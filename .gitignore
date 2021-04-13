@@ -1,0 +1,6 @@
+/summaries/
+*.pyc
+*.log
+*-checkpoint*
+*config.yml
+/pythonscripts/archive
