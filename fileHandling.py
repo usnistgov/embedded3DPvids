@@ -7,6 +7,7 @@ import shutil
 import time
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
+import pandas as pd
 
 from config import cfg
 
@@ -216,5 +217,40 @@ def sortSampleFolder(folder:str) -> None:
             renameSubFolder(filefull)
         else:
             putInSubFolder(filefull)
+            
+def listDirs(folder:str) -> List[str]:
+    '''List of directories in the folder'''
+    return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
+            
+def subFolders(topFolder:str) -> List[str]:
+    '''Get a list of bottom level subfolders in the top folder'''
+    dirs = listDirs(topFolder)
+    if len(dirs)==0:
+        folders = [topFolder]
+    else:
+        folders = []
+        for d in dirs:
+            folders = folders+subFolders(d)
+    return folders
+            
+            
+def countFiles(topFolder:str) -> pd.DataFrame:
+    '''Identify which subfolders in the top folder are missing data'''
+    folders = subFolders(topFolder)
+    outlist = []
+    for folder in folders:
+        d = {'Folder':os.path.basename(folder), 'BasVideo':0, 'BasStills':0, 'PhoneCam':0, 'Fluigent':0}
+        for f in os.listdir(folder):
+            if 'Basler camera' in f and '.png' in f:
+                d['BasStills']+=1
+            elif 'Basler camera' in f and '.avi' in f:
+                d['BasVideo']+=1
+            elif 'phoneCam' in f:
+                d['PhoneCam']+=1
+            elif 'Fluigent' in f:
+                d['Fluigent']+=1
+        outlist.append(d)        
+    data = pd.DataFrame(outlist)
+    return data
         
     
