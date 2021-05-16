@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 '''Functions for handling files'''
 
+# external packages
 import os
 import re
 import shutil
@@ -9,8 +10,14 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
 import pandas as pd
 
+# local packages
 from config import cfg
 
+# logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# info
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
@@ -18,7 +25,7 @@ __license__ = "MIT"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Production"
+__status__ = "Development"
 
 #----------------------------------------------
 
@@ -99,7 +106,8 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
     else:
         sample = 'I'+ink+'_S'+sup
     return sample
-            
+
+#---------------------------------------------            
 
 def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
     '''Given a subfolder inside of a sample designation, rename it to include the date, or set includeDate=False to not include the date. Returns new name'''
@@ -110,7 +118,13 @@ def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
     if len(f2)==0:
         return folder
     else:
-        f2 = f2[0]
+        if f2[0].startswith('Thumbs'):
+            if len(f2)>1:
+                f2 = f2[1]
+            else:
+                return folder
+        else:
+            f2 = f2[0]      
     
     parent = os.path.dirname(folder)
     basename = os.path.basename(folder)
@@ -145,8 +159,8 @@ def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
                 os.rename(folder, newname)
     return newname
 
-def correctName(file:str, debug:bool=False) -> str:
-    '''Find new name for to follow convention. Returns the new full path'''
+def renameFile(file:str, debug:bool=False) -> str:
+    '''Find new name for file to follow convention. Returns the new full path'''
     basename = os.path.basename(file)
     dirname = os.path.dirname(file)
     
@@ -180,6 +194,40 @@ def correctName(file:str, debug:bool=False) -> str:
                 os.rename(file, newname)
     return newname
     
+#-----------------------------------------------------
+
+def isSubFolder(file:str, debug:bool=False) -> bool:
+    '''determine if the folder is a subfolder'''
+    if not os.path.exists(file):
+        return False # path must exist
+    if not os.path.isdir(file):
+        return False # path must be a directory
+    f = os.path.basename(file)
+    for f1 in os.listdir(file):
+        if not f1 in ['raw']:
+            if os.path.isdir(os.path.join(file, f1)):
+                return False # this folder contains directories. is not a subfolder
+    entries = re.split('_', f)
+    if len(entries[-1])==6 and entries[-1][0]=='2':
+        # this is a date. file is named as a subfolder.
+        return True
+    else:
+        # file is not named as a subfolder, but should be.
+        renameSubFolder(file, includeDate=True, debug=debug)
+        return True
+
+def putInSampleFolder(file:str, debug:bool=False) -> str:
+    '''puts the subfolder in a sample folder. returns name of sample folder'''
+    sample = sampleName(file, formatOutput=False)
+    sampleFolder = os.path.join(os.path.dirname(file), sample)
+    if not os.path.exists(sampleFolder):
+        os.mkdir(sampleFolder)
+    newname = os.path.join(sampleFolder, os.path.basename(file))
+    if debug:
+        logging.debug(f'Old name: {file}\n  New name:{newname}')
+    else:
+        os.rename(file, newname)
+    return sampleFolder
         
 def putInSubFolder(file:str) -> None:
     '''Put a file in a sample folder into a subfolder with the date'''
@@ -187,7 +235,7 @@ def putInSubFolder(file:str) -> None:
         raise NameError(f'File does not exist: {file}')
         
     # correct file name if needed
-    file = correctName(file)
+    file = renameFile(file)
         
     # create subfolders
     parent = os.path.dirname(file)
@@ -203,9 +251,20 @@ def putInSubFolder(file:str) -> None:
        
     newname = os.path.join(subfolder, os.path.basename(file))
     os.rename(file, newname)
+    logging.info(f'Moved {file} to {newname}')
+
+#------------------------------------------------------------
+
+def sortSubFolder(folder:str) -> None:
+    '''sort and rename the files in the folder'''
+    if not os.path.isdir(folder):
+        return
+    renameSubFolder(folder)
+    for file in os.listdir(folder):
+        renameFile(os.path.join(folder, file))
     
 def sortSampleFolder(folder:str) -> None:
-    '''Sort a sample folder into subfolders based on date'''
+    '''Sort a sample folder (e.g. I_2.25_S_2.25) into subfolders based on date'''
     if not os.path.isdir(folder):
         return
     folder = renameSubFolder(folder, includeDate=False)
@@ -214,10 +273,32 @@ def sortSampleFolder(folder:str) -> None:
     for file in os.listdir(folder):
         filefull = os.path.join(folder, file)
         if os.path.isdir(filefull):
-            renameSubFolder(filefull)
+            sortSubFolder(filefull)
         else:
             putInSubFolder(filefull)
+    logging.info(f'Done sorting {folder}')
             
+def sortGroupFolder(folder:str) -> None:
+    '''Hierarchically sort all files in the folder (e.g. LapRD LapRD) into sample folders (I_2.25_S_2.25) and subfolders (I_2.25_S_2.25_210101)'''
+    if not os.path.isdir(folder):
+        return
+    for f in os.listdir(folder):
+        ffull = os.path.join(folder, f) # should be sample folder
+        if isSubFolder(ffull): 
+            ffull = putInSampleFolder(ffull) # if it's subfolder, put in sample folder
+        sortSampleFolder(ffull)
+    logging.info(f'Done sorting {folder}')
+    
+def sortDataFolder(folder:str) -> None:
+    '''sort/rename all files in the data folder (e.g. singleLines)'''
+    if not os.path.isdir(folder):
+        return
+    for f in os.listdir(folder):
+        groupfolder = os.path.join(folder, f)
+        fh.sortGroupFolder(groupfolder)
+            
+#------------------------------------------------------
+        
 def listDirs(folder:str) -> List[str]:
     '''List of directories in the folder'''
     return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
@@ -234,7 +315,7 @@ def subFolders(topFolder:str) -> List[str]:
     return folders
             
             
-def countFiles(topFolder:str) -> pd.DataFrame:
+def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
     '''Identify which subfolders in the top folder are missing data'''
     folders = subFolders(topFolder)
     outlist = []
@@ -250,7 +331,11 @@ def countFiles(topFolder:str) -> pd.DataFrame:
             elif 'Fluigent' in f:
                 d['Fluigent']+=1
         outlist.append(d)        
-    data = pd.DataFrame(outlist)
-    return data
+    df = pd.DataFrame(outlist)
+    if diag:
+        display(df[df['PhoneCam']==0])
+        display(df[df['BasVideo']==0])
+        display(df[df['BasStills']==0])
+    return df
         
     
