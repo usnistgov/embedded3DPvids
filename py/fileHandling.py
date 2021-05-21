@@ -2,7 +2,7 @@
 '''Functions for handling files'''
 
 # external packages
-import os
+import os, sys
 import re
 import shutil
 import time
@@ -11,6 +11,8 @@ import logging
 import pandas as pd
 
 # local packages
+currentdir = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(currentdir)
 from config import cfg
 
 # logging
@@ -28,6 +30,12 @@ __email__ = "Leanne.Friedrich@nist.gov"
 __status__ = "Development"
 
 #----------------------------------------------
+
+def fileTime(file:str) -> str:
+    '''get the time from the file, where the time is in the filename'''
+    split = re.split('_', os.path.basename(file))
+    time = split[-1]
+    return time
 
 def fileDate(file:str) -> str:
     '''Get the creation date from the file'''
@@ -107,24 +115,32 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
         sample = 'I'+ink+'_S'+sup
     return sample
 
-#---------------------------------------------            
+#---------------------------------------------  
+
+
+def videoFile(folder:str) -> str:
+    '''name of the video file'''
+    if not os.path.isdir(folder):
+        return ''
+    f2 = os.listdir(folder) # list of files
+    if len(f2)==0:
+        return ''
+    file = ''
+    while not file.endswith('.avi') and len(f2)>0:
+        file = f2.pop(0) # find the video
+    if not file.endswith('.avi'):
+        return ''
+    else:
+        return file 
 
 def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
     '''Given a subfolder inside of a sample designation, rename it to include the date, or set includeDate=False to not include the date. Returns new name'''
-    
     if not os.path.isdir(folder):
         return folder
-    f2 = os.listdir(folder)
+    f2 = os.listdir(folder) # list of files
     if len(f2)==0:
-        return folder
-    else:
-        if f2[0].startswith('Thumbs'):
-            if len(f2)>1:
-                f2 = f2[1]
-            else:
-                return folder
-        else:
-            f2 = f2[0]      
+        return folder # no files in folder
+    f2 = videoFile(folder) # path of the video file
     
     parent = os.path.dirname(folder)
     basename = os.path.basename(folder)
@@ -161,6 +177,9 @@ def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
 
 def renameFile(file:str, debug:bool=False) -> str:
     '''Find new name for file to follow convention. Returns the new full path'''
+    if os.path.isdir(file):
+        return file
+    
     basename = os.path.basename(file)
     dirname = os.path.dirname(file)
     
@@ -169,7 +188,7 @@ def renameFile(file:str, debug:bool=False) -> str:
         sample = sampleName(file, formatOutput=False)
         formattedSample = sampleName(file, formatOutput=True)
         basename = basename.replace(sample, formattedSample)
-    except:
+    except Exception as e:
         pass
     
     if '.jpg' in file:
@@ -186,12 +205,13 @@ def renameFile(file:str, debug:bool=False) -> str:
     newname = os.path.join(dirname, basename)
     if not file==newname:
         if debug:
-            logging.debug(file,'\n', newname)
+            logging.info(file,'\n', newname)
         else:
             if os.path.exists(newname):
                 os.remove(file)
             else:
                 os.rename(file, newname)
+                logging.debug(f'Rename {file}\n\t{newname}')
     return newname
     
 #-----------------------------------------------------
@@ -217,28 +237,43 @@ def isSubFolder(file:str, debug:bool=False) -> bool:
         return True
 
 def putInSampleFolder(file:str, debug:bool=False) -> str:
-    '''puts the subfolder in a sample folder. returns name of sample folder'''
+    '''puts the subfolder in a sample folder. returns new name of folder'''
+    if 'Thumbs' in file:
+        return ''
     sample = sampleName(file, formatOutput=False)
+    parent = os.path.basename(os.path.dirname(file))
+    if sample==parent:
+        # already in sample folder
+        return file
+    
+    # not already in sample folder. create a sample folder in the parent directory
     sampleFolder = os.path.join(os.path.dirname(file), sample)
     if not os.path.exists(sampleFolder):
-        os.mkdir(sampleFolder)
+        if debug:
+            logging.debug(f'Create {sampleFolder}')
+        else:
+            os.mkdir(sampleFolder)
     newname = os.path.join(sampleFolder, os.path.basename(file))
     if debug:
         logging.debug(f'Old name: {file}\n  New name:{newname}')
     else:
         os.rename(file, newname)
-    return sampleFolder
+    return newname
         
-def putInSubFolder(file:str) -> None:
+def putInSubFolder(file:str, debug:bool=False) -> None:
     '''Put a file in a sample folder into a subfolder with the date'''
     if not os.path.exists(file):
         raise NameError(f'File does not exist: {file}')
         
     # correct file name if needed
-    file = renameFile(file)
+    file = renameFile(file, debug=debug)
+
         
     # create subfolders
     parent = os.path.dirname(file)
+    if isSubFolder(parent, debug=debug):
+        return # already in subfolder
+    
     sample = sampleName(file, formatOutput=True)
     subfolder = sample +'_'+ fileDate(file)
     if os.path.basename(parent)==subfolder:
@@ -247,55 +282,37 @@ def putInSubFolder(file:str) -> None:
     subfolder = os.path.join(parent, subfolder)
     # create the subfolder if it doesn't already exist
     if not os.path.exists(subfolder):
-        os.makedirs(subfolder, exist_ok=True)
+        if debug:
+            logging.info(f'New folder: {subfolder}')
+        else:
+            os.makedirs(subfolder, exist_ok=True)
        
     newname = os.path.join(subfolder, os.path.basename(file))
-    os.rename(file, newname)
-    logging.info(f'Moved {file} to {newname}')
+    if debug:
+        logging.info(f'Move {file} to {newname}')
+    else:
+        os.rename(file, newname)
+        logging.info(f'Moved {file} to {newname}')
 
 #------------------------------------------------------------
 
-def sortSubFolder(folder:str) -> None:
-    '''sort and rename the files in the folder'''
-    if not os.path.isdir(folder):
-        return
-    renameSubFolder(folder)
-    for file in os.listdir(folder):
-        renameFile(os.path.join(folder, file))
-    
-def sortSampleFolder(folder:str) -> None:
-    '''Sort a sample folder (e.g. I_2.25_S_2.25) into subfolders based on date'''
-    if not os.path.isdir(folder):
-        return
-    folder = renameSubFolder(folder, includeDate=False)
+def sortRecursive(folder:str, debug:bool=False) -> None:
+    '''given any folder or file, sort and rename all the files inside'''
     if not os.path.exists(folder):
         return
-    for file in os.listdir(folder):
-        filefull = os.path.join(folder, file)
-        if os.path.isdir(filefull):
-            sortSubFolder(filefull)
-        else:
-            putInSubFolder(filefull)
-    logging.info(f'Done sorting {folder}')
-            
-def sortGroupFolder(folder:str) -> None:
-    '''Hierarchically sort all files in the folder (e.g. LapRD LapRD) into sample folders (I_2.25_S_2.25) and subfolders (I_2.25_S_2.25_210101)'''
-    if not os.path.isdir(folder):
+    if "Thumbs" in folder:
         return
-    for f in os.listdir(folder):
-        ffull = os.path.join(folder, f) # should be sample folder
-        if isSubFolder(ffull): 
-            ffull = putInSampleFolder(ffull) # if it's subfolder, put in sample folder
-        sortSampleFolder(ffull)
-    logging.info(f'Done sorting {folder}')
-    
-def sortDataFolder(folder:str) -> None:
-    '''sort/rename all files in the data folder (e.g. singleLines)'''
     if not os.path.isdir(folder):
-        return
-    for f in os.listdir(folder):
-        groupfolder = os.path.join(folder, f)
-        fh.sortGroupFolder(groupfolder)
+        putInSubFolder(folder, debug=debug) # put the file in the subfolder
+    else:
+        if isSubFolder(folder, debug=debug): # this also renames the subfolder
+            folder = putInSampleFolder(folder, debug=debug) # if it's subfolder, put in sample folder
+            for file in os.listdir(folder):
+                renameFile(os.path.join(folder, file), debug=debug) # rename files in subfolder
+        else: # this is a sample folder or higher
+            for f in os.listdir(folder):
+                sortRecursive(os.path.join(folder, f), debug=debug) # sort all of the subfolders
+
             
 #------------------------------------------------------
         
@@ -305,11 +322,11 @@ def listDirs(folder:str) -> List[str]:
             
 def subFolders(topFolder:str) -> List[str]:
     '''Get a list of bottom level subfolders in the top folder'''
-    dirs = listDirs(topFolder)
-    if len(dirs)==0:
+    if isSubFolder(topFolder):
         folders = [topFolder]
     else:
         folders = []
+        dirs = listDirs(topFolder)
         for d in dirs:
             folders = folders+subFolders(d)
     return folders
@@ -322,7 +339,7 @@ def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
     for folder in folders:
         d = {'Folder':os.path.basename(folder), 'BasVideo':0, 'BasStills':0, 'PhoneCam':0, 'Fluigent':0}
         for f in os.listdir(folder):
-            if 'Basler camera' in f and '.png' in f:
+            if ('Basler camera' in f or 'horiz' in f or 'xs' in f or 'vert' in f) and '.png' in f:
                 d['BasStills']+=1
             elif 'Basler camera' in f and '.avi' in f:
                 d['BasVideo']+=1

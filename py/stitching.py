@@ -138,6 +138,9 @@ class matchers:
         '''find homography matrix that relates the two images. set rigid true to only allow rigid transform, i.e. translation, rotation, scaling. set rigid false to allow warping'''
         imageSet1 = self.getSURFFeatures(i1)
         imageSet2 = self.getSURFFeatures(i2)
+        if len(imageSet1)<4 or len(imageSet2)<4:
+            # not enough points
+            return self.errorMatch(defaultToLastH, debug, i1, i2, imageSet1, imageSet2)
         matches = self.flann.knnMatch(imageSet2['des'],imageSet1['des'],k=2)
         good = []
         for i , (m, n) in enumerate(matches):
