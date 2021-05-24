@@ -222,6 +222,8 @@ def isSubFolder(file:str, debug:bool=False) -> bool:
         return False # path must exist
     if not os.path.isdir(file):
         return False # path must be a directory
+    if 'raw' in file:
+        return False # this is a raw data subdirectory
     f = os.path.basename(file)
     for f1 in os.listdir(file):
         if not f1 in ['raw']:
@@ -319,16 +321,26 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
 def listDirs(folder:str) -> List[str]:
     '''List of directories in the folder'''
     return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
+
+def anyIn(slist:List[str], s:str) -> bool:
+    '''bool if any of the strings in slist are in s'''
+    for si in slist:
+        if si in s:
+            return True
+    return False
             
-def subFolders(topFolder:str) -> List[str]:
+def subFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
     '''Get a list of bottom level subfolders in the top folder'''
     if isSubFolder(topFolder):
-        folders = [topFolder]
+        if anyIn(tags, topFolder):
+            folders = [topFolder]
+        else:
+            folders = []
     else:
         folders = []
         dirs = listDirs(topFolder)
         for d in dirs:
-            folders = folders+subFolders(d)
+            folders = folders+subFolders(d, tags=tags)
     return folders
             
             

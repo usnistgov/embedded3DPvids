@@ -10,6 +10,7 @@ import time
 import logging
 from typing import List, Dict, Tuple, Union, Any, TextIO
 from matplotlib import pyplot as plt
+import traceback
 
 # local packages
 
@@ -134,7 +135,7 @@ class matchers:
         else:
             return []
 
-    def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, debug:bool=False, defaultToLastH:bool=True) -> np.ndarray:
+    def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, debug:bool=False, defaultToLastH:bool=True, **kwargs) -> np.ndarray:
         '''find homography matrix that relates the two images. set rigid true to only allow rigid transform, i.e. translation, rotation, scaling. set rigid false to allow warping'''
         imageSet1 = self.getSURFFeatures(i1)
         imageSet2 = self.getSURFFeatures(i2)
@@ -175,7 +176,10 @@ class matchers:
             
 
     def getSURFFeatures(self, im):
-        gray = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+        try:
+            gray = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+        except:
+            gray = im
         kp, des = self.surf.detectAndCompute(gray, None)
         return {'kp':kp, 'des':des}
     
@@ -285,9 +289,15 @@ class Stitch:
         self.matcher = matchers()
         
     def readImage(self, file:str, crop:int=4, **kwargs) -> None:
+        if not os.path.exists(file):
+            return
         im = cv.imread(file)
-        h = im.shape[0]
-        w = im.shape[1]
+        try:
+            h = im.shape[0]
+            w = im.shape[1]
+        except:
+            logging.error(f'Image read error on {file}')
+            traceback.print_exc()
         im = im[crop:h-crop, crop:w-crop]
         try:
             self.images.append(im)
@@ -380,7 +390,7 @@ class Stitch:
             i+=1
         return fn
     
-    def returnStitch(self, export:bool=False, tag:str='', debug:bool=False, clearEntries:bool=False, duplicate:bool=True, retval:int=0) -> int:
+    def returnStitch(self, export:bool=False, tag:str='', debug:bool=False, clearEntries:bool=False, duplicate:bool=True, retval:int=0, **kwargs) -> int:
         '''return value from stitchTranslate. Return 0 if stitched, 1 if not'''
 
         if debug:
@@ -403,15 +413,25 @@ class Stitch:
                 if os.path.exists(fn):
                     return 1
         
-        logging.debug(f'Stitching {len(self.images)} images in {subfolder(self.filenames[0], short=True)}')
+        if 'tag' in kwargs:
+            tag = kwargs['tag']
+        else:
+            tag = ''
+        logging.debug(f'Stitching {len(self.images)} images in {subfolder(self.filenames[0], short=True)}: {tag}')
+        
         self.stitched = self.images[0]
         if len(self.images)>1:
             self.matcher.resetLastH()
             for i, im in enumerate(self.images[1:]):
-                H = self.matcher.match(self.stitched, im) # homography matrix, no warp
+                H = self.matcher.match(self.stitched, im, **kwargs) # homography matrix, no warp
                 if len(H)>0:
                     dx = int(H[0,2]) # translation in x
                     dy = int(H[1,2]) # translation in y
+                    if dx==0 and dy==0:
+                        # no translation: kill stitching
+                        self.killFrame = i+1
+                        logging.debug(f'No translation found for image {i+1}')
+                        return self.returnStitch(retval=1, **kwargs)
                     r = Region(self.stitched, im, dx, dy) # get positions
                     if i==0:
                         self.prevCenter = [r.im1yc, r.im1xc]
@@ -433,7 +453,7 @@ class Stitch:
         try:
             stitches = []
             while len(self.images)>0:
-                self.stitchTranslate(**kwargs)   
+                self.stitchTranslate(clearEntries=True, **kwargs)   
                 stitches.append(self.stitched.copy())
             if 'debug' in kwargs and kwargs['debug']:
                 imshow(*stitches)
