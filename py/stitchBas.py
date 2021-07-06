@@ -7,6 +7,7 @@ import traceback
 import logging
 import pandas as pd
 from typing import List, Dict, Tuple, Union, Any, TextIO
+import re
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -28,154 +29,306 @@ __status__ = "Development"
 
 #----------------------------------------------
 
-STLIST = ['horiz', 'vert1', 'vert2', 'vert3', 'vert4', 'xs1', 'xs2', 'xs3', 'xs4', 'xs5']
+def colNum(file:str)->int:
+    '''get the column number for this stitched image'''
+    bn = os.path.basename(file)
+    spl = re.split('_', bn)
+    tag = spl[-3] # if there is a scaling factor in the file name
+    if not tag[0].isalpha():
+        tag = spl[-2] # no scaling factor
+    i0 = 0
+    for i in range(len(tag)):
+        if tag[i].isalpha():
+            i0+=1
+    val = tag[i0:]
+    try:
+        out = int(val)
+    except:
+        raise ValueError('Could not determine column number')
+    else:
+        return out
+    
+def fileScale(file:str) -> str:
+    '''get the scale from the file name'''
+    scale = re.split('_', os.path.basename(file))[-2]
+    return scale
 
 class fileList:
     '''class that holds lists of files of different type'''
     
-    def __init__(self, *args):
+    def __init__(self, folder):
         '''args are folders'''
         
-        self.folders = args
+        self.folder = folder
+        
+        # number of columns for each type. 
+        self.horizCols = 12
+        self.vertCols = 4
+        self.xsCols = 5
+        
         self.resetList()
-        self.stillGroups = [self.horizStill, self.vert1Still, self.vert2Still, self.vert3Still, self.vert4Still, self.xs1Still, self.xs2Still, self.xs3Still, self.xs4Still, self.xs5Still]
-        for f in args:
-            self.splitFiles(f)
+        
+        self.splitFiles()
+            
+    def stlist(self, s2:str='') -> List[str]:
+        '''list of strings. set s2 to Still or Stitch to get list names'''
+        l = []
+        for s in ['horiz', 'vert', 'xs']:
+            for i in range(1,getattr(self, s+'Cols')+1):
+                l.append(s+str(i)+s2)
+            if s=='horiz':
+                l.append(s+s2)
+        return l
             
     def resetList(self):
         '''empty the lists of files'''
         self.phoneStill = []
         self.basVideo = []
         self.basStill = []
+        self.unstitchedStill = []
         self.webcamVideo = []
         self.webcamStill = []
         self.fluigent = []
+        self.resetSortedLists()
         
+    #-------
+        
+    def resetSortedLists(self):
+        '''reset the sorted lists of files'''       
+        for s in ['Still', 'Stitch']:
+            for st in self.stlist(s2=s):
+                    setattr(self, st, [])
+                
         self.horizStill = []
-        self.vert1Still = []
-        self.vert2Still = []
-        self.vert3Still = []
-        self.vert4Still = []
-        self.xs1Still = []
-        self.xs2Still = []
-        self.xs3Still = []
-        self.xs4Still = []
-        self.xs5Still = []
-        
         self.horizStitch = []
-        self.vert1Stitch = []
-        self.vert2Stitch = []
-        self.vert3Stitch = []
-        self.vert4Stitch = []
-        self.xs1Stitch = []
-        self.xs2Stitch = []
-        self.xs3Stitch = []
-        self.xs4Stitch = []
-        self.xs5Stitch = []
         
-    def splitFiles(self, folder:str) -> None:
+        for s in ['Still', 'Stitch']:
+            for s2 in ['horiz', 'vert', 'xs']:
+                setattr(self, s2+s+'Groups', [getattr(self, s2+str(i)+'Still') for i in range(1,getattr(self, s2+'Cols')+1)])
+     
+    #-------
+    
+    def addIf(self, l:list, val:Any) -> None:
+        '''add the val to the list if it isn't already there'''
+        if os.path.exists(val):
+            # this is a file
+            v2 = os.path.basename(val)
+            l2 = [os.path.basename(li) for li in l]
+        else:
+            v2 = val
+            l2 = l
+        if not v2 in l2:
+            l.append(val)
+    
+    def putInStillList(self, f:str, f1:str) -> None:
+        '''Put a still in the list of stills. f is base name, f1 is full path to file'''
+        if len(f1)==0:
+            raise NameError('file name is empty')
+        if len(f)==0:
+            f = os.path.basename(f1)
+
+        if 'phoneCam' in f:
+            self.addIf(self.phoneStill, f1)
+        elif 'Fluigent' in f:
+            self.addIf(self.fluigent, f1)
+        elif 'Nozzle camera' in f:
+            if '.avi' in f:
+                self.addIf(self.webcamVideo, f1)
+            elif '.png' in f:
+                self.addIf(self.webcamStill, f1)
+        elif 'Basler camera' in f:
+            for st in self.stlist():
+                if st==os.path.basename(os.path.dirname(f1)):
+                    # if the string is the folder name, this is a still
+                    self.addIf(getattr(self, st+'Still'),f1)
+                    self.addIf(self.basStill, f1)
+                    return
+            # if we make it through the loop, this has no label and goes into basStill or basVideo
+            if '.png' in f:
+                self.addIf(self.basStill, f1)
+                self.addIf(self.unstitchedStill, f1)
+            elif '.avi' in f:
+                self.addIf(self.basVideo, f1)
+        else:
+            # no camera type: this is a stitch
+            for st in self.stlist():
+                if st+'_' in f:
+                    # if the string is in the basename, this is a stitch
+                    self.addIf(getattr(self, st+'Stitch'), f1)
+                    return
+    
+    #-------
+    
+    def splitFiles(self, folder:str='') -> None:
         '''sort the files in the folder into the lists'''
-        for f in os.listdir(folder):
+        if not os.path.exists(folder):
+            folder = self.folder
+        for f in os.listdir(folder): # for each item in folder
             f1 = os.path.join(folder, f)
-            if os.path.isdir(f1):
+            if os.path.isdir(f1): # if the item is a folder, recurse
                 self.splitFiles(f1)
             else:
-                if 'Basler camera' in f:
-                    if '.png' in f:
-                        self.basStill.append(f1)
-                    elif '.avi' in f:
-                        self.basVideo.append(f1)
-                elif 'phoneCam' in f:
-                    self.phoneStill.append(f1)
-                elif 'Fluigent' in f:
-                    self.fluigent.append(f1)
-                elif 'Nozzle camera' in f:
-                    if '.avi' in f:
-                        self.webcamVideo.append(f1)
-                    elif '.png' in f:
-                        self.webcamStill.append(f1)
-                elif 'horiz' in f:
-                    self.horizStitch.append(f1)
-                elif 'vert1' in f:
-                    self.vert1Stitch.append(f1)
-                elif 'vert2' in f:
-                    self.vert2Stitch.append(f1)
-                elif 'vert3' in f:
-                    self.vert3Stitch.append(f1)
-                elif 'vert4' in f:
-                    self.vert4Stitch.append(f1)
-                elif 'xs1' in f:
-                    self.xs1Stitch.append(f1)
-                elif 'xs2' in f:
-                    self.xs2Stitch.append(f1)
-                elif 'xs3' in f:
-                    self.xs3Stitch.append(f1)
-                elif 'xs4' in f:
-                    self.xs4Stitch.append(f1)
-                elif 'xs5' in f:
-                    self.xs5Stitch.append(f1)
+                self.putInStillList(f,f1) # if the item is a file, sort it by type (nozzle, bas, video, etc.)      
+        if not 'raw' in folder:
+            self.splitBasStill()
+            self.reduceLists()
+                
+    #-------
+    
+    def reduceLists(self) -> None:
+        '''get rid of empty still lists'''
+        for s in ['Still']:
+            for s2 in ['horiz', 'vert', 'xs']:
+                numcols = 0
+                for i in range(1,getattr(self, s2+'Cols')+1):
+                    files = getattr(self, s2+str(i)+s)
+                    if len(files)==0:
+                        delattr(self, s2+str(i)+s)
+                    else:
+                        numcols = numcols+1
+                setattr(self, s2+'Cols', numcols) # adjust the number of cols
+                
+    def detectNumCols(self) -> None:
+        lastSkip = False
+#         logging.info(len(self.basStill))
+        if len(self.basStill)>0:
+            if len(self.basStill)==49 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horiznum=1
+                self.vertnum=4
+                self.xsnum=5
+                self.horizPerCol=9
+                self.vertPerCol=5
+                self.xsPerCol=4
+            elif len(self.basStill)==48 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=1
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=10
+                self.vertPerCol=7
+                self.xsPerCol=2
+            elif len(self.basStill)==58 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=1
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=10
+                self.vertPerCol=7
+                self.xsPerCol=4
+            elif len(self.basStill)==174 and 'singleLinesPics3' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=12
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                lastSkip = True
+            elif len(self.basStill)==108 and 'singleLinesPics4' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=6
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                lastSkip = True
+            return lastSkip
+        else:
+            # unknown sorting: check folders
+            for s in ['horiz', 'vert', 'xs']:
+                numfiles = len(getattr(self, s+'1Still'))
+                if numfiles>0:
+                    setattr(self, s+'PerCol', numfiles)
+                else:
+                    raise ValueError(f'{self.folder}: Cannot calculate files per column for {s}')
+            return False
+
+
+                
+    def splitBasStill(self) -> None:
+        '''sort the basStill files into horiz1Still, etc.'''
         self.basStill.sort(key=fh.fileTime)
-        if len(self.basStill)==49 and 'singleLinesPics' in self.basStill[0]:
-            # we used the shopbot script to generate these images
-            self.horizStill = self.basStill[0:9]
-            self.vert1Still = self.basStill[9:14]
-            self.vert2Still = self.basStill[14:19]
-            self.vert3Still = self.basStill[19:24]
-            self.vert4Still = self.basStill[24:29]
-            self.xs1Still = self.basStill[29:33]
-            self.xs2Still = self.basStill[33:37]
-            self.xs3Still = self.basStill[37:41]
-            self.xs4Still = self.basStill[41:45]
-            self.xs5Still = self.basStill[45:49]
-        elif len(self.basStill)==48 and 'singleLinesPics' in self.basStill[0]:
-            # we used the shopbot script to generate these images
-            self.horizStill = self.basStill[0:10]
-            self.vert1Still = self.basStill[10:17]
-            self.vert2Still = self.basStill[17:24]
-            self.vert3Still = self.basStill[24:31]
-            self.vert4Still = self.basStill[31:38]
-            self.xs1Still = self.basStill[38:40]
-            self.xs2Still = self.basStill[40:42]
-            self.xs3Still = self.basStill[42:44]
-            self.xs4Still = self.basStill[44:46]
-            self.xs5Still = self.basStill[46:48]
-        elif len(self.basStill)==58 and 'singleLinesPics' in self.basStill[0]:
-            # we used the shopbot script to generate these images
-            self.horizStill = self.basStill[0:10]
-            self.vert1Still = self.basStill[10:17]
-            self.vert2Still = self.basStill[17:24]
-            self.vert3Still = self.basStill[24:31]
-            self.vert4Still = self.basStill[31:38]
-            self.xs1Still = self.basStill[38:42]
-            self.xs2Still = self.basStill[42:46]
-            self.xs3Still = self.basStill[46:50]
-            self.xs4Still = self.basStill[50:54]
-            self.xs5Still = self.basStill[54:58]
+        lastSkip = self.detectNumCols()
+        # put stills in lists
+        
+        last=0
+        for s in ['horiz', 'vert', 'xs']:
+            for i in range(getattr(self, s+'Cols')):
+                i0 = last+i*getattr(self, s+'PerCol')
+                i1 = last+(i+1)*getattr(self, s+'PerCol')
+                if lastSkip:
+                    if s=='horiz' and i==getattr(self, s+'Cols')-1:
+                        i1 = i1-1 # last column is missing 1 image, for some reason
+                setattr(self, s+str(i+1)+'Still', self.basStill[i0:i1])
+            last=i1
+            
+        return
+    
+    
+    
+    def sortHorizCols(self) -> None:
+        '''take the stitched horiz images and put them in the horizStills folder'''
+        self.resetList()
+        self.splitFiles()
+        self.detectNumCols()
+        if len(self.horizStill)>0:
+            if not 'horiz' in os.path.basename(self.horizStill[0]):
+                # this is a single horiz column folder. don't look for stills
+                return
+        self.horizStill = []
+        for i in range(1, self.horizCols):
+#             if not (self.horizCols==12 and i==2): # skip number 2. Don't know why this column got collected twice
+            stlist = getattr(self, 'horiz'+str(i)+'Stitch')
+            if len(stlist)==0:
+                raise NameError(f'Missing horiz stitch: {i} with scale {scale}')
+            if i==1:
+                stfile = stlist[0]
+                scale=fileScale(stfile)
+            else:
+                j = 0
+                stfile = ''
+                while not scale in stfile and j<len(stlist):
+                    stfile = stlist[j]
+                    j+=1
+                if not scale in stfile:
+                    raise NameError(f'Missing horiz stitch: {i} with scale {scale}')
+            self.horizStill.append(stfile) # get first entry in each stitch list
+    
+    #-------
+    
+    def printFiles(self, name:str) -> None:
+        '''print all of the files under that list name'''
+        files = getattr(self, name)
+        if 'Still' in name and not name=='horizStill':
+            times = [fh.fileTime(s) for s in files]
+        else:
+            times = [os.path.basename(s) for s in files]
+        logging.info(f'{name}, {times}')
             
     def printGroups(self) -> None:
-        '''print file dates in the groups'''
-        for r in ['Still', 'Stitch']:
-            for st in STLIST:
-                files = getattr(self, st+r)
-                if r=='Still':
-                    times = [fh.fileTime(s) for s in files]
-                else:
-                    times = [os.path.basename(s) for s in files]
-                logging.info(f'{st}:{times}')
-                
+        '''print file dates in all groups'''
+        
+        for s in ['Still', 'Stitch']:
+            for st in self.stlist(s2=s):
+                self.printFiles(st)
+    
+    #-------
+    
     def countFiles(self) -> Dict:
         '''count the types of files in the folder'''
-        c = [['folder',self.folders[0]]]
+        c = [['folder',self.folder]]
         for r in ['Still', 'Stitch']:
-            for st in STLIST:
-                files = getattr(self, st+r)
-                c.append([st+r, len(files)])
+            for st in self.stlist(s2=r):
+                files = getattr(self, st)
+                c.append([st, len(files)])
         return dict(c)
     
     def stitchDone(self) -> bool:
         '''determine if the folder is done stitching'''
-        for st in STLIST:
-            files = getattr(self, st+'Stitch')
+        for st in self.stlist(s2='Stitch'):
+            files = getattr(self, st)
             if len(files)==0:
                 return False
         else:
@@ -194,9 +347,12 @@ class fileList:
             sample = os.path.basename(dirname) # folder name
         return files, dirname, sample
             
-    def archiveGroup(self, st:str, debug:bool=False, **kwargs) -> None:
+    def archiveGroup(self, st:str, files:List[str]=[], debug:bool=False, **kwargs) -> None:
         '''put files in an archive folder'''
-        files, dirname, sample = self.getFiles(st)
+        if len(files)==0:
+            files, dirname, _ = self.getFiles(st)
+        else:
+            dirname = os.path.dirname(files[0])
         if 'raw' in files[0]:
             # already archived
             return
@@ -219,26 +375,81 @@ class fileList:
         if not debug:
             setattr(self, st+"Still", newnames)
             
-    def stitchGroup(self, st:str, archive:bool=True, **kwargs) -> int:
-        '''stitch the group of files together and export. st must be horiz, vert1, vert2, vert3, vert4, xs1, xs2, xs3, xs4, or xs5. Returns 0 if stitched, 1 if not.'''
-        files, dirname, sample = self.getFiles(st)
+    def stitchGroup(self, st:str, archive:bool=True, scale:float=1, duplicate:bool=False, **kwargs) -> int:
+        '''stitch the group of files together and export. 
+        st must be horiz, vert1, vert2, vert3, vert4, xs1, xs2, xs3, xs4, or xs5. 
+        archive true to move raw images to raw folder
+        scale=1 to keep original resolution. lower to compress image.
+        put duplicate=True in kwargs to add a new file if this stitch already exists. duplicate=False to check if the file already exists
+        Returns 0 if stitched, 1 if failed, 2 if the file already exists.'''
+        if st=='horiz':
+            self.sortHorizCols() # sort stitched images into horiz folder
+        if st=='horizfull':
+            _, dirname, sample = self.getFiles('horiz')
+            if len(self.horizStitch)==0:
+                self.resetList()
+                self.splitFiles()
+            files = [self.horizStitch[0], getattr(self, 'horiz'+str(self.horizCols)+'Stitch')[0]]
+        else:
+            files, dirname, sample = self.getFiles(st)
+            
         if len(files)==0:
             return 1
-        tag = sample+'_'+st
         s = stitching.Stitch(files)
+        tag = sample+'_'+st
+        
+        self.detectNumCols() # detect number of columns for scaling
+
+        # set default displacements
         if 'xs' in st:
-            s.matcher.setDefaults(4.24781116, -265.683797)
+            s.matcher.setDefaults(4.24781116*scale, -265.683797*scale)
             s.matcher.resetLastH()
         elif 'vert' in st:
-            s.matcher.setDefaults(-1, -277)
+            if scale==1:
+                scale=round(3/self.vertPerCol,3) # automatically scale horiz1... to 3/number of images
+            s.matcher.setDefaults(-1*scale, -277*scale)
+            s.matcher.resetLastH()
+        elif 'horiz'==st:
+            scaleOrig=float(fileScale(files[0])) # need to adopt scaling from source images
+            if self.horizCols==12:
+                dx = 274
+            else:
+                dx = 2*274
+            s.matcher.setDefaults(dx*scale*scaleOrig, 0*scale*scaleOrig)
+            s.matcher.resetLastH()
+        elif 'horizfull'==st:
+            # for adding the last column
+            scaleOrig=float(fileScale(files[0])) # need to adopt scaling from source images
+            if self.horizCols==12:
+                dx = 274*(self.horizCols-1)
+            else:
+                dx = 2*274*(self.horizCols-1)
+            s.matcher.setDefaults(dx*scale*scaleOrig, 262*scale*scaleOrig)
             s.matcher.resetLastH()
         elif 'horiz' in st:
-            s.matcher.setDefaults(0, -280)
-            s.matcher.resetLastH()
+            if scale==1:
+                scale=round(3/self.horizPerCol,3) # automatically scale horiz1... to 3/number of images
+            s.matcher.setDefaults(0*scale, -280*scale)
+#             s.matcher.resetLastH()
+        
+        if not scale==1:
+            s.scaleImages(scale) # rescale images
+
+        if not duplicate:
+            fn = s.newFN(duplicate=False, tag=tag)
+            if os.path.exists(fn):
+                return 2 # file already exists
+            if 'horiz' in fn and not 'horiz_' in fn:
+                # horiz1, horiz2, etc.
+                fn2 = os.path.join(os.path.dirname(fn), 'raw', 'horiz', os.path.basename(fn))
+                if os.path.exists(fn2):
+                    return 2 # file already exists
             
         try:
             # stitch images and export
             s.stitchTranslate(export=True, tag=tag, **kwargs)
+            if st=='horiz':
+                self.stitchGroup('horizfull', archive=archive,scale=1,duplicate=duplicate,**kwargs)
         except:
             logging.warning('Stitching error')
             traceback.print_exc()
@@ -246,25 +457,30 @@ class fileList:
         else:
             # archive
             if archive:
-                self.archiveGroup(st, **kwargs)
+                self.archiveGroup(st, files=files, **kwargs)
             return 0
+
                 
     def stitchGroups(self, archive:bool=True, **kwargs) -> None:
         '''stitch all groups and export'''
         if 'stlist' in kwargs:
             stlist = kwargs['stlist']
         else:
-            stlist = STLIST
+            stlist = self.stlist()
         for st in stlist:
+#             self.printGroups()
             self.stitchGroup(st, archive=archive, **kwargs)
             
 #--------------------------------------------------
             
 def stitchSubFolder(folder:str, **kwargs) -> None:
     '''stitches images in the subfolder'''
-    fl = fileList(folder)
-    if not fl.stitchDone() and len(fl.xs1Still)>0:
-        fl.stitchGroups(**kwargs)
+    try:
+        fl = fileList(folder)
+        if not fl.stitchDone() and len(fl.xs1Still)>0:
+            fl.stitchGroups(**kwargs)
+    except:
+        logging.error(f'Error stitching {folder}')
             
 def stitchRecursive(folder:str, **kwargs) -> None:
     '''for all folders in the folder, stitch images in the subfolders'''
@@ -299,6 +515,9 @@ def countFiles(folder:str, stills:bool=True, stitches:bool=True, subcall:bool=Fa
     
     # top folder
     df = pd.DataFrame(c)
+    
+
+    STLIST = ['horiz', 'vert1', 'vert2', 'vert3', 'vert4', 'xs1', 'xs2', 'xs3', 'xs4', 'xs5']
     
     missing = False
     

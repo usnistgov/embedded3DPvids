@@ -4,6 +4,7 @@
 # external packages
 import cv2 as cv  # openCV version must be <=3.4.2.16, otherwise SIFT goes behind a paywall
 import numpy as np 
+import re
 import os
 import sys
 import time
@@ -32,6 +33,19 @@ __status__ = "Development"
 
 
 #----------------------------------
+
+def fileScale(file:str) -> str:
+    '''get the scale from the file name'''
+    scale = re.split('_', os.path.basename(file))[-2]
+    if len(scale)==6:
+        # this is a date
+        return 1
+    try:
+        s2 = float(scale)
+    except:
+        return 1
+    else:
+        return scale
 
 class Struct:
     def __init__(self, **entries):
@@ -93,8 +107,14 @@ class matchers:
         self.lastH = np.float32([[1.,0,self.defaultDx],[0,1,self.defaultDy]])
 
     def showKeypoints(self, i1:np.ndarray, i2:np.ndarray, imageSet1:dict, imageSet2:dict) -> None:
-        i1a = cv.drawKeypoints(i1, imageSet1['kp'], None, (255,0,0), 4)
-        i2a = cv.drawKeypoints(i2, imageSet2['kp'], None, (255,0,0), 4)
+        if len(i1)>0:
+            i1a = cv.drawKeypoints(i1, imageSet1['kp'], None, (255,0,0), 4)
+        else:
+            i1a=i1
+        if len(i2)>0:
+            i2a = cv.drawKeypoints(i2, imageSet2['kp'], None, (255,0,0), 4)
+        else:
+            i2a=i2
         imshow(i1a, i2a)
 
     def checkH(self, H:np.ndarray, i2:np.ndarray) -> bool:
@@ -137,6 +157,10 @@ class matchers:
 
     def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, debug:bool=False, defaultToLastH:bool=True, **kwargs) -> np.ndarray:
         '''find homography matrix that relates the two images. set rigid true to only allow rigid transform, i.e. translation, rotation, scaling. set rigid false to allow warping'''
+        if 'useDefault' in kwargs and kwargs['useDefault']:
+            # skip all of the matching and detection, and just use default translation
+            return self.errorMatch(True, False, i1, i2, [], [])
+        
         imageSet1 = self.getSURFFeatures(i1)
         imageSet2 = self.getSURFFeatures(i2)
         if len(imageSet1)<4 or len(imageSet2)<4:
@@ -198,8 +222,7 @@ class Region:
         self.Wim2 = im2.shape[1]
         self.Him2 = im2.shape[0]
         self.Dim2 = im2.shape[2]
-        self.Wnew = self.Wim1 + abs(dx)
-        self.Hnew = self.Him1 + abs(dy)
+
         if not self.Dim1==self.Dim2:
             raise ValueError('Images are not in same color space')
         else:
@@ -213,6 +236,11 @@ class Region:
         self.im1yf = self.im1y0+self.Him1
         self.im2xf = self.im2x0+self.Wim2
         self.im2yf = self.im2y0+self.Him2
+        
+#         self.Wnew = self.Wim1 + abs(dx)
+#         self.Hnew = self.Him1 + abs(dy)
+        self.Wnew = max(self.im1xf, self.im2xf)
+        self.Hnew = max(self.im1yf, self.im2yf)
         
         self.ox0 = max(self.im1x0, self.im2x0)
         self.oxf = min(self.im1xf, self.im2xf)
@@ -280,8 +308,15 @@ class Stitch:
     
     
     def __init__(self, filenames:List[str], **kwargs) -> None:
+        if len(filenames)==0:
+            raise ValueError('No images given')
+        self.scale = 1 # keeps track of rescaling of images
+        self.sourceScale = 0 # keeps track of initial scaling of images
         for file in filenames:
-            self.readImage(file, **kwargs)
+            try:
+                self.readImage(file, **kwargs)
+            except Exception as e:
+                raise e
         self.killFrame = ''
         self.filenames = filenames
         self.imagesPerm = self.images.copy()
@@ -303,7 +338,28 @@ class Stitch:
             self.images.append(im)
         except:
             self.images = [im]
-    
+        scale = float(fileScale(file))
+        if self.sourceScale==0:
+            self.sourceScale = scale
+            self.scale = self.scale*self.sourceScale
+        else:
+            if not self.sourceScale==scale:
+                raise ValueError('Files are of different scales')
+        
+            
+    def scaleImages(self, scale:float) -> None:
+        '''scale all of the image sizes'''
+        if not scale==1:
+            for i,img in enumerate(self.images):
+                width = int(img.shape[1]*scale)
+                height = int(img.shape[0]*scale)
+                dim = (width, height)
+
+                # resize image
+                resized = cv.resize(img, dim, interpolation = cv.INTER_AREA)
+                self.images[i] = resized
+            self.scale = self.scale*scale
+        
     def masks(self, r:Region) -> Tuple[np.ndarray, np.ndarray]:
         '''get blending masks for the two images'''
         new = np.zeros((r.Hnew, r.Wnew, r.Dnew), np.float32)
@@ -383,10 +439,11 @@ class Stitch:
         folder = subfolder(fn)
         i = 0
         ext = os.path.splitext(fn)[-1]
+        scale = '{0:.4g}'.format(self.scale)
         while (duplicate and os.path.exists(fn)) or (not duplicate and i==0):
             # if duplicate is true, keep going until we get a new file name
             # if duplicate is false, stop at 1st iteration
-            fn = os.path.join(folder, tag+"_{0:0=2d}".format(i)+ext)
+            fn = os.path.join(folder, tag+'_'+scale+"_{0:0=2d}".format(i)+ext)
             i+=1
         return fn
     
@@ -421,8 +478,10 @@ class Stitch:
         
         self.stitched = self.images[0]
         if len(self.images)>1:
-            self.matcher.resetLastH()
+#             self.matcher.resetLastH()
+            self.matcher.lastH = np.float32([[1.,0,0.001],[0,1,0.001]])
             for i, im in enumerate(self.images[1:]):
+#                 logging.debug(f'Image {i+1}')
                 H = self.matcher.match(self.stitched, im, **kwargs) # homography matrix, no warp
                 if len(H)>0:
                     dx = int(H[0,2]) # translation in x

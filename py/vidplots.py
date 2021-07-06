@@ -8,8 +8,9 @@ import logging
 import pandas as pd
 from matplotlib import pyplot as plt
 from typing import List, Dict, Tuple, Union, Any, TextIO
-from PIL import Image
 import re
+import numpy as np
+import cv2 as cv
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -49,6 +50,18 @@ class fluidVals:
                 self.val = self.val[:-1]
             else:
                 self.base = 'mineral oil'
+        elif fluid[:4]=='PDMS':
+            self.var = 'w% silica'
+            self.val = fluid[4:]
+            if fluid[-1]=='S':
+                self.base = 'mineral oil + PDMS + Span 20'
+                self.val = self.val[:-1]
+            else:
+                self.base = 'mineral oil + PDMS'
+        elif fluid[:3]=='PEG':
+            self.var = 'w% silica'
+            self.val = fluid[3:]
+            self.base = 'water + 40% PEGDA'
         else:
             self.var = 'w% Laponite RD'
             self.val = fluid
@@ -384,7 +397,7 @@ def exportIm(fn:str, fig) -> None:
         fig.savefig(fn+s, bbox_inches='tight', dpi=300)
     print('Exported ', fn)
 
-def picFromFolder(folder:str, tag:str):
+def picFromFolder(folder:str, tag:str) -> np.array:
     '''gets one picture from a folder
     returns the picture
     tag is the name of the image type, e.g. 'xs1'. Used to find images. '''
@@ -404,14 +417,14 @@ def picFromFolder(folder:str, tag:str):
                 if len(l)>0:
                     imfile = os.path.join(archive, l[0]) # if there is a file in the archive folder, use it
     if os.path.exists(imfile):
-        im = Image.open(imfile)
+        im = cv.imread(imfile)
         return im
     else:
         return []
 
-def cropImage(im:Image, crops:dict) -> Image:
+def cropImage(im:np.array, crops:dict) -> np.array:
     '''crop the image and return width, height, image. Crops must contain x0, xf, y0, yf. x0 and xf are from left. y0 and yf are from bottom.'''
-    width, height = im.size 
+    height,width = im.shape[0:2]
     if 'x0' in crops:
         x0 = crops['x0']
     else:
@@ -435,57 +448,64 @@ def cropImage(im:Image, crops:dict) -> Image:
         y0 = max(0,height-crops['yf'])
     else:
         y0 = 0
-    im = im.crop((x0, y0, xf, yf))
+    im = im[y0:yf, x0:xf]
     return im
 
-def picPlot(pv:printVals, cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
+def importAndCrop(folder:str, tag:str, **kwargs) -> np.array:
+    '''import and crop an image from a folder, given a tag. crops can be in kwargs'''
+    im = picFromFolder(folder, tag)
+    if type(im) is list:
+#         logging.debug(f'Image missing: {folder}')
+        return []
+    if 'crops' in kwargs:
+        crops = kwargs['crops']
+        im = cropImage(im, crops)
+    return im
+
+def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
     '''plots picture from just one folder. 
     folder is the full path name
     cp is the comboPlot object that stores the plot
-    dx is the spacing between images in plot space, e.g. 0.7
-    cropx is the size to crop from the left and right edges of the picture in px
-    cropy is the size to crop from top and bottom in px
+    dx0 is the spacing between images in plot space, e.g. 0.7
     tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
+    im = []
     try:
-        im = picFromFolder(pv.folder, tag)
-        if type(im) is list:
-            logging.debug(f'Image missing: {pv.folder}')
-            return
-        if 'crops' in kwargs:
-            crops = kwargs['crops']
-            im = cropImage(im, crops)
+        if not type(tag) is list:
+            tag = [tag]
+        for t in tag:
+            im1 = importAndCrop(pv.folder, t, **kwargs)
+            if len(im1)>0:
+                try:
+                    im = cv.hconcat([im, im1]) # add to the right
+                except Exception as e:
+                    im = im1 # set imtot to first image
     except Exception as e:
         logging.error(f'Cropping error: {str(e)}')
         return
+    if len(im)==0:
+        return
     
-    width, height = im.size
-    if 'crops' in kwargs and 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
-        if crops['yf']<0:
-            heightI = im.size[1]
-        else:
-            heightI = crops['yf']-crops['y0']
-        if crops['xf']<0:
-            widthI = im.size[0]
-        else:
-            widthI = crops['xf']-crops['x0']
-        # use intended height/width to scale all pictures the same
+    height,width = im.shape[0:2]
+    if 'crops' in kwargs:
+        crops = kwargs['crops']
+        if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
+            if crops['yf']<0:
+                heightI = height
+            else:
+                heightI = crops['yf']-crops['y0']
+            if crops['xf']<0:
+                widthI = width
+            else:
+                widthI = (crops['xf']-crops['x0'])*len(tag)
+            # use intended height/width to scale all pictures the same
     else:
         widthI = width
         heightI = height
-
-    # fix the aspect ratio
-    if height<width:
-        dy = dx*(height/width)
-    else:
-        dy = dx
-        dx = dx*(width/height)
-       
-        
-    wrel = width/widthI
-    hrel = height/heightI
     
-    dx = dx*min([wrel, hrel])
-    dy = dy*min([wrel, hrel])
+    # fix the scaling
+    pxperunit = max(widthI, heightI) # image pixels per image block
+    dx = dx0*(width/pxperunit)
+    dy = dx0*(height/pxperunit)
         
     try:
         x0, y0, axnum = vvplot(pv, cp)
@@ -493,6 +513,7 @@ def picPlot(pv:printVals, cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
         logging.error(f'Positioning error: {str(e)}')
         return
     s = 0.95 # scale images to leave white space
+    im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
     cp.axs[axnum].imshow(im, extent=[x0-dx*s, x0+dx*s, y0-dy*s, y0+dy*s])
 
 
@@ -520,7 +541,11 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
 
     if not os.path.isdir(topFolder):
         return
-    fn = imFn(exportFolder, topFolder, tag, **kwargs)
+    if type(tag) is list:
+        taglabel = "".join(tag)
+    else:
+        taglabel = tag
+    fn = imFn(exportFolder, topFolder, taglabel, **kwargs)
     if not overwrite and os.path.exists(fn+'.png'):
         return
     
