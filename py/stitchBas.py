@@ -65,6 +65,9 @@ class fileList:
         self.horizCols = 12
         self.vertCols = 4
         self.xsCols = 5
+        self.horizPerCol=0
+        self.vertPerCol=0
+        self.xsPerCol=0
         
         self.resetList()
         
@@ -78,6 +81,7 @@ class fileList:
                 l.append(s+str(i)+s2)
             if s=='horiz':
                 l.append(s+s2)
+                l.append(s+'full'+s2)
         return l
             
     def resetList(self):
@@ -172,6 +176,7 @@ class fileList:
         if not 'raw' in folder:
             self.splitBasStill()
             self.reduceLists()
+            self.detectHorizFiles()
                 
     #-------
     
@@ -234,6 +239,15 @@ class fileList:
                 self.vertPerCol=7
                 self.xsPerCol=3
                 lastSkip = True
+            elif len(self.basStill)==130 and 'singleLinesPics5' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                lastSkip = True
             return lastSkip
         else:
             # unknown sorting: check folders
@@ -273,16 +287,18 @@ class fileList:
         self.resetList()
         self.splitFiles()
         self.detectNumCols()
+        self.detectHorizFiles()
+        
+    def detectHorizFiles(self) -> None:
         if len(self.horizStill)>0:
             if not 'horiz' in os.path.basename(self.horizStill[0]):
                 # this is a single horiz column folder. don't look for stills
                 return
         self.horizStill = []
-        for i in range(1, self.horizCols):
-#             if not (self.horizCols==12 and i==2): # skip number 2. Don't know why this column got collected twice
+        for i in list(range(1, self.horizCols+1))+['']:
             stlist = getattr(self, 'horiz'+str(i)+'Stitch')
             if len(stlist)==0:
-                raise NameError(f'Missing horiz stitch: {i} with scale {scale}')
+                raise NameError(f'Missing horiz stitch: {i}')
             if i==1:
                 stfile = stlist[0]
                 scale=fileScale(stfile)
@@ -294,14 +310,20 @@ class fileList:
                     j+=1
                 if not scale in stfile:
                     raise NameError(f'Missing horiz stitch: {i} with scale {scale}')
-            self.horizStill.append(stfile) # get first entry in each stitch list
+            if type(i) is int and i<self.horizCols:
+                self.addIf(self.horizStill, stfile) # get first entry in each stitch list
+            else:
+                self.addIf(self.horizfullStill,stfile)
+        self.horizfullStill.sort()
+        self.horizfullStill.reverse()
+        
     
     #-------
     
     def printFiles(self, name:str) -> None:
         '''print all of the files under that list name'''
         files = getattr(self, name)
-        if 'Still' in name and not name=='horizStill':
+        if 'Still' in name and not name=='horizStill' and not name=='horizfullStill':
             times = [fh.fileTime(s) for s in files]
         else:
             times = [os.path.basename(s) for s in files]
@@ -385,13 +407,8 @@ class fileList:
         if st=='horiz':
             self.sortHorizCols() # sort stitched images into horiz folder
         if st=='horizfull':
-            _, dirname, sample = self.getFiles('horiz')
-            if len(self.horizStitch)==0:
-                self.resetList()
-                self.splitFiles()
-            files = [self.horizStitch[0], getattr(self, 'horiz'+str(self.horizCols)+'Stitch')[0]]
-        else:
-            files, dirname, sample = self.getFiles(st)
+            self.detectHorizFiles()        
+        files, dirname, sample = self.getFiles(st)
             
         if len(files)==0:
             return 1
@@ -413,8 +430,10 @@ class fileList:
             scaleOrig=float(fileScale(files[0])) # need to adopt scaling from source images
             if self.horizCols==12:
                 dx = 274
-            else:
+            elif self.horizCols==6:
                 dx = 2*274
+            elif self.horizCols==8:
+                dx = 424
             s.matcher.setDefaults(dx*scale*scaleOrig, 0*scale*scaleOrig)
             s.matcher.resetLastH()
         elif 'horizfull'==st:
@@ -422,8 +441,10 @@ class fileList:
             scaleOrig=float(fileScale(files[0])) # need to adopt scaling from source images
             if self.horizCols==12:
                 dx = 274*(self.horizCols-1)
-            else:
+            elif self.horizCols==6:
                 dx = 2*274*(self.horizCols-1)
+            elif self.horizCols==8:
+                dx = 422*(self.horizCols-1)
             s.matcher.setDefaults(dx*scale*scaleOrig, 262*scale*scaleOrig)
             s.matcher.resetLastH()
         elif 'horiz' in st:
@@ -442,6 +463,14 @@ class fileList:
             if 'horiz' in fn and not 'horiz_' in fn:
                 # horiz1, horiz2, etc.
                 fn2 = os.path.join(os.path.dirname(fn), 'raw', 'horiz', os.path.basename(fn))
+                if os.path.exists(fn2):
+                    return 2 # file already exists
+                else:
+                    fn2 = os.path.join(os.path.dirname(fn), 'raw', 'horizfull', os.path.basename(fn))
+                    if os.path.exists(fn2):
+                        return 2 # file already exists
+            elif 'horiz_' in fn:
+                fn2 = os.path.join(os.path.dirname(fn), 'raw', 'horizfull', os.path.basename(fn))
                 if os.path.exists(fn2):
                     return 2 # file already exists
             
@@ -481,6 +510,7 @@ def stitchSubFolder(folder:str, **kwargs) -> None:
             fl.stitchGroups(**kwargs)
     except:
         logging.error(f'Error stitching {folder}')
+        traceback.print_exc()
             
 def stitchRecursive(folder:str, **kwargs) -> None:
     '''for all folders in the folder, stitch images in the subfolders'''

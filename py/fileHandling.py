@@ -302,7 +302,7 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
     '''given any folder or file, sort and rename all the files inside'''
     if not os.path.exists(folder):
         return
-    if "Thumbs" in folder or "DS_Store" in folder:
+    if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
         return
     if not os.path.isdir(folder):
         putInSubFolder(folder, debug=debug) # put the file in the subfolder

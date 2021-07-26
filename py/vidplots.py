@@ -52,12 +52,16 @@ class fluidVals:
                 self.base = 'mineral oil'
         elif fluid[:4]=='PDMS':
             self.var = 'w% silica'
-            self.val = fluid[4:]
+            if fluid[4]=='M':
+                self.base = 'mineral oil'
+            else:
+                self.base = 'silicone oil'
+            self.val = fluid[5:]
             if fluid[-1]=='S':
-                self.base = 'mineral oil + PDMS + Span 20'
+                self.base = self.base+' + PDMS + Span 20'
                 self.val = self.val[:-1]
             else:
-                self.base = 'mineral oil + PDMS'
+                self.base = self.base+' + PDMS'
         elif fluid[:3]=='PEG':
             self.var = 'w% silica'
             self.val = fluid[3:]

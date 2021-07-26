@@ -13,6 +13,7 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
+from imshow import imshow
 
 # logging
 logger = logging.getLogger(__name__)
@@ -84,10 +85,30 @@ def componentCentroids(img:np.array) -> np.array:
     centroids = [componentCentroid(img, l) for l in labels]
     return centroids       
 
+def fillComponents(thresh:np.array)->np.array:
+    '''fill the connected components in the thresholded image, removing anything touching the border. https://www.programcreek.com/python/example/89425/cv2.floodFill'''
+    thresh2 = thresh.copy()
+    # add 1 pixel white border all around
+    pad = cv.copyMakeBorder(thresh2, 1,1,1,1, cv.BORDER_CONSTANT, value=255)
+    h, w = pad.shape
+    # create zeros mask 2 pixels larger in each dimension
+    mask = np.zeros([h + 2, w + 2], np.uint8)
+    img_floodfill = cv.floodFill(pad, mask, (0,0), 0, (5), (0), flags=8)[1] # floodfill outer white border with black
+    thresh2 = img_floodfill[1:h-1, 1:w-1]  # remove border
+    
+    im_flood_fill = thresh2.copy()
+    h, w = thresh.shape[:2]
+    mask = np.zeros((h + 2, w + 2), np.uint8)
+    im_flood_fill = im_flood_fill.astype("uint8")
+    cv.floodFill(im_flood_fill, mask, (0, 0), 255)
+    im_flood_fill_inv = cv.bitwise_not(im_flood_fill)
+    img_out = thresh2 | im_flood_fill_inv
+    return img_out
 
 def segmentInterfaces(img:np.array) -> np.array:
     gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
     gray = cv.medianBlur(gray, 5)
     ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-    markers = cv.connectedComponents(thresh)
-    return thresh
+    filled = fillComponents(thresh)
+    markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
+    return filled, markers
