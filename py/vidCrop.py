@@ -48,6 +48,13 @@ def imcrop(img:np.array, bounds:Union[Dict, int]) -> np.array:
         w = s[1]
         d = bounds
         crop = img[d:h-d, d:w-d]
+    elif len(bounds)==2:
+        s = img.shape
+        h = s[0]
+        w = s[1]
+        dx = bounds['dx']
+        dy = bounds['dy']
+        crop = img[dy:h-dy, dx:w-dx]
     else:
         crop = img[bounds['y0']:bounds['yf'], bounds['x0']:bounds['xf']]
     return crop

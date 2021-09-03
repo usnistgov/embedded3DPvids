@@ -9,6 +9,8 @@ import os
 import sys
 import logging
 from typing import List, Dict, Tuple, Union, Any, TextIO
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -105,10 +107,140 @@ def fillComponents(thresh:np.array)->np.array:
     img_out = thresh2 | im_flood_fill_inv
     return img_out
 
-def segmentInterfaces(img:np.array) -> np.array:
-    gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
-    gray = cv.medianBlur(gray, 5)
+def onlyBorderComponents(thresh:np.array) -> np.array:
+    '''only include the components that are touching the border'''
+    return cv.subtract(thresh, fillComponents(thresh))
+
+def removeBorders(im:np.array) -> np.array:
+    '''remove borders from color image'''
+    
+    # create a background image
+    average = im.mean(axis=0).mean(axis=0)
+    avim = np.ones(shape=im.shape, dtype=np.uint8)*np.uint8(average)
+    
+    # find the border
+    gray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
     ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-    filled = fillComponents(thresh)
-    markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
-    return filled, markers
+    thresh = dilate(thresh,10)
+    thresh = onlyBorderComponents(thresh)
+    thresh = cv.medianBlur(thresh,31)
+    t_inv = cv.bitwise_not(thresh)
+    
+    # remove border from image
+    imNoBorder = cv.bitwise_and(im,im,mask = t_inv)
+    # create background-colored border
+    border = cv.bitwise_and(avim,avim,mask = thresh)
+    # combine images
+    adjusted = cv.add(imNoBorder, border)
+    return adjusted
+
+def closeVerticalTop(thresh:np.array) -> np.array:
+    '''if the image is of a vertical line, close the top'''
+    if thresh.shape[0]<thresh.shape[1]*2:
+        return thresh
+    
+    imtop = int(thresh.shape[0]*0.03)  
+    thresh[0:imtop, :] = np.ones(thresh[0:imtop, :].shape)*0
+    
+    # vertical line. close top to fix bubbles
+    top = np.where(np.array([sum(x) for x in thresh])>0) 
+    if len(top[0])==0:
+        return thresh
+
+    imtop = top[0][0] # first position in y where black
+    marks = np.where(thresh[imtop]==255) 
+    if len(marks[0])==0:
+        return thresh
+    
+    first = marks[0][0] # first position in x in y row where black
+    last = marks[0][-1]
+    if last-first<thresh.shape[1]*0.2:
+        thresh[imtop:imtop+3, first:last] = 255*np.ones(thresh[imtop:imtop+3, first:last].shape)
+    return thresh
+
+def verticalFilter(gray:np.array) -> np.array:
+    '''vertical line filter'''
+    sobel_y = np.array([[-1, 0, 1],[-1, 0, 1],[-1, 0, 1], [-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
+    filtered_image_y = cv.filter2D(gray, -1, sobel_y)   # x gradient (vertical lines)
+    vertthresh = 255-cv.adaptiveThreshold(filtered_image_y,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,21,2) 
+        # threshold of vertical lines
+    sobel_x = np.array([[-1, -2, -1], [0, 0, 0], [1,2, 1]])
+    filtered_image_x = cv.filter2D(gray, -1, sobel_x)   # y gradient (horizontals)
+    horizthresh = 255-cv.adaptiveThreshold(filtered_image_x,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,21,2)
+        # threshold of horizontal lines
+    vertthresh = cv.subtract(vertthresh,horizthresh) # remove horizontals from verticals
+    vertthresh = closeMorph(vertthresh,2)          # close holes
+    return vertthresh
+
+
+
+
+def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
+    '''threshold the grayscale image'''
+    if attempt==0:
+        # just threshold on intensity
+        ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)    
+        thresh = closeVerticalTop(thresh)
+    elif attempt==1:
+        # adaptive threshold, for local contrast points
+        thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
+        filled = fillComponents(thresh)
+        thresh = cv.add(255-thresh,filled)
+    elif attempt==2:
+        # threshold based on difference between red and blue channel
+        b = img[:,:,2]
+        g = img[:,:,1]
+        r = img[:,:,0]
+        gray2 = cv.subtract(r,b)
+        gray2 = cv.medianBlur(gray2, 5)
+        ret, thresh = cv.threshold(gray2,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+        ret, background = cv.threshold(r,0,255, cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+        background = 255-background
+        thresh = cv.subtract(background, thresh)
+    elif attempt==3:
+        # adaptive threshold, for local contrast points
+        thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,21,2)
+        filled = fillComponents(thresh)
+        thresh2 = cv.add(255-thresh,filled)
+
+        # remove verticals
+        if removeVert:
+            thresh = cv.subtract(thresh, verticalFilter(gray))
+            ret, topbot = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU) 
+            thresh = cv.subtract(thresh,topbot)
+    elif attempt==4:
+        thresh0 = threshes(img, gray, removeVert, 0)
+        thresh2 = threshes(img, gray, removeVert, 2)
+        thresh = cv.bitwise_or(thresh0, thresh2)
+        thresh = cv.medianBlur(thresh,3)
+    thresh = closeVerticalTop(thresh)
+    return thresh
+
+def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=False, removeVert:bool=False) -> np.array:
+    '''from a color image, segment out the ink, and label each distinct fluid segment'''
+    if len(img.shape)==3:
+        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
+    else:
+        gray = img.copy()
+    gray = cv.medianBlur(gray, 5)
+    attempt = attempt0
+    finalAt = attempt
+    while attempt<5:
+        thresh = threshes(img, gray, removeVert, attempt)
+        filled = fillComponents(thresh)            
+        markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
+
+        if diag:
+            imshow(img, gray, thresh, filled)
+            plt.title(f'attempt:{attempt}')
+        if markers[0]>1:
+            boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
+            if max(boxes.loc[1:,'area'])<acrit:
+                # poor segmentation. redo with adaptive thresholding.
+                attempt=attempt+1
+            else:
+                finalAt = attempt
+                attempt = 5
+        else:
+            attempt = attempt+1
+    return filled, markers, finalAt

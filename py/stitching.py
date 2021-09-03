@@ -443,7 +443,10 @@ class Stitch:
         while (duplicate and os.path.exists(fn)) or (not duplicate and i==0):
             # if duplicate is true, keep going until we get a new file name
             # if duplicate is false, stop at 1st iteration
-            fn = os.path.join(folder, tag+'_'+scale+"_{0:0=2d}".format(i)+ext)
+            if 'scale' in kwargs and not kwargs['scale']:
+                fn = os.path.join(folder, tag+"_{0:0=2d}".format(i)+ext)
+            else:
+                fn = os.path.join(folder, tag+'_'+scale+"_{0:0=2d}".format(i)+ext)
             i+=1
         return fn
     

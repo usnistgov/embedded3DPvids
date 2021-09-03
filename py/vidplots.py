@@ -17,6 +17,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 import fileHandling as fh
 import stitchBas as sb
+from printVals import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -36,74 +37,6 @@ __status__ = "Development"
 
 #----------------------------------------------
 
-class fluidVals:
-    '''class that holds info about fluid'''
-    
-    def __init__(self, fluid:str):
-        '''convert the shorthand sample name to info about the fluid'''
-        self.shortname = fluid
-        if fluid[0]=='M':
-            self.var = 'w% silica'
-            self.val = fluid[1:]
-            if fluid[-1]=='S':
-                self.base = 'mineral oil + Span 20'
-                self.val = self.val[:-1]
-            else:
-                self.base = 'mineral oil'
-        elif fluid[:4]=='PDMS':
-            self.var = 'w% silica'
-            if fluid[4]=='M':
-                self.base = 'mineral oil'
-            else:
-                self.base = 'silicone oil'
-            self.val = fluid[5:]
-            if fluid[-1]=='S':
-                self.base = self.base+' + PDMS + Span 20'
-                self.val = self.val[:-1]
-            else:
-                self.base = self.base+' + PDMS'
-        elif fluid[:3]=='PEG':
-            self.var = 'w% silica'
-            self.val = fluid[3:]
-            self.base = 'water + 40% PEGDA'
-        else:
-            self.var = 'w% Laponite RD'
-            self.val = fluid
-            if fluid[-1]=='T':
-                self.base = 'water + Tween 80'
-                self.val = self.val[:-1]
-            else:
-                self.base = 'water'
-        try:
-            self.val = float(self.val)
-        except:
-            logging.warning(f'Failed to convert fluid value to float: {fluid}, {self.val}')
-
-#------   
-
-class printVals:
-    '''class that holds info about experiment'''
-    
-    def __init__(self, folder:str):
-        '''get the ink and support names from the folder name'''
-        self.folder = folder
-        self.bn = os.path.basename(folder)
-        split = re.split('_', self.bn)
-        ink = split[1]
-        sup = split[3]
-        self.ink = fluidVals(ink)
-        self.sup = fluidVals(sup)
-        
-    def base(self, xfluid:str, yfluid:str) -> str:
-        '''get the plot title'''
-        self.xval = getattr(self, xfluid).val
-        self.yval = getattr(self, yfluid).val
-        xbase = getattr(self, xfluid).base
-        ybase = getattr(self, yfluid).base
-        base = xbase + ', '+ybase
-        return base
-    
-#------
     
 
 
@@ -112,7 +45,7 @@ class printVals:
 class folderPlots:
     '''A generic class used for plotting many folders at once. Subclasses are comboPlot, which puts everything on one plot, and gridOfPlots, which puts everythign in separate plots based on viscosity.'''
     
-    def __init__(self, folders:List[str], imsize:float, **kwargs):
+    def __init__(self, folders:List[str], imsize:float,**kwargs):
         '''topFolder is the folder we're plotting
             imsize is the size of the total image in inches
             split is true to split into separate plots by surface tension'''
@@ -122,18 +55,22 @@ class folderPlots:
         self.imsize = imsize
         self.plotsLists(**kwargs) 
         
-    def plotsLists(self, **kwargs):
-        '''plotsLists initializes gridOfPlots and comboPlots objects, creating the initial figure'''
+    def plotsLists(self, vname:str='val', **kwargs):
+        '''plotsLists initializes gridOfPlots and comboPlots objects, creating the initial figure. vname=val for composition data. vname=v for speed data'''
         self.pvlists = [printVals(f) for f in self.flist]
 #         if not self.checkVals(**kwargs):
 #             raise ValueError(f'Inconsistent variables: {[f.bn for f in self.pvlists]}')
-        
+        self.vname = vname
         self.xfluid ='ink'
         self.yfluid = 'sup'
-        self.xvar = self.xfluid+'.var'
-        self.yvar = self.yfluid+'.var'
-        self.xfunc = self.xfluid+'.val'
-        self.yfunc = self.yfluid+'.val'
+        if vname=='val':
+            self.xvar = self.xfluid+'.var'
+            self.yvar = self.yfluid+'.var'
+        else:
+            self.xvar = self.xfluid+'.v'
+            self.yvar = self.yfluid+'.v'
+        self.xfunc = self.xfluid+'.'+vname
+        self.yfunc = self.yfluid+'.'+vname
         
         self.getBases()
         for s in ['x', 'y']:
@@ -154,7 +91,7 @@ class folderPlots:
         '''get the list of materials bases to determine how many plots to make'''
         self.bases = []
         for pv in self.pvlists:
-            base = pv.base(self.xfluid, self.yfluid)
+            base = pv.base(self.xfluid, self.yfluid, vname=self.vname)
             if not base in self.bases:
                 self.bases.append(base)
         return True
@@ -177,19 +114,22 @@ class folderPlots:
         return unqs
     
     def getLabels(self, var:str) -> List[str]:
-        '''get the axis labels and store axis numbers for each folder'''
+        '''get the axis labels and store axis numbers for each folder. vname=var for composition data. vname=v for velocity data'''
         labels = ['']*len(self.bases)
         if var=='x':
             fluid = self.xfluid
         else:
             fluid = self.yfluid
         for pv in self.pvlists:
-            base = pv.base(self.xfluid, self.yfluid)
+            base = pv.base(self.xfluid, self.yfluid, vname=self.vname)
             for i,b in enumerate(self.bases): # fill the list of labels corresponding to list of bases
                 if b==base:
                     pv.ax = i # store the axis number for this folder
                     if len(labels[i])==0: # fill this label if not already filled
-                        labels[i] = getattr(pv, fluid).var
+                        if self.vname=='var':
+                            labels[i] = ('ink ' if var=='x' else 'sup ') + getattr(getattr(pv, fluid),vname)
+                        elif self.vname=='v':
+                            labels[i] = ('ink' if var=='x' else 'sup') + ' speed'
         setattr(self, var+'labels', labels)
         
     
