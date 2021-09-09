@@ -55,7 +55,9 @@ def plainIm(file:str, ic:Union[int, bool], checkUnits:bool=True) -> Tuple[Union[
     
 def plainExp(fn:str, data:pd.DataFrame, units:dict) -> None:
     '''export the file'''
-    col = pd.MultiIndex.from_tuples([(k,v) for k, v in units.items()])
+    if len(data)==0 or len(units)==0:
+        return
+    col = pd.MultiIndex.from_tuples([(k,units[k]) for k in data]) # index with units
     data = np.array(data)
     df = pd.DataFrame(data, columns=col)       
     df.to_csv(fn)

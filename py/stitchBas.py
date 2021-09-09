@@ -60,6 +60,8 @@ class fileList:
         '''args are folders'''
         
         self.folder = folder
+        split = re.split('_', os.path.basename(folder))
+        self.date = int(split[-1][0:6])
         
         # number of columns for each type. 
         self.horizCols = 12

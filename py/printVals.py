@@ -204,6 +204,8 @@ class printVals:
         self.sup.constants(self.vsup, self.do, self.sigma)
         self.const()
         self.units = {'bn':'','folder':'','date':'YYMMDD','di':'mm','do':'mm', 'sigma':'mN/m', 'fluFile':'', 'calibFile':''}
+        self.progDims = {}
+        self.progDimsUnits = {}
         
                     
         
@@ -445,7 +447,7 @@ class printVals:
         '''initialize programmed dimensions table'''
         self.progDims = pd.DataFrame(columns=['name','l','w','t','a','vol'])
         self.progDims.name=['xs5','xs4','xs3','xs2','xs1','vert4','vert3','vert2','vert1','horiz2','horiz1','horiz0']
-        self.progDimsUnits = {'l':'mm','w':'mm','t':'s','a':'mm^2','vol':'mm^3'}
+        self.progDimsUnits = {'name':'', 'l':'mm','w':'mm','t':'s','a':'mm^2','vol':'mm^3'}
                 
     def useDefaultTimings(self):
         '''use the programmed line lengths'''
@@ -546,6 +548,30 @@ class printVals:
             
     def exportProgDims(self) -> None:
         plainExp(self.progDimsFile(), self.progDims, self.progDimsUnits)
+        
+    def progDimsSummary(self) -> Tuple[pd.DataFrame,dict]:
+        if len(self.progDims)==0:
+            self.importProgDims()
+        if len(self.progDims)==0:
+            return {},{}
+        df = self.progDims.copy()
+        df2 = pd.DataFrame(columns=df.columns)
+        for s in ['xs', 'vert', 'horiz']:
+            df2.loc[s] = df[df.name.str.contains(s)].mean()
+        df2 = df2.drop(columns=['name'])
+        df2 = df2.T
+        v = (df2).unstack().to_frame().sort_index(level=0).T
+        v.columns = v.columns.map('_'.join) # single row dataframe
+        vunits = dict([[k, self.progDimsUnits[re.split('_', k)[1]]] for k in v]) # units for this dataframe
+        for s in ['bn', 'vink', 'vsup', 'sigma']:
+            v.loc[0, s] = getattr(self, s)
+        v.loc[0, 'pressure'] = self.targetPressures[0]
+        vunits['bn']=''
+        vunits['vink']='mm/s'
+        vunits['vsup']='mm/s'
+        vunits['sigma']='mJ/m^2'
+        vunits['pressure']='mbar'
+        return v,vunits
     
     def vertSum(self) -> Tuple[dict, dict]:
         '''summarize all vertical lines'''
@@ -652,7 +678,7 @@ class printVals:
         return t3, units
     
     def summary(self) -> Tuple[dict,dict]:
-        logging.info(self.folder)
+#         logging.info(self.folder)
 #         self.fluigent()
         self.importProgDims()
         meta,metaunits = self.metarow()

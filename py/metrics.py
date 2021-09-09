@@ -387,12 +387,8 @@ def fnMeasures(folder:str, st:str) -> str:
 #     logging.info(f'Exported {fn}')
     
 def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
-    pdfile = os.path.join(folder, os.path.basename(folder)+'_progDims.csv')
-    if not os.path.exists(pdfile):
-        pv = printVals(folder)
-        progDims, units = pv.importProgDims()
-    else:
-        progDims, units = plainIm(pdfile, ic=0)
+    pv = printVals(folder)
+    progDims, units = pv.importProgDims()
     for s in ['l', 'w']:
         progDims[s] = progDims[s]*cfg.const.pxpmm # convert to mm
         units[s] = 'px'
@@ -422,6 +418,8 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
     try:
         fl = fileList(folder)
     except:
+        return
+    if fl.date<210500:
         return
     progDims, units = importProgDims(folder)
     logging.info(f'Measuring {os.path.basename(folder)}')
@@ -626,33 +624,31 @@ def stillsSummaryRecursive(topfolder:str) -> pd.DataFrame:
     if isSubFolder(topfolder):
         try:
             pv = printVals(topfolder)
-#             pv.redoSpeedFile()
-            pv.importProgDims()
-#             t,u = pv.summary()
-            t,u = {},{}
+            t,u = pv.summary()
         except:
-#             traceback.print_exc()
             logging.warning(f'failed to summarize {topfolder}')
             return {}, {}
         return [t],u
     elif os.path.isdir(topfolder):
         tt = []
         u = {}
+        logging.info(topfolder)
         for f in os.listdir(topfolder):
             f1f = os.path.join(topfolder, f)
             if os.path.isdir(f1f):
                 t,u0=stillsSummaryRecursive(f1f)
                 if len(t)>0:
                     tt = tt+t
-                    if len(u)==0:
-                        u = u0
+                    if len(u0)>len(u):
+                        u = dict(u, **u0)
         return tt, u
     
 def stillsSummary(topfolder:str, exportFolder:str, filename:str='stillsSummary.csv') -> pd.DataFrame:
     '''go through all of the folders and summarize the stills'''
     tt,units = stillsSummaryRecursive(topfolder)
-#     if os.path.exists(exportFolder):
-#         plainExp(os.path.join(exportFolder, filename), tt, units)
+    tt = pd.DataFrame(tt)
+    if os.path.exists(exportFolder):
+        plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
 
 def speedTableRecursive(topfolder:str) -> pd.DataFrame:
@@ -685,12 +681,45 @@ def speedTable(topfolder:str, exportFolder:str, filename:str) -> pd.DataFrame:
     tt,units = speedTableRecursive(topfolder)
     tt = pd.DataFrame(tt)
     if os.path.exists(exportFolder):
-        fn = os.path.join(exportFolder, filename)
-        col = pd.MultiIndex.from_tuples([(k,v) for k, v in units.items()])
-        data = np.array(tt)
-        df = pd.DataFrame(data, columns=col)       
-        df.to_csv(fn)
-        logging.info(f'Exported {fn}')
+        plainExp(os.path.join(exportFolder, filename), tt, units)
+    return tt,units
+
+
+def progTableRecursive(topfolder:str, useDefault:bool=False, **kwargs) -> pd.DataFrame:
+    '''go through all of the folders and summarize the stills'''
+    if isSubFolder(topfolder):
+        try:
+            pv = printVals(topfolder)
+            if useDefault:
+                pv.useDefaultTimings()
+            t,u = pv.progDimsSummary()
+        except:
+            traceback.print_exc()
+            logging.warning(f'failed to get speed from {topfolder}')
+            return {}, {}
+        return t,u
+    elif os.path.isdir(topfolder):
+        tt = []
+        u = {}
+        for f in os.listdir(topfolder):
+            f1f = os.path.join(topfolder, f)
+            if os.path.isdir(f1f):
+                t,u0=progTableRecursive(f1f, useDefault=useDefault, **kwargs)
+                if len(t)>0:
+                    if len(tt)>0:
+                        tt = pd.concat([tt,t])
+                    else:
+                        tt = t
+                    if len(u)==0:
+                        u = u0
+        return tt, u
+
+def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.DataFrame:
+    '''go through all the folders, get a table of the speeds and pressures, and export to fn'''
+    tt,units = progTableRecursive(topfolder, **kwargs)
+    tt = pd.DataFrame(tt)
+    if os.path.exists(exportFolder):
+        plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
                 
     
