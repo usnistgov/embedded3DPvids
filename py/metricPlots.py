@@ -147,87 +147,171 @@ def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool,
                     xm, xerr = pooledSE(ss3, xvar)
                     ym, yerr = pooledSE(ss3, yvar)
                 if zvar in ss3:
-                    c0, _ = pooledSE(ss3, zvar)
+                    try:
+                        c0, _ = pooledSE(ss3, zvar)
+                    except:
+                        c0 = 0
                 else:
                     c0 = 0
                 df2.append({'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0})
     df2 = pd.DataFrame(df2)
     return df2
-   
 
-def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:bool=False, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', **kwargs):
+
+def setUpAxes(xvar:str, yvar:str, **kwargs):
+    '''get figure and axes'''
+    if 'fig' in kwargs:
+        fig = kwargs['fig']
+    else:
+        fig = plt.figure()
+        kwargs['fig'] = fig
+    if 'ax' in kwargs:
+        ax = kwargs['ax']
+    else:
+        ax = fig.add_subplot(111)
+        kwargs['ax'] = ax
+    axisLabels(xvar, yvar, **kwargs)
+    return fig, ax, kwargs
+
+def axisLabels(xvar:str, yvar:str, **kwargs) -> None:
+    '''get the labels for the x and y axis and label the axis'''
+    xlabel = xvar
+    ylabel = yvar
+    if 'units' in kwargs:
+        units = kwargs['units']
+        if xvar in units and len(units[xvar])>0:
+            xlabel = xlabel + f' ({units[xvar]})'
+        if yvar in units and len(units[yvar])>0:
+            ylabel = ylabel + f' ({units[yvar]})'
+    kwargs['ax'].set_xlabel(xlabel)
+    kwargs['ax'].set_ylabel(ylabel)
+    return
+
+def setLog(ax, logx:bool, logy:bool) -> None:
+    '''set log scale on axis'''
+    if logx:
+        ax.set_xscale('log')
+    if logy:
+        ax.set_yscale('log')
+        
+def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict:
+    '''get the color for this series and put it in the plot args dictionary. i should be between 0 and 1, indicating color'''
+    if gradColor==0:
+        varargs = {}
+        if 'color' in kwargs:
+            # same color, vary marker
+            color = kwargs['color']
+        else:
+            # different color, same marker
+            if len(lst)>1:
+                ifrac = (i)/(len(lst)-1)
+                cmap = cm.get_cmap(cmapname)   
+                color = cmap(ifrac)
+                if (ifrac>0.35 and ifrac<0.65) and cmapname=='coolwarm':
+                    color = adjust_lightness(color, 1-abs(0.5-ifrac)) # darken middle color
+            else:
+                color = 'black'
+        if ('marker' in kwargs and kwargs['marker']==1) or (not 'marker' in kwargs and i==1):
+            varargs['facecolors']='none'
+            varargs['edgecolors']=color
+            varargs['color']=color 
+        elif 'marker' in kwargs:
+            varargs['marker'] = kwargs['marker']
+            varargs['color']=color  
+            varargs['edgecolors']='none'
+            varargs['facecolors']=color
+        else:
+            varargs['marker'] = ['o','o','P', 'v','s','X','D','v'][i]
+            varargs['color']=color  
+            varargs['edgecolors']='none'
+            varargs['facecolors']=color
+    elif gradColor==1:
+        # color by gradient
+        varargs = {}
+    elif gradColor==2:
+        varargs = {'fmt':'o'}
+        varargs['color']='black'
+    return varargs
+        
+def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) :
+    '''df2 is already sorted into x,y,c where c is color'''
+    if len(df2)==0:
+        return
+    
+    if gradColor==1:
+        # gradient coloring
+        cmin = df2.c.min()
+        cmax = df2.c.max()
+        if dx>0 and dy>0:
+            cmap = cm.get_cmap(cmapname)   
+            for j, row in df2.iterrows():
+                color = cmap((row['c']-cmin)/(cmax-cmin))
+                sc = ax.errorbar([row['x']],[row['y']], xerr=[row['xerr']], yerr=[row['yerr']],linestyle='None', color=color,**varargs)
+        sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,c=df2['c'],cmap=cmapname,**varargs)
+    else:
+        sc = ax.scatter(df2['x'],df2['y'], linestyle='None',zorder=100,**varargs)
+        for s in ['label', 'facecolors', 'edgecolors']:
+            if s in varargs:
+                varargs.pop(s)
+        sc = ax.errorbar(df2['x'],df2['y'], xerr=df2['xerr'], yerr=df2['yerr'],linestyle='None',**varargs)
+    return sc
+
+def idealLines(**kwargs) -> None:
+    '''add vertical and horizontal lines'''
+    if 'xideal' in kwargs:
+        kwargs['ax'].axvline(kwargs['xideal'], 0,1, color='gray', linestyle='--', linewidth=1, label='ideal')
+    if 'yideal' in kwargs:
+        varargs = {'color':'gray', 'linestyle':'--', 'linewidth':'1'}
+        if not 'xideal' in kwargs:
+            varargs['label']='ideal'
+        kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
+        
+def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', **kwargs):
     '''scatter plot. 
-    colorBy is the variable to color by. gradColor means to use a gradient color scheme, otherwise use discrete colors.
+    colorBy is the variable to color by. gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
     xvar is the x variable name, yvar is the y variable name. 
     logx=True to plot x axis on log scale. logy=True to plot y on log scale.
     dx>0 to group points by x and take error. otherwise, plot everything. dx=1 to average all points together'''
     if not (xvar in ss and yvar in ss):
         raise NameError('Variable name is not in table')
-    if 'fig' in kwargs:
-        fig = kwargs['fig']
-    else:
-        fig = plt.figure()
-    if 'ax' in kwargs:
-        ax = kwargs['ax']
-    else:
-        ax = fig.add_subplot(111)
-    ax.set_xlabel(xvar)
-    ax.set_ylabel(yvar)
-    if logx:
-        ax.set_xscale('log')
-    if logy:
-        ax.set_yscale('log')
-    cmap = cm.get_cmap(cmapname)
+    fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
+    setLog(ax, logx, logy)                    # set axes to log or not
+               # get a colormap function
     ss1 = ss.copy()
+    
+    # remove NA from table
     if not colorBy in ss:
-        gradColor = True
-        ss1 = ss1[[xvar,yvar]].dropna()  # remove NA from table
+        gradColor = 2
+        ss1 = ss1[[xvar,yvar]].dropna()  
     else:
         ss1 = ss1[[xvar, yvar, colorBy]].dropna()
-    if gradColor:
+        
+    # get a list of values on which to create series. if gradient color scheme, all one series
+    if gradColor>0:
         lst = [0]
     else:
         lst = ss1[colorBy].unique()
+        
+    # iterate through list of series
     for i,val in enumerate(lst):
-        if not gradColor:
-            varargs = {'fmt':'o'}
-            ss2 = ss1[ss1[colorBy]==val]
-            if len(lst)>1:
-                color = cmap((i)/(len(lst)-1))
-                if i/(len(lst)-1)==0.5 and cmapname=='coolwarm':
-                    color = adjust_lightness(color, 0.5) # darken middle color
-            else:
-                color = 'black'
-            varargs['color']=color   
-            varargs['label']=val
-        else: 
-            varargs = {}
-            ss2 = ss1
-        if gradColor and colorBy in ss: 
+        varargs = seriesColor(gradColor, cmapname, i, lst, **kwargs)
+        zvar = colorBy
+        if colorBy in ss:
             zvar = colorBy
-            
+        if gradColor==0:
+            ss2 = ss1[ss1[colorBy]==val]
+            varargs['label']=val
         else:
-            zvar = ''
+            ss2 = ss1
+
         if len(ss2)>0:
             df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
-            if len(df2)>0:
-                if gradColor and colorBy in ss:
-                    cmin = df2.c.min()
-                    cmax = df2.c.max()
-                    if dx>0 and dy>0:
-                        for j, row in df2.iterrows():
-                            color = cmap((row['c']-cmin)/(cmax-cmin))
-                            sc = ax.errorbar([row['x']],[row['y']], xerr=[row['xerr']], yerr=[row['yerr']],linestyle='None', color=color,**varargs)
-                    sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,c=df2['c'],cmap=cmapname,**varargs)
-                else:
-                    sc = ax.errorbar(df2['x'],df2['y'], xerr=df2['xerr'], yerr=df2['yerr'],linestyle='None',**varargs)
-                    if not colorBy in ss:
-                        sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,**varargs)
+            sc = plotSeries(df2, gradColor, ax, cmapname, varargs)
+      
+    # add verticals, horizontals
+    idealLines(**kwargs)
         
-    if 'xideal' in kwargs:
-        ax.axvline(kwargs['xideal'], 0,1, color='gray', linestyle='--', linewidth=1, label='ideal')
-    if 'yideal' in kwargs:
-        ax.axhline(kwargs['yideal'], 0,1, color='gray', linestyle='--', linewidth=1, label='ideal')
+    # add legends
     if gradColor and colorBy in ss:
         cbar = plt.colorbar(sc, label=colorBy)
     else:
@@ -237,6 +321,8 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
                 ax.legend(bbox_to_anchor=(1.05,1), loc='upper left', title=colorBy)
             else:
                 ax.legend(bbox_to_anchor=(0,1), loc='lower left', title=colorBy)
+                
+    # set square
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
     return fig,ax
 

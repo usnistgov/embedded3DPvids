@@ -199,12 +199,13 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
 
 
 def vertSegment(im:np.array, attempt0:int, s:float, maxlen:float, diag:int) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
-    '''segment out the filametn and measure it'''
-    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=5000, diag=max(0,diag-1))
-    if markers[0]==1:
+    '''segment out the filament and measure it'''
+    acrit=2500
+    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=acrit, diag=max(0,diag-1))
+    if len(markers)==0 or markers[0]==1:
         return {}, {}, {}, attempt, [], im2 # nothing to measure here
     df = markers2df(markers)
-    df = df[(df.a>5000)]
+    df = df[(df.a>acrit)]
         # remove anything too small
     df2 = df[(df.x0>10)&(df.y0>10)&(df.x0+df.w<im.shape[1]-10)&(df.y0+df.h<im.shape[0]-10)] 
         # remove anything too close to the border
@@ -231,7 +232,7 @@ def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]
     else:
         attempt0 = 0
     df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt0, s, maxlen, diag)
-    if len(componentMeasures)==0 or componentMeasures['emptiness']>0.3:
+    if len(componentMeasures)==0 or componentMeasures['emptiness']>0.5:
         df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt+1, s, maxlen, diag)
     if len(df2)==0:
         return {}, {}
@@ -256,7 +257,7 @@ def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]
     if diag:
         im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
         im2 = cv.rectangle(im2, (x0,y0), (x0+w,y0+h), (0,0,255), 2)
-        im2 = cv.circle(im2, (int(xc), int(xc)), 2, (0,0,255), 2)
+        im2 = cv.circle(im2, (int(xc), int(yc)), 2, (0,0,255), 2)
         imshow(im, im2)
         plt.title(os.path.basename(file))
     return ret, units
@@ -626,6 +627,7 @@ def stillsSummaryRecursive(topfolder:str) -> pd.DataFrame:
             pv = printVals(topfolder)
             t,u = pv.summary()
         except:
+            traceback.print_exc()
             logging.warning(f'failed to summarize {topfolder}')
             return {}, {}
         return [t],u
@@ -695,7 +697,7 @@ def progTableRecursive(topfolder:str, useDefault:bool=False, **kwargs) -> pd.Dat
             t,u = pv.progDimsSummary()
         except:
             traceback.print_exc()
-            logging.warning(f'failed to get speed from {topfolder}')
+            logging.warning(f'failed to get programmed timings from {topfolder}')
             return {}, {}
         return t,u
     elif os.path.isdir(topfolder):

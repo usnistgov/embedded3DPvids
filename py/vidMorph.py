@@ -179,7 +179,8 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     '''threshold the grayscale image'''
     if attempt==0:
         # just threshold on intensity
-        ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)    
+#         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)  
+        ret, thresh = cv.threshold(gray,127,255,cv.THRESH_BINARY_INV)  
         thresh = closeVerticalTop(thresh)
     elif attempt==1:
         # adaptive threshold, for local contrast points
@@ -218,6 +219,8 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
 
 def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=False, removeVert:bool=False) -> np.array:
     '''from a color image, segment out the ink, and label each distinct fluid segment'''
+    if attempt0>=5:
+        return [], [], attempt0
     if len(img.shape)==3:
         gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
     else:
@@ -226,6 +229,7 @@ def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=
     attempt = attempt0
     finalAt = attempt
     while attempt<5:
+        finalAt = attempt
         thresh = threshes(img, gray, removeVert, attempt)
         filled = fillComponents(thresh)            
         markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
@@ -239,7 +243,6 @@ def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=
                 # poor segmentation. redo with adaptive thresholding.
                 attempt=attempt+1
             else:
-                finalAt = attempt
                 attempt = 5
         else:
             attempt = attempt+1

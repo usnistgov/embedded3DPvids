@@ -322,7 +322,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     bn = os.path.basename(topfolder)
     s = ''
     for k in kwargs:
-        if not k in ['adjustBounds'] and type(kwargs[k]) is not dict:
+        if not k in ['adjustBounds', 'overlay', 'overwrite'] and type(kwargs[k]) is not dict:
             s = s + k + '_'+str(kwargs[k])+'_'
     s = s[0:-1]
     s = s.replace('*', 'x')
@@ -340,11 +340,9 @@ def exportIm(fn:str, fig) -> None:
     for s in ['.svg', '.png']:
         fig.savefig(fn+s, bbox_inches='tight', dpi=300)
     print('Exported ', fn)
-
-def picFromFolder(folder:str, tag:str) -> np.array:
-    '''gets one picture from a folder
-    returns the picture
-    tag is the name of the image type, e.g. 'xs1'. Used to find images. '''
+    
+def picFileFromFolder(folder:str, tag:str) -> str:
+    '''get the file name of the image'''
     imfile = ''
     for f in os.listdir(folder):
         if tag in f:
@@ -360,6 +358,13 @@ def picFromFolder(folder:str, tag:str) -> np.array:
                 l = os.listdir(archive)
                 if len(l)>0:
                     imfile = os.path.join(archive, l[0]) # if there is a file in the archive folder, use it
+    return imfile
+
+def picFromFolder(folder:str, tag:str) -> np.array:
+    '''gets one picture from a folder
+    returns the picture
+    tag is the name of the image type, e.g. 'xs1'. Used to find images. '''
+    imfile = picFileFromFolder(folder, tag)
     if os.path.exists(imfile):
         im = cv.imread(imfile)
         return im
@@ -392,10 +397,10 @@ def cropImage(im:np.array, crops:dict) -> np.array:
         y0 = max(0,height-crops['yf'])
     else:
         y0 = 0
-    im = im[y0:yf, x0:xf]
+    im = im[int(y0):int(yf), int(x0):int(xf)]
     return im
 
-def importAndCrop(folder:str, tag:str, **kwargs) -> np.array:
+def importAndCrop(folder:str, tag:str, normalize:bool=True, **kwargs) -> np.array:
     '''import and crop an image from a folder, given a tag. crops can be in kwargs'''
     im = picFromFolder(folder, tag)
     if type(im) is list:
@@ -404,6 +409,9 @@ def importAndCrop(folder:str, tag:str, **kwargs) -> np.array:
     if 'crops' in kwargs:
         crops = kwargs['crops']
         im = cropImage(im, crops)
+    if normalize:
+        norm = np.zeros(im.shape)
+        im = cv.normalize(im,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
     return im
 
 def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
@@ -459,6 +467,39 @@ def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
     s = 0.95 # scale images to leave white space
     im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
     cp.axs[axnum].imshow(im, extent=[x0-dx*s, x0+dx*s, y0-dy*s, y0+dy*s])
+    
+    if 'overlay' in kwargs:
+        overlay = kwargs['overlay'] # get overlay dictionary from kwargs
+        file = picFileFromFolder(pv.folder, t)
+        scale = float(sb.fileScale(file))
+        pxPerBlock = pxperunit/s # rescale px to include white space
+        realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
+        mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
+        mmPerPlotUnit = mmPerBlock/(2*dx0) # convert to dimensions of the plot
+        if 'diam' in overlay:
+#             circlewMM = overlay['diam'] # diameter should be in mm
+            circlewMM = getFilamentDiameter(file)
+            circlewPlotUnits = circlewMM/mmPerPlotUnit # diameter in plot units
+            if 'dx' in overlay:
+                x0 = x0+overlay['dx']
+            if 'dy' in overlay:
+                y0 = y0+overlay['dy']
+            circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
+            cp.axs[axnum].add_patch(circle2)
+            
+def getFilamentDiameter(file:str) -> float:
+    '''get the intended filament diameter in mm'''
+    if '_VI_' in file:
+        f = re.split('_', os.path.basename(file))
+        for i,char in enumerate(f):
+            if char=='VI':
+                inkv = float(f[i+1])
+            elif char=='VS':
+                supv = float(f[i+1])
+    else:
+        inkv = 5
+        supv = 5
+    return cfg.const.di*np.sqrt(inkv/supv)
 
 
 def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:

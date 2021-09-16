@@ -440,9 +440,9 @@ class Stitch:
         i = 0
         ext = os.path.splitext(fn)[-1]
         scale = '{0:.4g}'.format(self.scale)
-        while (duplicate and os.path.exists(fn)) or (not duplicate and i==0):
-            # if duplicate is true, keep going until we get a new file name
-            # if duplicate is false, stop at 1st iteration
+        while (duplicate==1 and os.path.exists(fn)) or (not duplicate==1 and i==0):
+            # if duplicate is 1, keep going until we get a new file name
+            # if duplicate is 0 or 2, stop at 1st iteration
             if 'scale' in kwargs and not kwargs['scale']:
                 fn = os.path.join(folder, tag+"_{0:0=2d}".format(i)+ext)
             else:
@@ -450,7 +450,7 @@ class Stitch:
             i+=1
         return fn
     
-    def returnStitch(self, export:bool=False, tag:str='', debug:bool=False, clearEntries:bool=False, duplicate:bool=True, retval:int=0, **kwargs) -> int:
+    def returnStitch(self, export:bool=False, tag:str='', debug:bool=False, clearEntries:bool=False, duplicate:bool=1, retval:int=0, **kwargs) -> int:
         '''return value from stitchTranslate. Return 0 if stitched, 1 if not'''
 
         if debug:
@@ -467,7 +467,7 @@ class Stitch:
     def stitchTranslate(self, **kwargs) -> int:
         '''stitch the images, but only use translation. clearEntries=true to remove stitched images from queue when done. Returns 0 if stitched, 1 if not'''
         if 'duplicate' in kwargs:
-            if not kwargs['duplicate']:
+            if kwargs['duplicate']==0:
                 # check if there is already a file
                 fn = self.newFN(**kwargs)
                 if os.path.exists(fn):

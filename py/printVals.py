@@ -593,8 +593,10 @@ class printVals:
             t2['wN'] = row['w']/cfg.const.pxpmm/progrow['w'] # convert to mm, divide by intended dimension
             t2['hN'] = row['h']/cfg.const.pxpmm/progrow['l'] # convert to mm
             t2['vN'] = row['vest']/cfg.const.pxpmm**3/progrow['vol'] # convert to mm^3. vN is the estimated volume of the bounding box
-            t2['viN'] = row['vintegral']/cfg.const.pxpmm**3/progrow['vol'] # convert to mm^3. viN is the estimated volume by integrating over the length of the line
-            t2['vleakN'] = row['vleak']/cfg.const.pxpmm**3/(progrow['a']*(15-progrow['l'])) 
+            t2['vintegral'] = row['vintegral']/cfg.const.pxpmm**3
+            t2['viN'] = t2['vintegral']/progrow['vol'] # convert to mm^3. viN is the estimated volume by integrating over the length of the line
+            t2['vleak'] = row['vleak']/cfg.const.pxpmm**3
+            t2['vleakN'] = t2['vleak']/(progrow['a']*(15-progrow['l'])) 
                 # convert to mm^3. viN is the estimated volume by integrating past the programmed length of the line, 
                 # normalized by the remaining allowed volume after flow stops
             t2['roughness'] = row['roughness']
@@ -606,7 +608,7 @@ class printVals:
         t3 = [['vert_'+s, t1[s].mean()] for s in t1] # averages
         t4 = [['vert_'+s+'_SE', t1[s].sem()] for s in t1] # standard errors
         t3 = dict(t3+t4)
-        units = dict([[s,''] for s in t3.keys()])
+        units = dict([[s,units[s.replace('vert_','')].replace('px','mm') if s.replace('vert_','') in units else ''] for s in t3.keys()])
         return t3, units
     
     def horizSum(self) -> Tuple[dict, dict]:
@@ -665,7 +667,8 @@ class printVals:
             t2['aspect'] = row['aspect']
             t2['xshift'] = row['xshift']
             t2['yshift'] = row['yshift']
-            t2['areaN'] = row['area']/(cfg.const.pxpmm**2)/progrow['a']
+            t2['area'] = row['area']/(cfg.const.pxpmm**2)
+            t2['areaN'] = t2['area']/progrow['a']
             t2['wN'] = row['w']/cfg.const.pxpmm/progrow['w']
             t2['hN'] = row['h']/cfg.const.pxpmm/progrow['w']
             t2['roughness'] = row['roughness']
@@ -674,7 +677,8 @@ class printVals:
         t3 = [['xs_'+s, t1[s].mean()] for s in t1] # averages
         t4 = [['xs_'+s+'_SE', t1[s].sem()] for s in t1] # standard errors
         t3 = dict(t3+t4)
-        units = dict([[s,''] for s in t3.keys()])
+        units['area']='mm^2'
+        units = dict([[s,units[s.replace('xs_','')] if s.replace('xs_','') in units else ''] for s in t3.keys()])
         return t3, units
     
     def summary(self) -> Tuple[dict,dict]:

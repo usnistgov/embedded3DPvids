@@ -50,8 +50,11 @@ def colNum(file:str)->int:
     
 def fileScale(file:str) -> str:
     '''get the scale from the file name'''
-    scale = re.split('_', os.path.basename(file))[-2]
-    return scale
+    try:
+        scale = float(re.split('_', os.path.basename(file))[-2])
+    except:
+        scale = 1
+    return str(scale)
 
 class fileList:
     '''class that holds lists of files of different type'''
@@ -415,20 +418,23 @@ class fileList:
             if debug:
                 logging.info(f'Old: {f}, New: {newname}')
             else:
+                if os.path.exists(newname):
+                    # remove existing file
+                    os.remove(newname)
                 os.rename(f, newname)
                 newnames.append(newname)
         if not debug:
             setattr(self, st+"Still", newnames)
             
-    def stitchGroup(self, st:str, archive:bool=True, scale:float=1, duplicate:bool=False, **kwargs) -> int:
+    def stitchGroup(self, st:str, archive:bool=True, scale:float=1, duplicate:bool=0, **kwargs) -> int:
         '''stitch the group of files together and export. 
         st must be horiz, vert1, vert2, vert3, vert4, xs1, xs2, xs3, xs4, or xs5. 
         archive true to move raw images to raw folder
         scale=1 to keep original resolution. lower to compress image.
-        put duplicate=True in kwargs to add a new file if this stitch already exists. duplicate=False to check if the file already exists
+        put duplicate=1 in kwargs to add a new file if this stitch already exists. duplicate=0 to check if the file already exists, duplicate=2 to overwrite existing file
         Returns 0 if stitched, 1 if failed, 2 if the file already exists.'''
-        
-        if not duplicate:
+
+        if duplicate==0:
             if len(getattr(self, st+'Stitch'))>0:
                 return 2 # file already exists
         
@@ -444,7 +450,8 @@ class fileList:
         s = stitching.Stitch(files)
         tag = sample+'_'+st
         
-        if not duplicate:
+        if duplicate==0:
+            # check if the file exists
             fn = s.newFN(duplicate=False, tag=tag)
             fn2 = s.newFN(duplicate=False, tag=tag, scale=False)
             if os.path.exists(fn) or os.path.exists(fn2):
@@ -504,11 +511,9 @@ class fileList:
         if not scale==1:
             s.scaleImages(scale) # rescale images
 
-
-            
         try:
             # stitch images and export
-            s.stitchTranslate(export=True, tag=tag, **kwargs)
+            s.stitchTranslate(export=True, tag=tag, duplicate=duplicate, **kwargs)
 #             if st=='horiz':
 #                 self.stitchGroup('horizfull', archive=archive,scale=1,duplicate=duplicate,**kwargs)
         except:
@@ -538,7 +543,7 @@ def stitchSubFolder(folder:str, **kwargs) -> None:
     '''stitches images in the subfolder'''
     try:
         fl = fileList(folder)
-        if not fl.stitchDone() and len(fl.xs1Still)>0:
+        if (('duplicate' in kwargs and kwargs['duplicate']>0) or not fl.stitchDone()) and len(fl.xs1Still)>0:
             fl.stitchGroups(**kwargs)
     except:
         logging.error(f'Error stitching {folder}')
