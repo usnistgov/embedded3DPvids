@@ -27,7 +27,7 @@ __status__ = "Development"
 
 #----------------------------------------------
 
-def plainIm(file:str, ic:Union[int, bool], checkUnits:bool=True) -> Tuple[Union[pd.DataFrame, List[Any]], Dict]:
+def plainIm(file:str, ic:Union[int, bool]=0, checkUnits:bool=True) -> Tuple[Union[pd.DataFrame, List[Any]], Dict]:
     '''import a csv to a pandas dataframe. ic is the index column. Int if there is an index column, False if there is none. checkUnits=False to assume that there is no units row. Otherwise, look for a units row'''
     if os.path.exists(file):
         try:

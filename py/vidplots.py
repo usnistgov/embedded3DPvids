@@ -18,6 +18,7 @@ sys.path.append(currentdir)
 import fileHandling as fh
 import stitchBas as sb
 from printVals import *
+import vidMorph as vm
 
 # logging
 logger = logging.getLogger(__name__)
@@ -410,8 +411,7 @@ def importAndCrop(folder:str, tag:str, normalize:bool=True, **kwargs) -> np.arra
         crops = kwargs['crops']
         im = cropImage(im, crops)
     if normalize:
-        norm = np.zeros(im.shape)
-        im = cv.normalize(im,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
+        im = vm.normalize(im)
     return im
 
 def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:

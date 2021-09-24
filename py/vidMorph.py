@@ -180,7 +180,8 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     if attempt==0:
         # just threshold on intensity
 #         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)  
-        ret, thresh = cv.threshold(gray,127,255,cv.THRESH_BINARY_INV)  
+#         ret, thresh = cv.threshold(gray,127,255,cv.THRESH_BINARY_INV)  
+        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)  
         thresh = closeVerticalTop(thresh)
     elif attempt==1:
         # adaptive threshold, for local contrast points
@@ -217,7 +218,7 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     thresh = closeVerticalTop(thresh)
     return thresh
 
-def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=False, removeVert:bool=False) -> np.array:
+def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=False, removeVert:bool=False, removeBorder:bool=True) -> np.array:
     '''from a color image, segment out the ink, and label each distinct fluid segment'''
     if attempt0>=5:
         return [], [], attempt0
@@ -231,7 +232,10 @@ def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=
     while attempt<5:
         finalAt = attempt
         thresh = threshes(img, gray, removeVert, attempt)
-        filled = fillComponents(thresh)            
+        if removeBorder:
+            filled = fillComponents(thresh)    
+        else:
+            filled = thresh.copy()
         markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
 
         if diag:
@@ -247,3 +251,21 @@ def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=
         else:
             attempt = attempt+1
     return filled, markers, finalAt
+
+
+
+def markers2df(markers:Tuple) -> pd.DataFrame:
+    '''convert the labeled segments to a dataframe'''
+    df = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w','h','a'])
+    df2 = pd.DataFrame(markers[3], columns=['xc','yc'])
+    df = pd.concat([df, df2], axis=1) 
+        # combine markers into dataframe w/ label stats
+    df = df[df.a<df.a.max()] 
+        # remove largest element, which is background
+    return df
+
+def normalize(im:np.array) -> np.array:
+    '''normalize the image'''
+    norm = np.zeros(im.shape)
+    im = cv.normalize(im,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
+    return im

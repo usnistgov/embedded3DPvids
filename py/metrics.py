@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''Functions for collecting data from stills of single lines'''
 
 # external packages
 import os, sys
@@ -134,15 +134,6 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
 
 #-------------------------------
 
-def markers2df(markers:Tuple) -> pd.DataFrame:
-    '''convert the labeled segments to a dataframe'''
-    df = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w','h','a'])
-    df2 = pd.DataFrame(markers[3], columns=['xc','yc'])
-    df = pd.concat([df, df2], axis=1) 
-        # combine markers into dataframe w/ label stats
-    df = df[df.a<df.a.max()] 
-        # remove largest element, which is background
-    return df
 
 def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
     '''measure cross-section'''
@@ -377,15 +368,7 @@ def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0) -> Union[
 def fnMeasures(folder:str, st:str) -> str:
     '''get a filename for summary table'''
     return os.path.join(folder, os.path.basename(folder)+'_'+st+'Summary.csv')
-    
-# def exportMeasures(t:pd.DataFrame, st:str, folder:str, units:dict) -> None:
-#     '''export measured values'''
-#     fn = fnMeasures(folder, st)
-#     col = pd.MultiIndex.from_tuples([(k,v) for k, v in units.items()])
-#     data = np.array(t)
-#     df = pd.DataFrame(data, columns=col)       
-#     df.to_csv(fn)
-#     logging.info(f'Exported {fn}')
+
     
 def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
     pv = printVals(folder)

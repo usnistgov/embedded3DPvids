@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
 
 # external packages
 import os, sys
@@ -229,7 +229,7 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
         # color by gradient
         varargs = {}
     elif gradColor==2:
-        varargs = {'fmt':'o'}
+        varargs = {}
         varargs['color']='black'
     return varargs
         
@@ -281,6 +281,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     
     # remove NA from table
     if not colorBy in ss:
+        logging.warning(f'variable {colorBy} is not in table')
         gradColor = 2
         ss1 = ss1[[xvar,yvar]].dropna()  
     else:

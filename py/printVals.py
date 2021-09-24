@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''Functions for storing metadata about print folders'''
 
 # external packages
 import os, sys
@@ -279,10 +279,16 @@ class printVals:
     
     def vidFile(self) -> str:
         '''get the path of the video file taken during the print'''
+        vidfiles = []
         for f in os.listdir(self.folder):
             if 'singleLinesNoZig' in f and 'avi' in f and 'Basler camera' in f:
-                return os.path.join(self.folder, f)
-        return ''
+                vidfiles.append(os.path.join(self.folder, f))
+        if len(vidfiles)>0:
+            # select the last video file
+            vidfiles.sort()
+            return vidfiles[-1]
+        else:
+            return ''
                     
     
     #--------------------------------------------------
@@ -421,7 +427,7 @@ class printVals:
         if len(l)==0:
             raise NameError(f'No fluigent file found in {self.folder}')
         l.sort()
-        file = os.path.join(self.folder, l[-1])
+        file = os.path.join(self.folder, l[-1]) # select last fluigent file
         ftable = pd.read_csv(file)
         ftable.rename(columns={'time (s)':'time','Channel 0 pressure (mbar)':'pressure'}, inplace=True)
         return ftable
@@ -445,9 +451,9 @@ class printVals:
                 
     def initializeProgDims(self):
         '''initialize programmed dimensions table'''
-        self.progDims = pd.DataFrame(columns=['name','l','w','t','a','vol'])
+        self.progDims = pd.DataFrame(columns=['name','l','w','t','a','vol', 't0','tf'])
         self.progDims.name=['xs5','xs4','xs3','xs2','xs1','vert4','vert3','vert2','vert1','horiz2','horiz1','horiz0']
-        self.progDimsUnits = {'name':'', 'l':'mm','w':'mm','t':'s','a':'mm^2','vol':'mm^3'}
+        self.progDimsUnits = {'name':'', 'l':'mm','w':'mm','t':'s','a':'mm^2','vol':'mm^3','t0':'s', 'tf':'s'}
                 
     def useDefaultTimings(self):
         '''use the programmed line lengths'''
@@ -470,6 +476,8 @@ class printVals:
         self.progDims.iloc[i]['l'] = vals['l']
         self.progDims.iloc[i]['vol'] = vals['vol']
         self.progDims.iloc[i]['t'] = vals['ttot']
+        self.progDims.iloc[i]['tf'] = vals['tf']
+        self.progDims.iloc[i]['t0'] = vals['t0']
         self.progDims.iloc[i]['a']= vals['vol']/vals['l']
 #         self.progDims.iloc[i]['w'] = 2*np.sqrt(self.progDims.iloc[i]['a']/np.pi) # a=pi*(w/2)^2
         self.progDims.iloc[i]['w'] = self.dEst 
@@ -486,6 +494,8 @@ class printVals:
         anoz = np.pi*(self.di/2)**2 # inner cross-sectional area of nozzle
         for j,row in df.iterrows():
             if row['pressure']>0:
+                if ttot==0:
+                    t0 = row['time']
                 # flow is on
                 if j>0:
                     dt = (row['time']-df.loc[j-1,'time']) # timestep size
@@ -497,10 +507,6 @@ class printVals:
                 if dt==0:
                     dvol=0
                 else:
-#                     dvol = row['pressure']/tp*a*dl 
-#                         # volume extruded in this timestep,
-#                         # where a*dl is ideal and volume is scaled by 
-#                         # ratio of intended pressure to actual pressure
                     p = row['pressure']
                     flux = max((self.caliba*p**2+self.calibb*p+self.calibc)*anoz,0)
                         # actual flow speed based on calibration curve (mm/s) * area of nozzle (mm^2) = flux (mm^3/s)
@@ -509,14 +515,17 @@ class printVals:
             else:
                 # flow is off
                 if l>0:
-                    self.storeProg(i, {'l':l, 'vol':vol, 'ttot':ttot, 'a':a})
+                    self.storeProg(i, {'l':l, 'vol':vol, 'ttot':ttot, 'a':a, 't0':t0, 'tf':row['time']})
                     ttot=0
                     vol=0
                     l=0
                     i = i+1
         if i<len(self.progDims):
-            self.storeProg(i, {'l':l, 'vol':vol, 'ttot':ttot, 'a':a})
-        self.progDimsUnits = {'name':'', 'l':'mm', 'w':'mm', 't':'s', 'a':'mm^2', 'vol':'mm^3'}
+            self.storeProg(i, {'l':l, 'vol':vol, 'ttot':ttot, 'a':a, 't0':t0, 'tf':row['time']})
+        self.progDimsUnits = {'name':'', 'l':'mm', 'w':'mm', 't':'s', 'a':'mm^2', 'vol':'mm^3', 't0':'s', 'tf':'s'}
+        self.progDims.tf = self.progDims.tf-self.progDims.t0.min()
+        self.progDims.t0 = self.progDims.t0-self.progDims.t0.min()
+        
     
     
     def fluigent(self) -> None:
@@ -536,10 +545,10 @@ class printVals:
     def progDimsFile(self) -> str:
         return os.path.join(self.folder, os.path.basename(self.folder)+'_progDims.csv')
     
-    def importProgDims(self) -> str:
+    def importProgDims(self, overwrite:bool=False) -> str:
         '''import the progdims file'''
         fn = self.progDimsFile()
-        if not os.path.exists(fn):
+        if not os.path.exists(fn) or overwrite:
             self.fluigent()
             self.exportProgDims()
         else:

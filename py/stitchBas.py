@@ -506,6 +506,7 @@ class fileList:
             if scale==1:
                 scale=round(3/self.horizPerCol,3) # automatically scale horiz1... to 3/number of images
             s.matcher.setDefaults(0*scale, -280*scale)
+#             s.matcher.setDefaults(0*scale, -314*scale)
 #             s.matcher.resetLastH()
         
         if not scale==1:
@@ -545,9 +546,9 @@ def stitchSubFolder(folder:str, **kwargs) -> None:
         fl = fileList(folder)
         if (('duplicate' in kwargs and kwargs['duplicate']>0) or not fl.stitchDone()) and len(fl.xs1Still)>0:
             fl.stitchGroups(**kwargs)
-    except:
-        logging.error(f'Error stitching {folder}')
-        traceback.print_exc()
+    except Exception as e:
+        logging.error(f'Error stitching {folder}: {e}')
+#         traceback.print_exc()
             
 def stitchRecursive(folder:str, **kwargs) -> None:
     '''for all folders in the folder, stitch images in the subfolders'''
