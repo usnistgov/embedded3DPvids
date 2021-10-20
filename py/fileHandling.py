@@ -35,6 +35,8 @@ def fileTime(file:str) -> str:
     '''get the time from the file, where the time is in the filename'''
     split = re.split('_', os.path.basename(file))
     time = split[-1]
+    if len(time)!=6:
+        time = split[-2]
     return time
 
 def fileDate(file:str) -> str:

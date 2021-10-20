@@ -101,7 +101,7 @@ class fluidVals:
         rhelist = ['tau0', 'eta0']
         rhe = [[tag+i,getattr(self,i)] for i in rhelist]
         rheunits = [[tag+i, self.rheUnits[i]] for i in rhelist]
-        clist = ['v', 'visc0', 'CaInv', 'Re', 'WeInv', 'OhInv', 'rPR']
+        clist = ['density', 'v', 'visc0', 'CaInv', 'Re', 'WeInv', 'OhInv', 'dPR']
         const = [[tag+i,getattr(self,i)] for i in clist]
         constunits = [[tag+i, self.constUnits[i]] for i in clist]
         out = dict(meta+rhe+const)
@@ -165,11 +165,11 @@ class fluidVals:
         self.rate = v/diam                                      # 1/s
         self.visc0 = self.visc(self.rate)                       # Pa*s
         self.CaInv = sigma/(self.visc0*self.v)                  # capillary number ^-1
-        self.Re = 10**3*(self.density*self.v*diam)/(self.visc0) # reynold's number
-        self.WeInv = 10**-3*sigma/(self.density*self.v**2*diam) # weber number ^-1
+        self.Re = 10**-3*(self.density*self.v*diam)/(self.visc0) # reynold's number
+        self.WeInv = 10**3*sigma/(self.density*self.v**2*diam) # weber number ^-1
         self.OhInv = np.sqrt(self.WeInv)*self.Re                # Ohnesorge number^-1
-        self.rPR = sigma/self.tau0                              # characteristic length for Plateau rayleigh instability in mm
-        self.constUnits = {'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','rPR':'mm'}
+        self.dPR = sigma/self.tau0                              # characteristic diameter for Plateau rayleigh instability in mm
+        self.constUnits = {'density':'g/mL', 'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','dPR':'mm'}
         
 
 #------   
@@ -317,26 +317,47 @@ class printVals:
                 validfiles.append(os.path.join(folder, f))
         return validfiles
         
-    def getTargetPressureFromCalib(self, calibFile:str) -> dict:
+    def getTargetPressureFromCalib(self, calibFile:str, justCalib:bool=False) -> dict:
         '''find the target pressure from the calibration file'''
         with open(calibFile, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='|')
             for row in reader:
-                if row[0]=='target speed':
-                    if not self.vink==float(row[2]):
-                        return False
-                if row[0]=='target pressure':
-                    self.targetPressures[0] = float(row[2])
-                elif row[0]=='a':
+                if not justCalib:
+                    if row[0]=='target speed':
+                        if not self.vink==float(row[2]):
+                            return False
+                    elif row[0]=='target pressure':
+                        self.targetPressures[0] = float(row[2])
+                if row[0]=='a':
                     self.caliba = float(row[2])
                 elif row[0]=='b':
                     self.calibb = float(row[2])
                 elif row[0]=='c':
                     self.calibc = float(row[2])
+                    self.calculateTargetPressure()
                     return True
         return False
+    
+    def calculateTargetPressure(self) -> None:
+        '''calculate the target pressure from the calibration curve and flow speed'''
+        a = self.caliba
+        b = self.calibb
+        c = self.calibc
+        s = self.vink
+        if abs(a)>0:
+            d = b**2-4*a*(c-s)
+            if d>0:
+                p = (-b+np.sqrt(d))/(2*a)
+            else:
+                logging.warning(f'{self.bn}: Speed cannot be reached')
+                p = 0
+        elif abs(b)>0:
+            p = (s-c)/b
+        else:
+            p = c
+        self.targetPressures[0] = p
         
-    def readCalibFile(self) -> None:
+    def readCalibFile(self, justCalib:bool=False) -> None:
         '''read target pressure and calibration curve from calibration file'''
         self.calibFile = False
         # find the file
@@ -345,11 +366,12 @@ class printVals:
         except:
             return
         if len(cfiles)==0:
+#             logging.warning(f'{self.bn}: No calibration file found')
             return
         # read the file
         read = False
         while not read and len(cfiles)>0:
-            read = self.getTargetPressureFromCalib(cfiles.pop())
+            read = self.getTargetPressureFromCalib(cfiles.pop(), justCalib=justCalib)
         if self.targetPressures[0]>0:
             self.calibFile = True
                 
@@ -362,6 +384,7 @@ class printVals:
     
     def readSpeedFile(self, file:str) -> None:
         '''read values from the speed file'''
+        correctSpeedFile=False
         with open(file, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='|')
             self.targetPressures = {}
@@ -374,13 +397,19 @@ class printVals:
                     self.vink = float(row[2])
                 elif 'support speed' in row:
                     self.vsup = float(row[2])
-                elif 'caliba' in row:
+                elif 'caliba' in row and self.caliba==0:
                     self.caliba = float(row[2])
-                elif 'calibb' in row:
+                    self.calibFile=True
+                elif 'calibb' in row or ('caliba' in row and not self.caliba==0):
                     self.calibb = float(row[2])
-                elif 'calibc' in row:
+                    if not 'calibb' in row:
+                        correctSpeedFile = True # there was an error in the original file. re-export correct labels
+                elif 'calibc' in row or ('caliba' in row and not self.calibb==0):
                     self.calibc = float(row[2])
-                
+                    if not 'calibc' in row:
+                        correctSpeedFile = True # there was an error in the original file. re-export correct labels
+        if correctSpeedFile:
+            self.exportSpeedFile()
 
     def exportSpeedFile(self) -> None:
         '''export a speed file based on expected values'''
@@ -399,6 +428,7 @@ class printVals:
             writer.writerow(['caliba', 'mm/s/mbar^2', str(self.caliba)])
             writer.writerow(['calibb', 'mm/s/mbar', str(self.calibb)])
             writer.writerow(['calibc', 'mm/s', str(self.calibc)])
+        logging.info(f'Exported {file}')
         
     def findVelocities(self) -> None:
         '''find the target velocities'''
@@ -431,12 +461,10 @@ class printVals:
         ftable = pd.read_csv(file)
         ftable.rename(columns={'time (s)':'time','Channel 0 pressure (mbar)':'pressure'}, inplace=True)
         return ftable
-    
-                
-                    
+
     def redoSpeedFile(self) -> None:
         '''read calibration curve from calibration file and add to speed file'''
-        self.readCalibFile()
+        self.readCalibFile(justCalib=True)
         if self.calibb==0:
             # if there is no calibration curve, assume speed = pressure * (intended speed)/(max pressure)
             try:
@@ -502,14 +530,21 @@ class printVals:
                 else:
                     dt = (-row['time']+df.loc[j+1,'time']) 
                 ttot = ttot+dt # total time traveled
-                dl = dt*self.sup.v # length traveled in this timestep
+                if self.date<=210929 and 'vert' in self.progDims.loc[i,'name']:
+                    # bug in initial code wasn't changing vertical velocity
+                    dl = dt*5
+                else:
+                    dl = dt*self.sup.v # length traveled in this timestep
                 l = l+dl  # total length traveled
                 if dt==0:
                     dvol=0
                 else:
                     p = row['pressure']
-                    flux = max((self.caliba*p**2+self.calibb*p+self.calibc)*anoz,0)
+                    if not (self.caliba==0 and self.calibb==0 and self.calibc==0):
+                        flux = max((self.caliba*p**2+self.calibb*p+self.calibc)*anoz,0)
                         # actual flow speed based on calibration curve (mm/s) * area of nozzle (mm^2) = flux (mm^3/s)
+                    else:
+                        flux = p/self.targetPressures[0]*anoz
                     dvol = flux*dt 
                 vol = vol+dvol # total volume extruded
             else:
@@ -553,6 +588,8 @@ class printVals:
             self.exportProgDims()
         else:
             self.progDims, self.progDimsUnits = plainIm(fn, ic=0)
+            if not 0 in list(self.progDims.vol):
+                self.fluFile=True
         return self.progDims, self.progDimsUnits
             
     def exportProgDims(self) -> None:
@@ -563,6 +600,11 @@ class printVals:
             self.importProgDims()
         if len(self.progDims)==0:
             return {},{}
+        if 0 in list(self.progDims.vol):
+            # redo programmed dimensions if there are zeros in the volume column
+            self.redoSpeedFile()
+            self.fluigent()
+            self.exportProgDims()
         df = self.progDims.copy()
         df2 = pd.DataFrame(columns=df.columns)
         for s in ['xs', 'vert', 'horiz']:
@@ -591,6 +633,9 @@ class printVals:
         if len(tab)==0:
             return {},{}
         t1 = []
+        if 15 in list(self.progDims.l):
+            # using default timings. throw this out
+            return {},{}
         for i,row in tab.iterrows():
             progrow = self.progDims[self.progDims.name=='vert'+str(int(row['line']))]
             if len(progrow)==0:

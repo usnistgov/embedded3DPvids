@@ -262,6 +262,30 @@ class fileList:
                 self.horizPerCol=10
                 self.vertPerCol=9
                 self.xsPerCol=3
+            elif len(self.basStill)==121 and 'singleLinesPics7' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=1
+            elif len(self.basStill)==131 and 'singleLinesPics8' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=3
+            elif len(self.basStill)==136 and 'singleLinesPics9' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.vertCols=4
+                self.xsCols=5
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=4
             return 
         else:
             # unknown sorting: check folders
@@ -389,10 +413,12 @@ class fileList:
             return [],'',''
         dirname = files[0]
         sample = ''
-        while not ('I_' in sample and '_S_' in sample):
+        i = 0
+        while not ('I_' in sample and '_S_' in sample) and i<3:
             # keep going up folders until you hit the sample subfolder
             dirname = os.path.dirname(dirname)
             sample = os.path.basename(dirname) # folder name
+            i+=1
         return files, dirname, sample
             
     def archiveGroup(self, st:str, files:List[str]=[], debug:bool=False, **kwargs) -> None:
@@ -447,6 +473,7 @@ class fileList:
             
         if len(files)==0:
             return 1
+        
         s = stitching.Stitch(files)
         tag = sample+'_'+st
         

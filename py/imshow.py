@@ -31,8 +31,14 @@ __status__ = "Development"
 
 def imshow(*args, scale:float=8, axesVisible:bool=True, **kwargs) -> None:
     '''displays cv image(s) in jupyter notebook using matplotlib'''
+    aspect = args[0].shape[0]/args[0].shape[1]
+    if aspect>1:
+        f, axs = plt.subplots(1, len(args), figsize=(scale*len(args)/aspect, scale))
+    else:
+        f, axs = plt.subplots(1, len(args), figsize=(scale*len(args), scale*aspect))
     if len(args)>1:
-        f, axs = plt.subplots(1, len(args), figsize=(len(args)*scale, 1*scale))
+        
+        
         for ax in axs:
             ax.get_xaxis().set_visible(axesVisible)
             ax.get_yaxis().set_visible(axesVisible)
@@ -44,7 +50,7 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, **kwargs) -> None:
                 # B&W
                 axs[i].imshow(im, cmap='Greys')
     else:
-        f, ax = plt.subplots(1, len(args), figsize=(1*scale,len(args)*scale))
+        ax = axs
         ax.get_xaxis().set_visible(axesVisible)
         ax.get_yaxis().set_visible(axesVisible)
         im = args[0]
@@ -54,5 +60,5 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, **kwargs) -> None:
             ax.imshow(im, cmap='Greys')
     if 'title' in kwargs:
         # put title on figure
-        f.suptitle(kwargs['title'],y=1)
-        f.tight_layout()
+        f.suptitle(kwargs['title'])
+    f.tight_layout()

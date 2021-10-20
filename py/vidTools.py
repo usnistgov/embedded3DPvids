@@ -507,15 +507,19 @@ class vidData:
         t = t0+dt*f
         return self.measureHorizFrame(t, s, f, diag=diag, **kwargs)
     
-    def vidMeasuresFN(self) -> str:
+    def vidMeasuresFNHoriz(self, tag) -> str:
         '''file name for video measurement table'''
-        return os.path.join(self.pv.folder, os.path.basename(self.pv.folder)+'_vidHorizMeasures.csv')
+        return os.path.join(self.pv.folder, os.path.basename(self.pv.folder)+'_vid'+tag+'Measures.csv')
         
         
-    def measureVideo(self, diag:int=0, overwrite:bool=False, **kwargs) -> Tuple[pd.DataFrame, dict]:
+    def measureVideoHoriz(self, diag:int=0, overwrite:bool=False, **kwargs) -> Tuple[pd.DataFrame, dict]:
         '''get info about the ellipses. Returns 1 when video is done. Returns 0 to continue grabbing.'''
-        fn  = self.vidMeasuresFN()
+        fn  = self.vidMeasuresFN('Horiz')
         if os.path.exists(fn):
+            return
+        if len(self.prog)==0:
+            return
+        if not 'name' in self.prog.keys():
             return
         out = []
         units = []
@@ -556,7 +560,7 @@ class vidData:
             logging.error(f'Error detecting nozzle in {self.folder}')
             traceback.print_exc()
             return
-        self.measureVideo(diag=diag, **kwargs)
+        self.measureVideoHoriz(diag=diag, **kwargs)
         
         
     def importVidMeasures(self) -> Tuple[pd.DataFrame, dict]:

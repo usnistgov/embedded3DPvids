@@ -111,7 +111,7 @@ def onlyBorderComponents(thresh:np.array) -> np.array:
     '''only include the components that are touching the border'''
     return cv.subtract(thresh, fillComponents(thresh))
 
-def removeBorders(im:np.array) -> np.array:
+def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
     '''remove borders from color image'''
     
     # create a background image
@@ -132,6 +132,8 @@ def removeBorders(im:np.array) -> np.array:
     border = cv.bitwise_and(avim,avim,mask = thresh)
     # combine images
     adjusted = cv.add(imNoBorder, border)
+    if normalizeIm:
+        adjusted = normalize(adjusted)
     return adjusted
 
 def closeVerticalTop(thresh:np.array) -> np.array:
@@ -181,8 +183,8 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
         # just threshold on intensity
 #         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)  
 #         ret, thresh = cv.threshold(gray,127,255,cv.THRESH_BINARY_INV)  
-        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)  
-        thresh = closeVerticalTop(thresh)
+        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV) 
+#         thresh = closeVerticalTop(thresh)
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
@@ -269,3 +271,14 @@ def normalize(im:np.array) -> np.array:
     norm = np.zeros(im.shape)
     im = cv.normalize(im,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
     return im
+
+
+def white_balance(img:np.array):
+    # automatically correct white balance
+    result = cv.cvtColor(img, cv.COLOR_BGR2LAB)
+    avg_a = np.average(result[:, :, 1])
+    avg_b = np.average(result[:, :, 2])
+    result[:, :, 1] = result[:, :, 1] - ((avg_a - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result = cv.cvtColor(result, cv.COLOR_LAB2BGR)
+    return result

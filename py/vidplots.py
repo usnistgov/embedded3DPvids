@@ -127,10 +127,10 @@ class folderPlots:
                 if b==base:
                     pv.ax = i # store the axis number for this folder
                     if len(labels[i])==0: # fill this label if not already filled
-                        if self.vname=='var':
-                            labels[i] = ('ink ' if var=='x' else 'sup ') + getattr(getattr(pv, fluid),vname)
+                        if self.vname=='val':
+                            labels[i] = ('ink ' if var=='x' else 'support ') + str(getattr(getattr(pv, fluid),'var'))
                         elif self.vname=='v':
-                            labels[i] = ('ink' if var=='x' else 'sup') + ' speed'
+                            labels[i] = ('ink' if var=='x' else 'support') + ' speed (mm/s)'
         setattr(self, var+'labels', labels)
         
     
@@ -323,7 +323,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     bn = os.path.basename(topfolder)
     s = ''
     for k in kwargs:
-        if not k in ['adjustBounds', 'overlay', 'overwrite'] and type(kwargs[k]) is not dict:
+        if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize'] and type(kwargs[k]) is not dict:
             s = s + k + '_'+str(kwargs[k])+'_'
     s = s[0:-1]
     s = s.replace('*', 'x')
@@ -342,23 +342,44 @@ def exportIm(fn:str, fig) -> None:
         fig.savefig(fn+s, bbox_inches='tight', dpi=300)
     print('Exported ', fn)
     
+def parseTag(tag:str) -> dict:
+    '''parse the tag into relevant names'''
+    out = {'raw':False, 'tag':'', 'num':0}
+    if '_' in tag:
+        spl = re.split('_',tag)
+        if 'raw' in spl:
+            out['raw'] = True
+            spl.remove('raw')
+        for s in spl:
+            try:
+                num = int(s)
+            except:
+                out['tag']=s
+            else:
+                out['num']=num
+    else:
+        out['tag'] = tag
+    return out
+    
 def picFileFromFolder(folder:str, tag:str) -> str:
     '''get the file name of the image'''
     imfile = ''
-    for f in os.listdir(folder):
-        if tag in f:
-            imfile = os.path.join(folder, f)
+    if not 'raw' in tag:
+        for f in os.listdir(folder):
+            if tag in f:
+                imfile = os.path.join(folder, f)
     if not os.path.exists(imfile):
         # no file in the main folder. search archives
         raw = os.path.join(folder, 'raw')
         if os.path.exists(raw):
-            archive = os.path.join(raw, tag)
+            out = parseTag(tag)
+            archive = os.path.join(raw, out['tag'])
             if not os.path.exists(archive):
                 archive = os.path.join(raw, tag[:-1]) # remove last char, e.g. for xs1 just use xs
             if os.path.exists(archive):
                 l = os.listdir(archive)
                 if len(l)>0:
-                    imfile = os.path.join(archive, l[0]) # if there is a file in the archive folder, use it
+                    imfile = os.path.join(archive, l[out['num']]) # if there is a file in the archive folder, use it
     return imfile
 
 def picFromFolder(folder:str, tag:str) -> np.array:
@@ -401,7 +422,7 @@ def cropImage(im:np.array, crops:dict) -> np.array:
     im = im[int(y0):int(yf), int(x0):int(xf)]
     return im
 
-def importAndCrop(folder:str, tag:str, normalize:bool=True, **kwargs) -> np.array:
+def importAndCrop(folder:str, tag:str, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False, **kwargs) -> np.array:
     '''import and crop an image from a folder, given a tag. crops can be in kwargs'''
     im = picFromFolder(folder, tag)
     if type(im) is list:
@@ -410,6 +431,10 @@ def importAndCrop(folder:str, tag:str, normalize:bool=True, **kwargs) -> np.arra
     if 'crops' in kwargs:
         crops = kwargs['crops']
         im = cropImage(im, crops)
+    if removeBorders:
+        im = vm.removeBorders(im, normalizeIm=False)
+    if whiteBalance:
+        im = vm.white_balance(im)
     if normalize:
         im = vm.normalize(im)
     return im
@@ -470,24 +495,40 @@ def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
     
     if 'overlay' in kwargs:
         overlay = kwargs['overlay'] # get overlay dictionary from kwargs
-        file = picFileFromFolder(pv.folder, t)
+        file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
         scale = float(sb.fileScale(file))
         pxPerBlock = pxperunit/s # rescale px to include white space
         realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
         mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
         mmPerPlotUnit = mmPerBlock/(2*dx0) # convert to dimensions of the plot
-        if 'diam' in overlay:
+        if overlay['shape'] in ['rectangle', 'circle']:
 #             circlewMM = overlay['diam'] # diameter should be in mm
-            circlewMM = getFilamentDiameter(file)
+            if 'diam' in overlay:
+                circlewMM = getFilamentDiameter(file, diam=overlay['diam'])
+            else:
+                circlewMM = getFilamentDiameter(file)
             circlewPlotUnits = circlewMM/mmPerPlotUnit # diameter in plot units
             if 'dx' in overlay:
                 x0 = x0+overlay['dx']
             if 'dy' in overlay:
                 y0 = y0+overlay['dy']
-            circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
-            cp.axs[axnum].add_patch(circle2)
+            if overlay['shape']=='circle':
+                circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
+                cp.axs[axnum].add_patch(circle2)
+            if overlay['shape']=='rectangle' and ('w' in overlay or 'h' in overlay):
+                if 'w' in overlay:
+                    w = overlay['w']/mmPerPlotUnit
+                    h = circlewPlotUnits
+                else:
+                    w = circlewPlotUnits
+                    h = overlay['h']/mmPerPlotUnit
+                y0 = y0-h/2
+                x0 = x0-w/2
+                rect = plt.Rectangle((x0, y0), w, h, color='black', fill=True, edgecolor=None)
+                cp.axs[axnum].add_patch(rect)
+        
             
-def getFilamentDiameter(file:str) -> float:
+def getFilamentDiameter(file:str, diam:float=cfg.const.di) -> float:
     '''get the intended filament diameter in mm'''
     if '_VI_' in file:
         f = re.split('_', os.path.basename(file))
@@ -499,7 +540,7 @@ def getFilamentDiameter(file:str) -> float:
     else:
         inkv = 5
         supv = 5
-    return cfg.const.di*np.sqrt(inkv/supv)
+    return diam*np.sqrt(inkv/supv)
 
 
 def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
@@ -516,7 +557,7 @@ def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
     cp.clean()
 
 
-def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwrite:bool=False, **kwargs) -> None:
+def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs) -> None:
     '''plot all pictures for simulations in a folder, but use automatic settings for cropping and spacing and export the result
     topFolder is the folder that holds the simulations
     exportFolder is the folder to export the images to
@@ -530,7 +571,7 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
         taglabel = "".join(tag)
     else:
         taglabel = tag
-    fn = imFn(exportFolder, topFolder, taglabel, **kwargs)
+    fn = imFn(exportFolder, topFolder, taglabel, dates=dates[0], **kwargs)
     if not overwrite and os.path.exists(fn+'.png'):
         return
     
@@ -544,3 +585,6 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
     
     if not ('export' in kwargs and not kwargs['export']):
         exportIm(fn, cp.fig)
+        
+    if not showFig:
+        plt.close()

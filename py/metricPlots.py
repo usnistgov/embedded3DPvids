@@ -6,6 +6,7 @@ import os, sys
 import traceback
 import logging
 import pandas as pd
+import matplotlib
 from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 from typing import List, Dict, Tuple, Union, Any, TextIO
@@ -196,7 +197,7 @@ def setLog(ax, logx:bool, logy:bool) -> None:
         
 def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict:
     '''get the color for this series and put it in the plot args dictionary. i should be between 0 and 1, indicating color'''
-    if gradColor==0:
+    if gradColor==0 or gradColor==2:
         varargs = {}
         if 'color' in kwargs:
             # same color, vary marker
@@ -208,7 +209,10 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
                 cmap = cm.get_cmap(cmapname)   
                 color = cmap(ifrac)
                 if (ifrac>0.35 and ifrac<0.65) and cmapname=='coolwarm':
-                    color = adjust_lightness(color, 1-abs(0.5-ifrac)) # darken middle color
+                    if ifrac==0.5:
+                        color='gray'
+                    else:
+                        color = adjust_lightness(color, 1-abs(0.5-ifrac)) # darken middle color
             else:
                 color = 'black'
         if ('marker' in kwargs and kwargs['marker']==1) or (not 'marker' in kwargs and i==1):
@@ -228,9 +232,9 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
     elif gradColor==1:
         # color by gradient
         varargs = {}
-    elif gradColor==2:
-        varargs = {}
-        varargs['color']='black'
+
+    if 'markersize' in kwargs:
+        varargs['s']=kwargs['markersize']
     return varargs
         
 def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) :
@@ -240,6 +244,8 @@ def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) 
     
     if gradColor==1:
         # gradient coloring
+        sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,c=df2['c'],cmap=cmapname,**varargs)
+        varargs.pop('s')
         cmin = df2.c.min()
         cmax = df2.c.max()
         if dx>0 and dy>0:
@@ -247,10 +253,9 @@ def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) 
             for j, row in df2.iterrows():
                 color = cmap((row['c']-cmin)/(cmax-cmin))
                 sc = ax.errorbar([row['x']],[row['y']], xerr=[row['xerr']], yerr=[row['yerr']],linestyle='None', color=color,**varargs)
-        sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,c=df2['c'],cmap=cmapname,**varargs)
     else:
         sc = ax.scatter(df2['x'],df2['y'], linestyle='None',zorder=100,**varargs)
-        for s in ['label', 'facecolors', 'edgecolors']:
+        for s in ['label', 'facecolors', 'edgecolors', 's']:
             if s in varargs:
                 varargs.pop(s)
         sc = ax.errorbar(df2['x'],df2['y'], xerr=df2['xerr'], yerr=df2['yerr'],linestyle='None',**varargs)
@@ -266,12 +271,15 @@ def idealLines(**kwargs) -> None:
             varargs['label']='ideal'
         kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
         
-def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', **kwargs):
+def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, **kwargs):
     '''scatter plot. 
     colorBy is the variable to color by. gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
     xvar is the x variable name, yvar is the y variable name. 
     logx=True to plot x axis on log scale. logy=True to plot y on log scale.
     dx>0 to group points by x and take error. otherwise, plot everything. dx=1 to average all points together'''
+
+    plt.rc('font', size=fontsize) 
+    
     if not (xvar in ss and yvar in ss):
         raise NameError('Variable name is not in table')
     fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
@@ -313,7 +321,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     idealLines(**kwargs)
         
     # add legends
-    if gradColor and colorBy in ss:
+    if gradColor==1 and colorBy in ss:
         cbar = plt.colorbar(sc, label=colorBy)
     else:
         handles, labels = ax.get_legend_handles_labels()
@@ -324,8 +332,78 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
                 ax.legend(bbox_to_anchor=(0,1), loc='lower left', title=colorBy)
                 
     # set square
-    ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+    setSquare(ax)
+    fixTicks(ax, logx, logy)
     return fig,ax
+
+def setSquare(ax):
+    ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+    
+    
+def calcTicks(lim:Tuple[float]):
+    '''get the major ticks and minor ticks from the limit'''
+    ticklims = [np.ceil(np.log10(lim[0])), np.floor(np.log10(lim[1]))]
+    tdiff = ticklims[1]-ticklims[0]
+    if tdiff<1:
+        # range less than 1 order of magnitude
+        tm = 0.2
+        ticks = []
+        while len(ticks)<4:
+            ticks = [i*10**ticklims[0] for i in np.arange(tm, 1+tm, tm)]+[i*10**(int(ticklims[1]+1)) for i in np.arange(tm, 1+tm, tm)]
+            ticks = [round(i, -int(np.floor(np.log10(tm)))) for i in ticks]
+            ticks = [i for i in ticks if (i>lim[0])&(i<lim[1])]
+            tm = tm/2
+        tminor = 0.1
+    elif tdiff<2:
+        ticks = [0.5*10**ticklims[0], 10**ticklims[0], 0.5*10**ticklims[1], 10**ticklims[1], 1.5*10**ticklims[1]]
+        tminor = 0.1
+    elif tdiff<5:
+        ticks = [10**i for i in np.arange(ticklims[0], ticklims[1]+1, 1)]
+        tminor = 0.1
+    else:
+        dt = np.ceil(tdiff/4)
+        ticks = [10**i for i in np.arange(ticklims[0], ticklims[1]+dt, dt)]
+        tminor = 0.5
+    locmin = matplotlib.ticker.LogLocator(base=10.0,subs=np.arange(tminor, 1, tminor),numticks=12)
+    ticks = [i for i in ticks if (i>lim[0])&(i<lim[1])]
+    ticks = list(set(ticks))
+    return ticks, locmin
+    
+def fixTicks(ax, logx:bool, logy:bool):
+    '''fix log scale ticks'''
+    
+    if logx:
+        lim = ax.get_xlim()
+        ticks, locmin = calcTicks(lim)
+        ax.set_xticks(ticks)
+        if min(ticks)>0.1 and max(ticks)<=10:
+            ax.set_xticklabels(ticks)
+        ax.xaxis.set_minor_locator(locmin)
+        ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    if logy:
+        lim = ax.get_ylim()
+        ticks, locmin = calcTicks(lim)
+        ax.set_yticks(ticks)
+        if min(ticks)>0.1 and max(ticks)<=10:
+            ax.set_yticklabels(ticks)
+        ax.xaxis.set_minor_locator(locmin)
+        ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+
+def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **kwargs):
+    '''plot values based on sweep type'''
+    
+    ss.sort_values(by='sweepType')
+    cmap = cm.get_cmap(cmapname)
+    fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
+    for i,s in enumerate(['visc', 'speed']):
+        ss0 = ss[ss.sweepType.str.startswith(s)]
+        color = cmap(0.99*i)
+        if i==1:
+            if 'yideal' in kwargs:
+                kwargs.pop('yideal')
+            if 'xideal' in kwargs:
+                kwargs.pop('xideal')
+        scatterSS(ss0, xvar, yvar, 'sweepType', cmapname=cmapname, color=color, **kwargs)
 
 
 def contourSS(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool=False, logy:bool=False):

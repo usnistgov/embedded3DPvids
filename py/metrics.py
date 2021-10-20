@@ -146,10 +146,11 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
         attempt0 = 4
     else:
         attempt0 = 0
+    im = vm.normalize(im)
     im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=100, diag=max(0,diag-1))
     if markers[0]==1:
         return {}, {}
-    df = markers2df(markers)
+    df = vm.markers2df(markers)
     roughness = getRoughness(im2, diag=max(0,diag-1))
     xest = 400 # estimated x
     yest = im2.shape[0]-300
@@ -195,7 +196,7 @@ def vertSegment(im:np.array, attempt0:int, s:float, maxlen:float, diag:int) -> T
     im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=acrit, diag=max(0,diag-1))
     if len(markers)==0 or markers[0]==1:
         return {}, {}, {}, attempt, [], im2 # nothing to measure here
-    df = markers2df(markers)
+    df = vm.markers2df(markers)
     df = df[(df.a>acrit)]
         # remove anything too small
     df2 = df[(df.x0>10)&(df.y0>10)&(df.x0+df.w<im.shape[1]-10)&(df.y0+df.h<im.shape[0]-10)] 
@@ -223,7 +224,8 @@ def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]
     else:
         attempt0 = 0
     df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt0, s, maxlen, diag)
-    if len(componentMeasures)==0 or componentMeasures['emptiness']>0.5:
+#     if len(componentMeasures)==0 or componentMeasures['emptiness']>0.5:
+    if len(componentMeasures)==0:
         df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt+1, s, maxlen, diag)
     if len(df2)==0:
         return {}, {}
@@ -265,14 +267,15 @@ def markHorizOnIm(im2:np.array, row:pd.Series) -> np.array:
 
 def horizLineMeasure(df:pd.DataFrame, y:float, margin:float, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
     '''measure one horizontal line'''
-    df = df[(df.yc>y-margin)&(df.yc<y+margin)&(df.a>0.2*df.a.max())]
+    df = df[(df.yc>y-margin)&(df.yc<y+margin)]
+    df = df[(df.a>0.2*df.a.max())]  # eliminate tiny satellite droplets
     numlines = len(df)
     measures = []
     cmunits = {}
     maxlen = progDims[progDims.name=='horiz'+str(j)].iloc[0]['l']  # length of programmed line
     for i,row in df.iterrows():
         componentMask = (labeled == i).astype("uint8") * 255   # image with line in it
-        if row['w']>row['h']*0.9: # horiz lines must be circular or wide and not empty
+        if row['w']>row['h']*0.7: # horiz lines must be circular or wide and not empty
             box = {'i':i, 'w':row['w'], 'h':row['h'], 'area':row['a']}
             componentMeasures, cmunits = measureComponent(componentMask, True, s, maxlen, reverse=(j==1), diag=max(0,diag-1))
             if len(componentMeasures)>0 and componentMeasures['emptiness']<0.5:
@@ -305,11 +308,11 @@ def horizLineMeasure(df:pd.DataFrame, y:float, margin:float, labeled:np.array, i
 
 def horizSegment(im0:np.array, attempt0:int, progDims, diag:int, s:float) -> Tuple[pd.DataFrame, dict]:
     '''segment the image and take measurements'''
-    im2, markers, attempt = vm.segmentInterfaces(im0, attempt0=attempt0, diag=max(0,diag-1), removeVert=True, acrit=1000)
+    im2, markers, attempt = vm.segmentInterfaces(im0, attempt0=attempt0, diag=max(0,diag-1), removeVert=True, acrit=2000)
     if markers[0]==1:
         return [], {}, attempt, im2
     labeled = markers[1]
-    df = markers2df(markers)
+    df = vm.markers2df(markers)
     linelocs = [275, 514, 756] # expected positions of lines
     margin = 150
     if diag:
@@ -324,12 +327,12 @@ def horizSegment(im0:np.array, attempt0:int, progDims, diag:int, s:float) -> Tup
     return ret, cmunits, attempt, im2
     
 
-def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[pd.DataFrame, dict]:
+def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int=3, **kwargs) -> Tuple[pd.DataFrame, dict]:
     '''measure horizontal lines. diag=1 to print diagnostics for this function, diag=2 to print this function and the functions it calls'''
     s = 1/fileScale(file)
     im = cv.imread(file)
     im0 = im
-    im0[0, 0] = np.zeros(im0[0, 0].shape)
+#     im0[0, 0] = np.zeros(im0[0, 0].shape)
 #     im0 = vc.imcrop(im0, {'dx':0, 'dy':80})
     im0 = vm.removeBorders(im0)
     if 'LapRD LapRD' in file:
@@ -339,7 +342,7 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[pd.DataFr
     else:
         attempt0 = 0
     ret, cmunits, attempt, im2 = horizSegment(im0, attempt0, progDims, diag, s)
-    if len(ret)<3:
+    if len(ret)<critHorizLines:
         ret2, cmunits2, attempt, im3 = horizSegment(im0, attempt+1, progDims, diag, s)
         if len(ret2)>len(ret):
             ret = ret2
@@ -356,14 +359,14 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[pd.DataFr
 
 #--------------------------------
 
-def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
+def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
     '''measure one stitched image'''
     if st=='xs':
         return xsMeasure(file, diag=diag)
     elif st=='vert':
         return vertMeasure(file, progDims, diag=diag)
     elif st=='horiz':
-        return horizMeasure(file, progDims, diag=diag)
+        return horizMeasure(file, progDims, diag=diag, **kwargs)
     
 def fnMeasures(folder:str, st:str) -> str:
     '''get a filename for summary table'''
@@ -379,7 +382,7 @@ def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
     return progDims, units  
 
 
-def measure1Line(folder:str, st:str, i:int, diag:int=0) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
+def measure1Line(folder:str, st:str, i:int, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
     '''measure just one line'''
     try:
         fl = fileList(folder)
@@ -392,7 +395,7 @@ def measure1Line(folder:str, st:str, i:int, diag:int=0) -> Union[Tuple[dict,dict
         sval = st+str(i+1)+'Stitch'
     file = getattr(fl, sval)
     if len(file)>0:
-        return stitchMeasure(file[0], st, progDims, diag=diag)
+        return stitchMeasure(file[0], st, progDims, diag=diag, **kwargs)
 
 
 def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:List[str]=['xs', 'vert', 'horiz'], **kwargs) -> None:
@@ -405,6 +408,8 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
         return
     if fl.date<210500:
         return
+    if 'dates' in kwargs and not fl.date in kwargs['dates']:
+        return
     progDims, units = importProgDims(folder)
     logging.info(f'Measuring {os.path.basename(folder)}')
     for st in ['xs', 'vert']:
@@ -416,7 +421,7 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
             for i in range(getattr(fl, st+'Cols')):
                 file = getattr(fl, st+str(i+1)+'Stitch')
                 if len(file)>0:
-                    ret = stitchMeasure(file[0], st, progDims, diag=diag)
+                    ret = stitchMeasure(file[0], st, progDims, diag=diag, **kwargs)
                     if len(ret[0])>0:
                         sm, units = ret
                         xs.append(sm)
@@ -430,7 +435,7 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
     if not os.path.exists(fn):
         file = fl.horizfullStitch
         if len(file)>0:
-            hm, units = horizMeasure(file[0], progDims,  diag=diag)
+            hm, units = horizMeasure(file[0], progDims,  diag=diag, **kwargs)
             if len(hm)>0:
                 plainExp(fnMeasures(folder, 'horiz'), hm, units)
 #                 exportMeasures(hm, 'horiz', folder, units)
@@ -636,6 +641,45 @@ def stillsSummary(topfolder:str, exportFolder:str, filename:str='stillsSummary.c
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
 
+
+def importStillsSummary(diag:bool=False) -> pd.DataFrame:
+    '''import the stills summary and convert sweep types, capillary numbers'''
+    ss,u = plainIm(os.path.join(cfg.path.fig, 'stillsSummary.csv'), ic=0)
+    
+    ss = ss[ss.date>210500]
+    ss = ss[ss.ink_days==1]
+    ss.date = ss.date.replace(210728, 210727)
+    
+    k = ss.keys()
+    k = k[~(k.str.contains('_SE'))]
+    idx = int(np.argmax(k=='xs_aspect'))
+    controls = k[:idx]
+    deps = k[idx:]
+    
+    ss.insert(idx, 'sup_Ca', 1/ss['sup_CaInv'])
+    ss.insert(idx+1, 'ink_Ca', 1/ss['ink_CaInv'])
+    ss.insert(idx+2, 'ReProd', ss['ink_Re']*ss['sup_Re'])
+    ss.insert(idx+3, 'CaProd', 1/(ss['sup_CaInv']*ss['ink_CaInv']))
+    ss.insert(idx+4, 'sweepType', ['visc_'+str(i['sigma']) for j,i in ss.iterrows()])
+    ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_0_high_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_0_low_visc_ratio'
+    ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_0_high_v_ratio'
+    ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_20_low_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_20_high_visc_ratio'
+    ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
+    
+    if diag:
+        idx = idx+5
+        k = ss.keys()
+        k = k[~(k.str.contains('_SE'))]
+        controls = k[:idx]
+        deps = k[idx:]
+        print(f'Independents: {list(controls)}')
+        print()
+        print(f'Dependents: {list(deps)}')
+    return ss,u
+
+
 def speedTableRecursive(topfolder:str) -> pd.DataFrame:
     '''go through all of the folders and summarize the stills'''
     if isSubFolder(topfolder):
@@ -670,11 +714,15 @@ def speedTable(topfolder:str, exportFolder:str, filename:str) -> pd.DataFrame:
     return tt,units
 
 
-def progTableRecursive(topfolder:str, useDefault:bool=False, **kwargs) -> pd.DataFrame:
-    '''go through all of the folders and summarize the stills'''
+def progTableRecursive(topfolder:str, useDefault:bool=False, overwrite:bool=False, **kwargs) -> pd.DataFrame:
+    '''go through all of the folders and summarize the programmed timings'''
     if isSubFolder(topfolder):
         try:
             pv = printVals(topfolder)
+            if (not 'dates' in kwargs or pv.date in kwargs['dates']) and overwrite:
+                pv.redoSpeedFile()
+                pv.fluigent()
+                pv.exportProgDims() # redo programmed dimensions
             if useDefault:
                 pv.useDefaultTimings()
             t,u = pv.progDimsSummary()
@@ -689,7 +737,7 @@ def progTableRecursive(topfolder:str, useDefault:bool=False, **kwargs) -> pd.Dat
         for f in os.listdir(topfolder):
             f1f = os.path.join(topfolder, f)
             if os.path.isdir(f1f):
-                t,u0=progTableRecursive(f1f, useDefault=useDefault, **kwargs)
+                t,u0=progTableRecursive(f1f, useDefault=useDefault, overwrite=overwrite, **kwargs)
                 if len(t)>0:
                     if len(tt)>0:
                         tt = pd.concat([tt,t])
@@ -698,6 +746,26 @@ def progTableRecursive(topfolder:str, useDefault:bool=False, **kwargs) -> pd.Dat
                     if len(u)==0:
                         u = u0
         return tt, u
+    
+def checkProgTableRecursive(topfolder:str, **kwargs) -> None:
+    if isSubFolder(topfolder):
+        try:
+            pv = printVals(topfolder)
+            pv.importProgDims()
+            if 0 in list(pv.progDims.a):
+                pv.fluigent()
+                pv.exportProgDims() # redo programmed dimensions
+        except:
+            traceback.print_exc()
+            logging.warning(f'failed to get programmed timings from {topfolder}')
+            return
+        return 
+    elif os.path.isdir(topfolder):
+        for f in os.listdir(topfolder):
+            f1f = os.path.join(topfolder, f)
+            if os.path.isdir(f1f):
+                checkProgTableRecursive(f1f, **kwargs)
+        return
 
 def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.DataFrame:
     '''go through all the folders, get a table of the speeds and pressures, and export to fn'''
