@@ -134,34 +134,32 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
 
 #-------------------------------
 
-
-def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
-    '''measure cross-section'''
-    name = lineName(file, 'xs')
-    im = cv.imread(file)
-    if 'I_M' in file or 'I_PD' in file:
-        im = vc.imcrop(im, 10)
-    # label connected components
-    if 'PEG' in file:
-        attempt0 = 4
-    else:
-        attempt0 = 0
-    im = vm.normalize(im)
-    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=100, diag=max(0,diag-1))
+def xsMeasureIm(im:np.ndarray, s:float, attempt0:int, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
+    '''im is imported image. s is scale as fraction of initial image size. attempt0 indicates type of segmentation to start with in vm.segmentInterfaces'''
+    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=acrit, diag=max(0,diag-1))
     if markers[0]==1:
         return {}, {}
     df = vm.markers2df(markers)
     roughness = getRoughness(im2, diag=max(0,diag-1))
-    xest = 400 # estimated x
-    yest = im2.shape[0]-300
+    xest = im2.shape[1]/2 # estimated x
+    if im2.shape[0]>600:
+        yest = im2.shape[0]-300
+        dycrit = 200
+    else:
+        yest = im2.shape[0]/2
+        dycrit = im2.shape[0]/2
     df = df[(df.x0>10)&(df.y0>10)&(df.x0+df.w<im.shape[1]-10)&(df.y0+df.h<im.shape[0]-10)] 
         # remove anything too close to the border
-    df2 = df[(abs(df.xc-xest)<100)&(abs(df.yc-yest)<200)&(df.a>100)] 
+    df = df[(df.a>acrit)]
+    df2 = df[(abs(df.xc-xest)<100)&(abs(df.yc-yest)<dycrit)] 
         # filter by location relative to expectation and area
     if len(df2)==0:
         df2 = df[(df.a>1000)] # if everything was filtered out, only filter by area
         if len(df2)==0:
             return {},{}
+    if len(df2)>1 and df2.a.max() < 2*list(df.a.nlargest(2))[1]:
+        # largest object not much larger than 2nd largest
+        return {},{}
     m = (df2[df2.a==df2.a.max()]).iloc[0] # select largest object
     x0 = int(m['x0'])
     y0 = int(m['y0'])
@@ -178,14 +176,33 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
 
     if diag:
         im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
-        im2 = cv.rectangle(im2, (x0,y0), (x0+w,y0+h), (0,0,255), 2)
-        im2 = cv.circle(im2, (int(xc), int(yc)), 2, (0,0,255), 2)
+        for j, imgi in enumerate([im, im2]):
+            cv.rectangle(imgi, (x0,y0), (x0+w,y0+h), (0,0,255), 2)   # bounding box
+            cv.circle(imgi, (int(xc), int(yc)), 2, (0,0,255), 2)     # centroid
+            cv.circle(imgi, (x0+int(w/2),y0+int(h/2)), 2, (0,255,255), 2) # center of bounding box
         imshow(im, im2)
-        plt.title(os.path.basename(file))
+        plt.title(title)
+        cv.imwrite(r'C:\Users\lmf1\OneDrive - NIST\NIST\data\shopbot\results\figures\yshift_example.png', im[600:900, 300:450])
     units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'xc':'px', 'yc':'px', 'roughness':''} # where pixels are in original scale
-    s = 1/fileScale(file)
     retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':area*s**2, 'x0':x0*s, 'y0':y0*s, 'w':w*s, 'h':h*s, 'xc':xc*s, 'yc':yc*s, 'roughness':roughness}
     return retval, units
+
+def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
+    '''measure cross-section'''
+    name = lineName(file, 'xs')
+    im = cv.imread(file)
+    if 'I_M' in file or 'I_PD' in file:
+        im = vc.imcrop(im, 10)
+    # label connected components
+    if 'PEG' in file:
+        attempt0 = 4
+    else:
+        attempt0 = 0
+    s = 1/fileScale(file)
+    title = os.path.basename(file)
+    im = vm.normalize(im)
+    return xsMeasureIm(im, s, attempt0, title, name, diag=diag)
+    
 
 #------------------------------------
 
@@ -641,6 +658,19 @@ def stillsSummary(topfolder:str, exportFolder:str, filename:str='stillsSummary.c
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
 
+def printStillsKeys(ss:pd.DataFrame) -> None:
+    k = ss.keys()
+    k = k[~(k.str.contains('_SE'))]
+    idx = int(np.argmax(k=='xs_aspect'))
+    controls = k[:idx]
+    deps = k[idx:]
+    k = ss.keys()
+    k = k[~(k.str.contains('_SE'))]
+    controls = k[:idx]
+    deps = k[idx:]
+    print(f'Independents: {list(controls)}')
+    print()
+    print(f'Dependents: {list(deps)}')
 
 def importStillsSummary(diag:bool=False) -> pd.DataFrame:
     '''import the stills summary and convert sweep types, capillary numbers'''
@@ -655,12 +685,8 @@ def importStillsSummary(diag:bool=False) -> pd.DataFrame:
     idx = int(np.argmax(k=='xs_aspect'))
     controls = k[:idx]
     deps = k[idx:]
-    
-    ss.insert(idx, 'sup_Ca', 1/ss['sup_CaInv'])
-    ss.insert(idx+1, 'ink_Ca', 1/ss['ink_CaInv'])
-    ss.insert(idx+2, 'ReProd', ss['ink_Re']*ss['sup_Re'])
-    ss.insert(idx+3, 'CaProd', 1/(ss['sup_CaInv']*ss['ink_CaInv']))
-    ss.insert(idx+4, 'sweepType', ['visc_'+str(i['sigma']) for j,i in ss.iterrows()])
+    ss = flipInv(ss)
+    ss.insert(idx+2, 'sweepType', ['visc_'+str(i['sigma']) for j,i in ss.iterrows()])
     ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_0_high_visc_ratio'
     ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_0_low_visc_ratio'
     ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_0_high_v_ratio'
@@ -669,16 +695,46 @@ def importStillsSummary(diag:bool=False) -> pd.DataFrame:
     ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
     
     if diag:
-        idx = idx+5
-        k = ss.keys()
-        k = k[~(k.str.contains('_SE'))]
-        controls = k[:idx]
-        deps = k[idx:]
-        print(f'Independents: {list(controls)}')
-        print()
-        print(f'Dependents: {list(deps)}')
+        printStillsKeys(ss)
     return ss,u
 
+def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
+    '''find inverse values and invert them (e.g. WeInv)'''
+    k = ss.keys()
+    idx = int(np.argmax(k=='xs_aspect'))
+    for j, s2 in enumerate(varlist):
+        for i,s1 in enumerate(['sup', 'ink']):
+            xvar = s1+'_'+s2
+            if f'{s1}_{s2}Inv' in ss and not xvar in ss:
+                ss.insert(idx, xvar, 1/ss[f'{s1}_{s2}Inv'])
+                idx+=1
+    return ss
+
+def addRatios(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
+    k = ss.keys()
+    idx = int(np.argmax(k=='xs_aspect'))
+    for j, s2 in enumerate(varlist):
+        xvar =  f'{s2}{operator}'
+        if not xvar in ss:
+            if not f'ink_{s2}' in ss or not  'sup_{s2}' in ss:
+                ss = flipInv(ss)
+            if operator=='Prod':
+                ss.insert(idx, xvar, ss[f'ink_{s2}']*ss[f'sup_{s2}'])
+            elif operator=='Ratio':
+                ss.insert(idx, xvar, ss[f'ink_{s2}']/ss[f'sup_{s2}'])
+            idx+=1
+    return ss
+
+def addLogs(ss:pd.DataFrame, varlist) -> pd.DataFrame:
+    k = ss.keys()
+    idx = int(np.argmax(k=='xs_aspect'))
+    for j, s2 in enumerate(varlist):
+        xvar = s2+'_log'
+        if not xvar in s2:
+            ss.insert(idx, xvar, np.log10(ss[s2]))
+            idx+=1
+    return ss
+    
 
 def speedTableRecursive(topfolder:str) -> pd.DataFrame:
     '''go through all of the folders and summarize the stills'''

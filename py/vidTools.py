@@ -22,6 +22,7 @@ import vidMorph as vm
 from config import cfg
 from plainIm import *
 from fileHandling import isSubFolder
+import metrics as me
 
 # logging
 logger = logging.getLogger(__name__)
@@ -148,7 +149,7 @@ class vidData:
         self.xRmin = 300
         self.xRmax = 600
         self.yBmin = 250
-        self.yBmax = 400
+        self.yBmax = 430
         self.nozwidthMin = 0.75 # mm
         self.nozWidthMax = 1.05 # mm
         
@@ -403,10 +404,10 @@ class vidData:
     #------------------------------------------------------------------------------------
         
         
-    def maskNozzle(self, frame:np.array) -> np.array:
+    def maskNozzle(self, frame:np.array, dilate:int=0) -> np.array:
         '''block the nozzle out of the image'''
-        frameMasked = cv.bitwise_and(frame,frame,mask = self.nozMask)
-        out = cv.add(frameMasked, self.nozCover) 
+        frameMasked = cv.bitwise_and(frame,frame,mask = vm.erode(self.nozMask, dilate))
+        out = cv.add(frameMasked, vm.dilate(self.nozCover, dilate)) 
         norm = np.zeros(out.shape)
         out = cv.normalize(out,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
         return out
@@ -420,6 +421,7 @@ class vidData:
             self.detectNozzle()
         self.openStream()
         frame = self.getFrameAtTime(time)
+        self.closeStream()
         frame2 = self.maskNozzle(frame)
         acrit=1000
         m = 10
@@ -495,7 +497,6 @@ class vidData:
 #             fig = plt.gcf()
 #             fig.savefig(os.path.join(cfg.path.fig, 'figures', 'horizVid_detection.svg'), bbox_inches='tight', dpi=300)
         units = {'name':'','time':'s', 'frac':'','behindX':'mm','projection':'mm', 'projShift':'mm', 'vertDispBot':'mm', 'vertDispMid':'mm', 'vertDispTop':'mm'}
-        self.closeStream()
         return out, units
     
     def measureFrameFromLine(self, s:str, f:float, diag:int=0, **kwargs) -> Tuple[dict,dict]:
@@ -507,15 +508,15 @@ class vidData:
         t = t0+dt*f
         return self.measureHorizFrame(t, s, f, diag=diag, **kwargs)
     
-    def vidMeasuresFNHoriz(self, tag) -> str:
+    def vidMeasuresFN(self, tag) -> str:
         '''file name for video measurement table'''
         return os.path.join(self.pv.folder, os.path.basename(self.pv.folder)+'_vid'+tag+'Measures.csv')
         
         
-    def measureVideoHoriz(self, diag:int=0, overwrite:bool=False, **kwargs) -> Tuple[pd.DataFrame, dict]:
+    def measureVideoHoriz(self, diag:int=0, overwrite:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
         '''get info about the ellipses. Returns 1 when video is done. Returns 0 to continue grabbing.'''
         fn  = self.vidMeasuresFN('Horiz')
-        if os.path.exists(fn):
+        if os.path.exists(fn) and overwrite==0:
             return
         if len(self.prog)==0:
             return
@@ -552,6 +553,81 @@ class vidData:
         plainExp(fn, self.measures, self.measuresUnits)
         return self.measures, self.measuresUnits
     
+    def getXSFrame(self, time:float, fn:str) -> np.ndarray:
+        '''obtain and mask a frame for cross-sections. fn is filename'''
+        self.openStream()
+        frame = self.getFrameAtTime(time)
+        self.closeStream()
+        frame = self.maskNozzle(frame, dilate=30)
+        frame = frame[0:int(self.yB)+150, 0:self.xL+30]
+        return frame
+    
+
+    def overwriteXSFrame(self, s:str, dt0:float, diag:bool=False, **kwargs) -> None:
+        '''overwrite the cross-section image file'''
+        if 'time' in kwargs:
+            time = kwargs['time']
+        else:
+            dt = self.prog.loc[2,'t0']-self.prog.loc[1,'t0']
+            row = (self.prog[self.prog.name==s])
+            time = row.iloc[0]['t0']+dt
+        fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
+        frame = self.getXSFrame(time+dt0, fn)
+        cv.imwrite(fn, frame)
+        logging.info(f'Exported {fn}')
+        if diag:
+            imshow(frame)
+    
+    def measureVideoXS(self, diag:int=0, overwrite:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
+        '''get stills from right after the XS lines are printed, and analyze them. overwrite=2 to overwrite images, overwrite=1 to overwrite file'''
+        filefn  = self.vidMeasuresFN('XS')
+        if os.path.exists(filefn) and overwrite==0:
+            return
+        if len(self.prog)==0:
+            return
+        if not 'name' in self.prog.keys():
+            return
+        out = []
+        units = []
+        dt = self.prog.loc[2,'t0']-self.prog.loc[1,'t0']
+        for s in ['xs2', 'xs3', 'xs4', 'xs5']:
+            fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
+            if overwrite<2 and os.path.exists(fn):
+                frame = cv.imread(fn)
+                framerow, u = me.xsMeasureIm(frame, 1, 0, os.path.basename(self.folder), s, diag=diag, acrit=300, **kwargs)
+            else:
+                framerow = []
+            if len(framerow)==0:
+                row = (self.prog[self.prog.name==s])
+                time = row.iloc[0]['t0']+dt
+                # iterate through times inside of this line
+                dtlist = list(np.arange(-0.2, 0.8, 0.05))
+                while len(dtlist)>0:
+                    dt0 = dtlist.pop(0)
+                    frame = self.getXSFrame(time+dt0, fn)
+                    framerow, u = me.xsMeasureIm(frame, 1, 0, f'{os.path.basename(self.folder)}_{s}_{dt0}', s, diag=diag, acrit=300, **kwargs)
+                    if len(framerow)>0:
+                        if framerow['x0']<40 or framerow['x0']>self.xL-100 or framerow['y0']>self.yB+100:
+                            # detected particle is too far left or too far right or too low
+                            framerow = []
+                        else:
+                            # success
+                            dtlist = []
+            if len(framerow)>0:
+                out.append(framerow)
+                units = u
+                if overwrite>1 or not os.path.exists(fn):
+                    cv.imwrite(fn, frame)
+                    logging.info(f'Exported {fn}')
+                    
+        # store table in object
+        self.measures = pd.DataFrame(out)
+        self.measuresUnits = units
+        
+        # export
+        plainExp(filefn, self.measures, self.measuresUnits)
+        return self.measures, self.measuresUnits
+    
     def measureAll(self, diag:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
         '''initialize data and measure the video'''
         try:
@@ -560,7 +636,8 @@ class vidData:
             logging.error(f'Error detecting nozzle in {self.folder}')
             traceback.print_exc()
             return
-        self.measureVideoHoriz(diag=diag, **kwargs)
+#         self.measureVideoHoriz(diag=diag, **kwargs)
+        self.measureVideoXS(diag=diag, **kwargs)
         
         
     def importVidMeasures(self) -> Tuple[pd.DataFrame, dict]:

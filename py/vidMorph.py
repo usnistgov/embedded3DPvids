@@ -40,6 +40,8 @@ __status__ = "Development"
 
 def morph(img:np.array, width:int, func:str, iterations:int=1, shape:bool=cv.MORPH_RECT, aspect:float=1, **kwargs) -> np.array:
     '''erode, dilate, open, or close. func should be erode, dilate, open, or close. aspect is aspect ratio of the kernel, height/width'''
+    if width==0:
+        return img
     if not shape in [cv.MORPH_RECT, cv.MORPH_ELLIPSE, cv.MORPH_CROSS]:
         raise NameError('Structuring element must be rect, ellipse, or cross')
     kernel = cv.getStructuringElement(cv.MORPH_RECT,(width, int(width*aspect)))

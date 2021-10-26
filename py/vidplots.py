@@ -83,6 +83,7 @@ class folderPlots:
             self.ylists = self.unqList('y')
             self.xlistsreal = [[]]*len(self.bases)
             self.ylistsreal = [[]]*len(self.bases)
+            self.xylistsreal = [[[]]]*len(self.bases)
         except:
             raise ValueError('Failed to identify x and y variables')
             traceback.print_exc()
@@ -314,6 +315,10 @@ def vvplot(pv:printVals, cp:comboPlot) -> Tuple[float, float, float]:
         cp.xlistsreal[axnum].append(x)
     if y not in cp.ylistsreal[axnum]:
         cp.ylistsreal[axnum].append(y)
+    if [x,y] not in cp.xylistsreal[axnum]:
+        cp.xylistsreal[axnum].append([x,y])
+    else:
+        raise ValueError('Square already filled')
     return x0, y0, axnum
     
 #-----------------------------------------------
@@ -323,7 +328,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     bn = os.path.basename(topfolder)
     s = ''
     for k in kwargs:
-        if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize'] and type(kwargs[k]) is not dict:
+        if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize', 'crops'] and type(kwargs[k]) is not dict:
             s = s + k + '_'+str(kwargs[k])+'_'
     s = s[0:-1]
     s = s.replace('*', 'x')
@@ -345,6 +350,9 @@ def exportIm(fn:str, fig) -> None:
 def parseTag(tag:str) -> dict:
     '''parse the tag into relevant names'''
     out = {'raw':False, 'tag':'', 'num':0}
+    if 'vid' in tag:
+        out['tag']=tag
+        return out
     if '_' in tag:
         spl = re.split('_',tag)
         if 'raw' in spl:
@@ -439,42 +447,76 @@ def importAndCrop(folder:str, tag:str, whiteBalance:bool=True, normalize:bool=Tr
         im = vm.normalize(im)
     return im
 
-def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
-    '''plots picture from just one folder. 
-    folder is the full path name
-    cp is the comboPlot object that stores the plot
-    dx0 is the spacing between images in plot space, e.g. 0.7
-    tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
+def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
+    '''get the images, crop them, and put them together into one image'''
     im = []
     try:
         if not type(tag) is list:
             tag = [tag]
-        for t in tag:
-            im1 = importAndCrop(pv.folder, t, **kwargs)
+        for i,t in enumerate(tag):
+            if 'crops' in kwargs and type(kwargs['crops']) is list:
+                k2 = kwargs.copy()
+                if i-1>len(kwargs['crops']):
+                    raise Exception('Image list is longer than crop list')
+                k2['crops'] = kwargs['crops'][i]
+            else:
+                k2 = kwargs
+            im1 = importAndCrop(pv.folder, t, **k2)
             if len(im1)>0:
-                try:
-                    im = cv.hconcat([im, im1]) # add to the right
-                except Exception as e:
-                    im = im1 # set imtot to first image
+                if len(im)==0:
+                    im = im1
+                else:
+                    if im1.shape[0]>im.shape[0]:
+                        pad = im1.shape[0]-im.shape[0]
+                        im = cv.copyMakeBorder(im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
+                    elif im.shape[0]>im1.shape[0]:
+                        pad = im.shape[0]-im1.shape[0]
+                        im1 = cv.copyMakeBorder(im1, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
+                    try:
+                        im = cv.hconcat([im, im1]) # add to the right
+                    except Exception as e:
+                        traceback.print_exc()
+                        im = im1 # set imtot to first image
     except Exception as e:
         logging.error(f'Cropping error: {str(e)}')
-        return
+        traceback.print_exc()
+        raise e
     if len(im)==0:
-        return
+        raise e
+    return im, t, tag
     
+def getWidthScaling(im:np.array, dx0:float, tag, **kwargs) -> Tuple[float,float,float]:
+    '''determine how to scale the image'''
     height,width = im.shape[0:2]
     if 'crops' in kwargs:
         crops = kwargs['crops']
-        if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
-            if crops['yf']<0:
-                heightI = height
-            else:
-                heightI = crops['yf']-crops['y0']
-            if crops['xf']<0:
-                widthI = width
-            else:
-                widthI = (crops['xf']-crops['x0'])*len(tag)
-            # use intended height/width to scale all pictures the same
+        if type(crops) is list:
+            # multiple crop zones indicated for different images
+            c = pd.DataFrame(crops)
+            if not 'x0' in c:
+                c['x0'] = 0
+            if not 'xf' in c:
+                c['xf'] = width
+            if not 'y0' in c:
+                c['y0'] = 0
+            if not 'yf' in c:
+                c['yf'] = 0
+            c['w'] = c['xf']-c['x0']
+            c['h'] = c['yf']-c['y0']
+            widthI = c.w.sum()
+            heightI = c.h.max()
+        else:
+            # single crop zone indicated
+            if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
+                if crops['yf']<0:
+                    heightI = height
+                else:
+                    heightI = crops['yf']-crops['y0']
+                if crops['xf']<0:
+                    widthI = width*len(tag)
+                else:
+                    widthI = (crops['xf']-crops['x0'])*len(tag)
+                # use intended height/width to scale all pictures the same
     else:
         widthI = width
         heightI = height
@@ -483,49 +525,81 @@ def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
     pxperunit = max(widthI, heightI) # image pixels per image block
     dx = dx0*(width/pxperunit)
     dy = dx0*(height/pxperunit)
+    
+    return dx, dy, pxperunit, dx0
+
+def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y0:float, s:float, ax, **kwargs):
+    '''draw an overlay over the image'''
+    overlay = kwargs['overlay'] # get overlay dictionary from kwargs
+    file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
+    scale = float(sb.fileScale(file))
+    pxPerBlock = pxperunit/s # rescale px to include white space
+    realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
+    mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
+    mmPerPlotUnit = mmPerBlock/(2*dx0) # convert to dimensions of the plot
+    if not overlay['shape'] in ['rectangle', 'circle']:
+        return
+
+    # determine scaling
+    if 'diam' in overlay:
+        circlewMM = getFilamentDiameter(file, diam=overlay['diam'])
+    else:
+        circlewMM = getFilamentDiameter(file)
+    circlewPlotUnits = circlewMM/mmPerPlotUnit # diameter in plot units
+    if 'dx' in overlay:
+        x0 = x0+overlay['dx']
+    if 'dy' in overlay:
+        y0 = y0+overlay['dy']
         
+    if overlay['shape']=='circle':
+        # plot circle
+        circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
+        ax.add_patch(circle2)
+    elif overlay['shape']=='rectangle' and ('w' in overlay or 'h' in overlay):
+        # plot rectangle
+        if 'w' in overlay:
+            w = overlay['w']/mmPerPlotUnit
+            h = circlewPlotUnits
+        else:
+            w = circlewPlotUnits
+            h = overlay['h']/mmPerPlotUnit
+        y0 = y0-h/2
+        x0 = x0-w/2
+        rect = plt.Rectangle((x0, y0), w, h, color='black', fill=True, edgecolor=None)
+        ax.add_patch(rect)
+    
+def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
+    '''plots picture from just one folder. 
+    folder is the full path name
+    cp is the comboPlot object that stores the plot
+    dx0 is the spacing between images in plot space, e.g. 0.7
+    tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
+    
+    # determine where to plot the image
     try:
         x0, y0, axnum = vvplot(pv, cp)
     except Exception as e:
-        logging.error(f'Positioning error: {str(e)}')
+        if not 'already filled' in str(e):
+            logging.error(f'Positioning error: {str(e)}')
         return
+    
+    # get the images
+    try:
+        im, t, tag = getImages(pv, tag, **kwargs)
+    except:
+        return
+    
+    # get scaling
+    dx, dy, pxperunit, dx0 = getWidthScaling(im, dx0, tag, **kwargs)
+    
     s = 0.95 # scale images to leave white space
     im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
+    
+    # plot the image
     cp.axs[axnum].imshow(im, extent=[x0-dx*s, x0+dx*s, y0-dy*s, y0+dy*s])
     
     if 'overlay' in kwargs:
-        overlay = kwargs['overlay'] # get overlay dictionary from kwargs
-        file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
-        scale = float(sb.fileScale(file))
-        pxPerBlock = pxperunit/s # rescale px to include white space
-        realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
-        mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
-        mmPerPlotUnit = mmPerBlock/(2*dx0) # convert to dimensions of the plot
-        if overlay['shape'] in ['rectangle', 'circle']:
-#             circlewMM = overlay['diam'] # diameter should be in mm
-            if 'diam' in overlay:
-                circlewMM = getFilamentDiameter(file, diam=overlay['diam'])
-            else:
-                circlewMM = getFilamentDiameter(file)
-            circlewPlotUnits = circlewMM/mmPerPlotUnit # diameter in plot units
-            if 'dx' in overlay:
-                x0 = x0+overlay['dx']
-            if 'dy' in overlay:
-                y0 = y0+overlay['dy']
-            if overlay['shape']=='circle':
-                circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
-                cp.axs[axnum].add_patch(circle2)
-            if overlay['shape']=='rectangle' and ('w' in overlay or 'h' in overlay):
-                if 'w' in overlay:
-                    w = overlay['w']/mmPerPlotUnit
-                    h = circlewPlotUnits
-                else:
-                    w = circlewPlotUnits
-                    h = overlay['h']/mmPerPlotUnit
-                y0 = y0-h/2
-                x0 = x0-w/2
-                rect = plt.Rectangle((x0, y0), w, h, color='black', fill=True, edgecolor=None)
-                cp.axs[axnum].add_patch(rect)
+        picPlotOverlay(pv, pxperunit, t, dx0, x0, y0, s, cp.axs[axnum], **kwargs)
         
             
 def getFilamentDiameter(file:str, diam:float=cfg.const.di) -> float:
@@ -576,6 +650,7 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
         return
     
     flist = fh.subFolders(topFolder, tags=dates, **kwargs)
+    flist.reverse()
     if len(flist)==0:
         return
     

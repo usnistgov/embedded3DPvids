@@ -8,7 +8,10 @@ import logging
 import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt
+from matplotlib.markers import MarkerStyle
 import matplotlib.cm as cm
+import matplotlib.colors as mc
+import colorsys
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
@@ -17,6 +20,7 @@ import seaborn as sns
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
+import regression as rg
 
 
 # logging
@@ -24,6 +28,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
+    
+# plotting
+matplotlib.rcParams['svg.fonttype'] = 'none'
+matplotlib.rc('font', family='Arial')
+matplotlib.rc('font', size='10.0')
 
 # info
 __author__ = "Leanne Friedrich"
@@ -38,6 +47,12 @@ __status__ = "Development"
 
 #-------------------------------------------------------------
 
+def tossBigSE(df:pd.DataFrame, column:str, quantile:float=0.9):
+    '''toss big standard errors from the list'''
+    if not column[-3:]=='_SE':
+        column = column+'_SE'
+    return df[df[column]<df[column].quantile(quantile)]
+
 def cubehelix1(val:float):
     '''val should be 0-1. returns a color'''
     cm = sns.cubehelix_palette(as_cmap=True, rot=-0.4)
@@ -46,14 +61,21 @@ def cubehelix1(val:float):
 
 def adjust_lightness(color, amount=0.5):
     '''https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
-    import matplotlib.colors as mc
-    import colorsys
     try:
         c = mc.cnames[color]
     except:
         c = color
     c = colorsys.rgb_to_hls(*mc.to_rgb(c))
     return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
+
+def adjust_saturation(color, amount=0.5):
+    '''https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
+    try:
+        c = mc.cnames[color]
+    except:
+        c = color
+    c = colorsys.rgb_to_hls(*mc.to_rgb(c))
+    return colorsys.hls_to_rgb(c[0], c[1], max(0, min(1, amount * c[1])))
 
 def roundToOrder(val:float):
     if abs(val)<10**-14:
@@ -107,6 +129,9 @@ def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
             xmin = min(logs)
             xmax = max(logs)
             ddx = (xmax-xmin)*dx
+            if ddx==0:
+                xl0 = list(s3.unique())
+                return onePointSpacing(xl0)
             xl = [10**i for i in np.arange(xmin-ddx*0.5,xmax+ddx*0.51,ddx)]
         else:
             xmin = s3.min()
@@ -195,13 +220,33 @@ def setLog(ax, logx:bool, logy:bool) -> None:
     if logy:
         ax.set_yscale('log')
         
+def getMarker(i:int, color) -> dict:
+    '''get marker parameters for an index'''
+    varargs = {}
+    print(i, color)
+    if i==1:
+#         varargs['marker'] = ''
+        varargs['facecolors']='none'
+        varargs['edgecolors']=color
+        varargs['color']=color 
+    else:
+        mlist = ['o','o','v','s','^','X','D','v']
+        varargs['marker'] = mlist[i%len(mlist)]
+        varargs['color']=color  
+        varargs['edgecolors']='none'
+        varargs['facecolors']=color
+    return varargs
+        
 def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict:
     '''get the color for this series and put it in the plot args dictionary. i should be between 0 and 1, indicating color'''
     if gradColor==0 or gradColor==2:
+        print(lst)
         varargs = {}
         if 'color' in kwargs:
             # same color, vary marker
             color = kwargs['color']
+        elif 'edgecolors' in kwargs and not kwargs['edgecolors']=='none':
+            color = kwargs['edgecolors']
         else:
             # different color, same marker
             if len(lst)>1:
@@ -212,40 +257,44 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
                     if ifrac==0.5:
                         color='gray'
                     else:
-                        color = adjust_lightness(color, 1-abs(0.5-ifrac)) # darken middle color
+                        color = adjust_saturation(adjust_lightness(color, 0.9), 0.5) # darken and desaturate middle color
             else:
                 color = 'black'
-        if ('marker' in kwargs and kwargs['marker']==1) or (not 'marker' in kwargs and i==1):
-            varargs['facecolors']='none'
-            varargs['edgecolors']=color
-            varargs['color']=color 
-        elif 'marker' in kwargs:
-            varargs['marker'] = kwargs['marker']
-            varargs['color']=color  
-            varargs['edgecolors']='none'
-            varargs['facecolors']=color
-        else:
-            varargs['marker'] = ['o','o','P', 'v','s','X','D','v'][i]
-            varargs['color']=color  
-            varargs['edgecolors']='none'
-            varargs['facecolors']=color
+        if 'marker' in kwargs:
+            if kwargs['marker']==1:
+                varargs = getMarker(1, color)
+            else:
+                varargs['marker'] = kwargs['marker']
+        elif not 'edgecolors' in kwargs:
+            varargs = getMarker(i, color)
+        for sname in ['facecolors', 'color', 'edgecolors']:
+            if sname in kwargs:
+                varargs[sname] = kwargs[sname]
+            else:
+                if (sname=='edgecolors' and not i==1) or (i==1 and sname=='facecolors'):
+                    varargs[sname] = 'none'
+                else:
+                    varargs[sname]=color  
     elif gradColor==1:
         # color by gradient
         varargs = {}
 
     if 'markersize' in kwargs:
         varargs['s']=kwargs['markersize']
+        if 'marker' in varargs:
+            # markers don't work with size, for some reason
+            varargs.pop('marker')
     return varargs
         
-def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) :
+def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict) :
     '''df2 is already sorted into x,y,c where c is color'''
     if len(df2)==0:
         return
-    
     if gradColor==1:
         # gradient coloring
         sc = ax.scatter(df2['x'],df2['y'],linestyle='None',zorder=100,c=df2['c'],cmap=cmapname,**varargs)
-        varargs.pop('s')
+        if 's' in varargs:
+            varargs.pop('s')
         cmin = df2.c.min()
         cmax = df2.c.max()
         if dx>0 and dy>0:
@@ -254,8 +303,8 @@ def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, varargs:dict) 
                 color = cmap((row['c']-cmin)/(cmax-cmin))
                 sc = ax.errorbar([row['x']],[row['y']], xerr=[row['xerr']], yerr=[row['yerr']],linestyle='None', color=color,**varargs)
     else:
-        sc = ax.scatter(df2['x'],df2['y'], linestyle='None',zorder=100,**varargs)
-        for s in ['label', 'facecolors', 'edgecolors', 's']:
+        sc = ax.scatter(df2['x'],df2['y'], **varargs)
+        for s in ['label', 'facecolors', 'edgecolors', 's', 'fillstyle']:
             if s in varargs:
                 varargs.pop(s)
         sc = ax.errorbar(df2['x'],df2['y'], xerr=df2['xerr'], yerr=df2['yerr'],linestyle='None',**varargs)
@@ -281,7 +330,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     plt.rc('font', size=fontsize) 
     
     if not (xvar in ss and yvar in ss):
-        raise NameError('Variable name is not in table')
+        raise NameError(f'Variable name {xvar} or {yvar} is not in table')
     fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
     setLog(ax, logx, logy)                    # set axes to log or not
                # get a colormap function
@@ -315,18 +364,18 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
 
         if len(ss2)>0:
             df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
-            sc = plotSeries(df2, gradColor, ax, cmapname, varargs)
+            sc = plotSeries(df2, gradColor, ax, cmapname, dx, dy, varargs)
       
     # add verticals, horizontals
     idealLines(**kwargs)
         
     # add legends
-    if gradColor==1 and colorBy in ss:
+    if gradColor==1 and colorBy in ss and not ('legend' in kwargs and kwargs['legend']==False):
         cbar = plt.colorbar(sc, label=colorBy)
     else:
         handles, labels = ax.get_legend_handles_labels()
         if len(labels)>0 and not ('legend' in kwargs and kwargs['legend']==False):
-            if len(fig.axes)==1:
+            if len(fig.axes)==1 or ('legendloc' in kwargs and kwargs['legendloc']=='right'):
                 ax.legend(bbox_to_anchor=(1.05,1), loc='upper left', title=colorBy)
             else:
                 ax.legend(bbox_to_anchor=(0,1), loc='lower left', title=colorBy)
@@ -338,6 +387,25 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
 
 def setSquare(ax):
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
+    
+def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
+    '''add a linear regression to the plot'''
+    reg = rg.regPD(ss, [xvar], yvar)
+    min1 = ss[xvar].min()
+    max1 = ss[xvar].max()
+    logxlist = list(np.arange(min1, max1, (max1-min1)/20))
+    ylist = [reg['c']+reg['b']*x for x in logxlist]
+    if xvar[-3:]=='log':
+        xlist = [10**i for i in logxlist]
+    else:
+        xlist = logxlist
+    if yvar[-3:]=='log':
+        ylist = [10**i for i in ylist]
+    ylim = ax.get_ylim()
+    xlist = [xlist[i] for i, y in enumerate(ylist) if ((y>ylim[0])&(y<ylim[1]))]
+    ylist = [ylist[i] for i, y in enumerate(ylist) if ((y>ylim[0])&(y<ylim[1]))]
+    ax.plot(xlist, ylist, color='black')
+    ax.set_title('r2 = {:0.2}'.format(reg['r2']))
     
     
 def calcTicks(lim:Tuple[float]):
@@ -367,6 +435,8 @@ def calcTicks(lim:Tuple[float]):
     locmin = matplotlib.ticker.LogLocator(base=10.0,subs=np.arange(tminor, 1, tminor),numticks=12)
     ticks = [i for i in ticks if (i>lim[0])&(i<lim[1])]
     ticks = list(set(ticks))
+    if ticks[0]==0.9 and ticks[-1]>=2:
+        ticks = ticks[1:]
     return ticks, locmin
     
 def fixTicks(ax, logx:bool, logy:bool):
@@ -394,16 +464,21 @@ def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **
     
     ss.sort_values(by='sweepType')
     cmap = cm.get_cmap(cmapname)
-    fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
+    fig,ax,kwargs0 = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
     for i,s in enumerate(['visc', 'speed']):
         ss0 = ss[ss.sweepType.str.startswith(s)]
-        color = cmap(0.99*i)
-        if i==1:
-            if 'yideal' in kwargs:
-                kwargs.pop('yideal')
-            if 'xideal' in kwargs:
-                kwargs.pop('xideal')
-        scatterSS(ss0, xvar, yvar, 'sweepType', cmapname=cmapname, color=color, **kwargs)
+        color0 = cmap(0.99*i)
+        u = ss0.sweepType.unique()
+        for j,st in enumerate(u):
+            color = cmap(1*i + (0.5-i)*j/len(u))
+            print(f'get marker {j}')
+            ma = getMarker(j, color)
+            kwargs = {**kwargs0, **ma}
+            scatterSS(ss0[ss0.sweepType==st], xvar, yvar, 'sweepType', cmapname=cmapname, **kwargs)
+            if 'yideal' in kwargs0:
+                kwargs0.pop('yideal')
+            if 'xideal' in kwargs0:
+                kwargs0.pop('xideal')
 
 
 def contourSS(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool=False, logy:bool=False):

@@ -101,7 +101,7 @@ class fluidVals:
         rhelist = ['tau0', 'eta0']
         rhe = [[tag+i,getattr(self,i)] for i in rhelist]
         rheunits = [[tag+i, self.rheUnits[i]] for i in rhelist]
-        clist = ['density', 'v', 'visc0', 'CaInv', 'Re', 'WeInv', 'OhInv', 'dPR']
+        clist = self.constUnits.keys()
         const = [[tag+i,getattr(self,i)] for i in clist]
         constunits = [[tag+i, self.constUnits[i]] for i in clist]
         out = dict(meta+rhe+const)
@@ -169,7 +169,8 @@ class fluidVals:
         self.WeInv = 10**3*sigma/(self.density*self.v**2*diam) # weber number ^-1
         self.OhInv = np.sqrt(self.WeInv)*self.Re                # Ohnesorge number^-1
         self.dPR = sigma/self.tau0                              # characteristic diameter for Plateau rayleigh instability in mm
-        self.constUnits = {'density':'g/mL', 'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','dPR':'mm'}
+        self.Bm = self.tau0*diam/(self.visc0*self.v)            # Bingham number
+        self.constUnits = {'density':'g/mL', 'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','dPR':'mm', 'dnormInv':'', 'Bm':''}
         
 
 #------   
@@ -222,6 +223,8 @@ class printVals:
         self.vRatio = self.ink.v/self.sup.v 
         self.dEst = self.di*np.sqrt(self.vRatio)
             # expected filament diameter in mm
+        self.ink.dnormInv = self.ink.dPR/self.dEst
+        self.sup.dnormInv = self.sup.dPR/self.dEst
         self.ReRatio = self.ink.Re/self.sup.Re
         l = 12.5 # mm, depth of nozzle in bath
         dn = 2*np.sqrt(self.do*l/np.pi)
@@ -237,7 +240,7 @@ class printVals:
         mlist = ['bn', 'date', 'sigma', 'di', 'do', 'fluFile', 'calibFile']
         meta = [[i,getattr(self,i)] for i in mlist]
         munits = [[i, self.units[i]] for i in mlist]
-        clist = [ 'viscRatio','vRatio',  'ReRatio', 'rGrav', 'dEst', 'hDragP', 'vDragP']
+        clist = self.constUnits.keys()
         const = [[i,getattr(self,i)] for i in clist]
         cunits = [[i, self.constUnits[i]] for i in clist]
         pvals = dict(meta+const)
