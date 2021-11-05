@@ -233,7 +233,9 @@ class printVals:
             # horizontal line stokes drag pressure
         self.vDragP = 3*self.sup.visc0*self.sup.v*4/(self.do)
             # vertical line stokes drag pressure
-        self.constUnits = {'viscRatio':'', 'vRatio':'', 'ReRatio':'', 'rGrav':'mm','dEst':'mm', 'hDragP':'Pa', 'vDragP':'Pa'}
+        self.int_CaInv = self.sigma/(self.sup.visc0*self.ink.v)
+        self.int_Re = 10**-3*(self.ink.density*self.ink.v*self.di)/(self.sup.visc0)
+        self.constUnits = {'viscRatio':'', 'vRatio':'', 'ReRatio':'', 'rGrav':'mm','dEst':'mm', 'hDragP':'Pa', 'vDragP':'Pa', 'int_CaInv':'', 'int_Re':''}
         
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''

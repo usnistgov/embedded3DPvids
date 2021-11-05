@@ -7,6 +7,7 @@ import traceback
 import logging
 import pandas as pd
 from matplotlib import pyplot as plt
+import matplotlib
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
@@ -25,6 +26,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
+    
+# plotting
+matplotlib.rcParams['svg.fonttype'] = 'none'
+matplotlib.rc('font', family='Arial')
+matplotlib.rc('font', size='10.0')
 
 # info
 __author__ = "Leanne Friedrich"
@@ -374,7 +380,7 @@ def picFileFromFolder(folder:str, tag:str) -> str:
     imfile = ''
     if not 'raw' in tag:
         for f in os.listdir(folder):
-            if tag in f:
+            if tag in f and not ('vid' not in tag and 'vid' in f):
                 imfile = os.path.join(folder, f)
     if not os.path.exists(imfile):
         # no file in the main folder. search archives
@@ -435,7 +441,14 @@ def importAndCrop(folder:str, tag:str, whiteBalance:bool=True, normalize:bool=Tr
     im = picFromFolder(folder, tag)
     if type(im) is list:
 #         logging.debug(f'Image missing: {folder}')
-        return []
+        if 'crops' in kwargs:
+            crops = kwargs['crops']
+            if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
+                return 255*np.ones((int(crops['yf']-crops['y0']), int(crops['xf']-crops['x0']), 3), dtype=np.uint8)
+            else:
+                return []
+        else:
+            return []
     if 'crops' in kwargs:
         crops = kwargs['crops']
         im = cropImage(im, crops)
@@ -550,10 +563,15 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
         x0 = x0+overlay['dx']
     if 'dy' in overlay:
         y0 = y0+overlay['dy']
+    
+    if 'color' in overlay:
+        color = overlay['color']
+    else:
+        color = 'black'
         
     if overlay['shape']=='circle':
         # plot circle
-        circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color='black', fill=False)
+        circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color=color, fill=False)
         ax.add_patch(circle2)
     elif overlay['shape']=='rectangle' and ('w' in overlay or 'h' in overlay):
         # plot rectangle
@@ -565,7 +583,7 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
             h = overlay['h']/mmPerPlotUnit
         y0 = y0-h/2
         x0 = x0-w/2
-        rect = plt.Rectangle((x0, y0), w, h, color='black', fill=True, edgecolor=None)
+        rect = plt.Rectangle((x0, y0), w, h, color=color, fill=True, edgecolor=None)
         ax.add_patch(rect)
     
 def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:

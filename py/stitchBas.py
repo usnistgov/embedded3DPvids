@@ -50,6 +50,8 @@ def colNum(file:str)->int:
     
 def fileScale(file:str) -> str:
     '''get the scale from the file name'''
+    if 'vid' in file:
+        return '1'
     try:
         scale = float(re.split('_', os.path.basename(file))[-2])
     except:

@@ -12,6 +12,7 @@ import re
 import numpy as np
 import cv2 as cv
 import imutils
+import csv
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -97,8 +98,7 @@ class vidData:
         pg = self.getProgDims()
         if pg>0:
             return
-        self.defineCritVals()
-        
+        self.defineCritVals()       
         
     def getProgDims(self) -> int:
         '''get line starts and stops'''
@@ -116,6 +116,8 @@ class vidData:
         if not self.streamOpen:
             self.stream = cv.VideoCapture(self.file)
             self.frames = int(self.stream.get(cv.CAP_PROP_FRAME_COUNT)) # total number of frames
+            self.fps = self.stream.get(cv.CAP_PROP_FPS)
+            self.duration = self.frames/self.fps
             self.streamOpen = True
         
     def setTime(self, t:float) -> None:
@@ -132,6 +134,53 @@ class vidData:
             return 1
         else:
             return frame[5:-5,5:-5] # crop
+        self.closeStream()
+    
+    def getVertFrame(self, time:float) -> np.ndarray:
+        '''obtain frame and crop to nozzle width'''
+        frame = self.getFrameAtTime(time)
+        frame = frame[:, self.xL-100:self.xR+100]
+        return frame
+    
+    def getXSFrame(self, time:float) -> np.ndarray:
+        '''obtain and mask a frame for cross-sections'''
+        frame = self.getFrameAtTime(time)
+        frame = self.maskNozzle(frame, dilate=30)
+        frame = frame[0:int(self.yB)+150, 0:self.xL+30]
+        return frame
+    
+    def getLineTime(self, s:str, dt0:float, **kwargs) -> float:
+        '''get the time of the end of the line'''
+        if 'time' in kwargs:
+            time = kwargs['time']
+        else:
+            i = self.prog.index[self.prog.name==(s[:-1])+'1'].tolist()[0]  # index of line 1
+            dt = self.prog.loc[i+1,'t0']-self.prog.loc[i,'t0'] # time between lines
+            row = (self.prog[self.prog.name==s])
+            if not 'xs' in s:
+                dt = dt/2
+            time = row.iloc[0]['t0']+dt
+        return time+dt0
+    
+    def getLineFrame(self, s:str, dt0:float, **kwargs) -> np.ndarray:
+        '''get one frame from a given line, e.g. s='xs2' '''
+        time = self.getLineTime(s, dt0, **kwargs)
+        if 'xs' in s:
+            frame = self.getXSFrame(time)
+        elif 'vert' in s:
+            frame = self.getVertFrame(time)
+        else:
+            frame = self.getFrameAtTime(time)
+        return frame
+
+    def overwriteFrame(self, s:str, dt0:float, diag:bool=False,  **kwargs) -> None:
+        '''overwrite the cross-section image file'''
+        frame = self.getLineFrame(s, dt0, **kwargs)
+        fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
+        cv.imwrite(fn, frame)
+        logging.info(f'Exported {fn}')
+        if diag:
+            imshow(frame)
         
         
     def closeStream(self) -> None:
@@ -145,7 +194,7 @@ class vidData:
     def defineCritVals(self):
         '''critical values to trigger an error'''
         self.xLmin = 200 # px
-        self.xLmax = 400
+        self.xLmax = 500
         self.xRmin = 300
         self.xRmax = 600
         self.yBmin = 250
@@ -176,27 +225,30 @@ class vidData:
     def drawNozzleOnFrame(self, colors:bool=True) -> None:
         '''draw the nozzle on the original frame'''
         # draw left and right edge
-        for i,line in self.lines.iterrows():
+        try:
+            for i,line in self.lines.iterrows():
+                if colors:
+                    c = (0,0,255)
+                else:
+                    c = (255,255,255)
+                cv.line(self.line_image,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),c,2)
+
+            # draw bottom edge
             if colors:
-                c = (0,0,255)
+                c = (255,255,0)
             else:
                 c = (255,255,255)
-            cv.line(self.line_image,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),c,2)
-            
-        # draw bottom edge
-        if colors:
-            c = (255,255,0)
-        else:
-            c = (255,255,255)
-        cv.line(self.line_image,(int(self.lines.loc[0,'xf']),int(self.yB)),(int(self.lines.loc[1,'xf']),int(self.yB)),c,2)
+            cv.line(self.line_image,(int(self.lines.loc[0,'xf']),int(self.yB)),(int(self.lines.loc[1,'xf']),int(self.yB)),c,2)
+        except:
+            pass
         
         # draw corner points
-        for l in [self.leftCorner, self.rightCorner]:
+        for l in [self.xL, self.xR]:
             if colors:
                 c = (0,255,0)
             else:
                 c = (255,255,255)
-            cv.circle(self.line_image,(int(l['xf']),int(l['yf'])),10,c,3)
+            cv.circle(self.line_image,(int(l),int(self.yB)),10,c,3)
         
     def drawLinesOnFrame(self) -> None:
         '''draw the list of all lines on the thresholded frame'''
@@ -204,23 +256,39 @@ class vidData:
             for i,line in df.iterrows():
                 color = list(np.random.random(size=3) * 256)
                 cv.line(self.lines_image,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,4)
+                
+    def initLineImage(self) -> None:
+        '''initialize line_image0 and line_image'''
+        try:
+            self.line_image = self.line_image0.copy()
+        except:
+            self.openStream()
+            frame = self.nozzleFrame()           # get median or averaged frame
+            self.closeStream()
+            self.line_image0 = np.copy(frame) 
+            self.line_image = self.line_image0.copy()
             
     def drawDiagnostics(self, diag:int) -> None:
         '''create an image with diagnostics'''
+        self.initLineImage()
         if diag==0:
             return
         try:
             self.drawNozzleOnFrame()   # draw nozzle on original frame
         except Exception as e:
+            traceback.print_exc()
             pass
         if diag>1:
             try:
                 self.drawLinesOnFrame() 
             except:
+                traceback.print_exc()
                 pass
         try:
             imshow(self.line_image, self.lines_image, self.edgeImage, scale=4, title=os.path.basename(self.folder))
-        except:
+        except Exception as e:
+            if 'lines_image' in str(e):
+                imshow(self.line_image, scale=4, title=os.path.basename(self.folder))
             pass
         
     def thresholdNozzle(self, mode) -> None:
@@ -228,7 +296,7 @@ class vidData:
         self.openStream()
         frame = self.nozzleFrame(mode=mode)           # get median or averaged frame
         self.closeStream()
-        self.line_image = np.copy(frame)              # copy of original frame to draw nozzle lines on
+        self.line_image0 = np.copy(frame)              # copy of original frame to draw nozzle lines on
         
         # convert to gray, blurred, normalized
         gray2 = cv.cvtColor(frame, cv.COLOR_BGR2GRAY) # convert to gray
@@ -363,14 +431,51 @@ class vidData:
     def createNozzleMask(self) -> None:
         '''create a nozzle mask, so we can erase nozzle from images'''
         # create mask
-        frame = self.line_image
+        try:
+            frame = self.line_image
+        except:
+            frame = self.getFrameAtTime(1)
+        
         self.nozMask = 255*np.ones((frame.shape[0], frame.shape[1]), dtype=np.uint8)
         self.nozCover = np.copy(frame)*0 # create mask
         average = frame.mean(axis=0).mean(axis=0)
-        self.nozCover[0:int(self.yB), self.xL-10:self.xR+10]=255
+        self.nozCover[0:int(self.yB), self.xL-10:self.xR+10]=255 
         m = cv.cvtColor(self.nozCover,cv.COLOR_BGR2GRAY)
-        _,self.nozMask = cv.threshold(m,0,255,cv.THRESH_BINARY_INV)
+        _,self.nozMask = cv.threshold(m,0,255,cv.THRESH_BINARY_INV)   # binary mask of nozzle
         
+    def nozDimsFN(self) -> str:
+        '''file name of nozzle dimensions table'''
+        return os.path.join(self.pv.folder, os.path.basename(self.pv.folder)+'_nozDims.csv')
+        
+    def exportNozzleDims(self) -> None:
+        '''export the nozzle location to file'''
+        fn = self.nozDimsFN()
+        with open(fn, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(['yB', str(self.yB)])
+            writer.writerow(['xL', str(self.xL)])
+            writer.writerow(['xR', str(self.xR)])
+        logging.info(f'Exported {fn}')
+        
+    def importNozzleDims(self) -> None:
+        '''find the target pressure from the calibration file. returns 0 if successful, 1 if not'''
+        fn = self.nozDimsFN()
+        if not os.path.exists(fn):
+            return 1
+        tlist = ['yB', 'xL', 'xR']
+        with open(fn, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+            for row in reader:
+                # save all rows as class attributes
+                if row[0] in tlist:
+                    tlist.remove(row[0])
+                    setattr(self, row[0], int(float(row[1])))
+        if len(tlist)==0:
+            self.xM = (self.xL+self.xR)/2
+            self.initLineImage()
+            return 0
+        else:
+            return 1
     
     def detectNozzle0(self, diag:int=0, suppressSuccess:bool=False, mode:int=0) -> None:
         '''find the bottom corners of the nozzle. suppressSuccess=True to only print diagnostics if the run fails'''
@@ -380,34 +485,51 @@ class vidData:
             raise ValueError('Failed to detect any vertical lines in nozzle')
         self.findNozzlePoints()
         self.checkNozzleValues()
+        self.exportNozzleDims()
         self.createNozzleMask()
-        if diag>0 and not suppressSuccess:
+        if diag>0 and not suppressSuccess and im==1:
             self.drawDiagnostics(diag) # show diagnostics
         
 
-    def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0) -> None:
+    def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
+        logging.info(f'detecting nozzle in {self.folder}')
         if len(self.prog)==0:
             # nothing detected
             return 1
+        if not overwrite:
+            im = self.importNozzleDims()
+        if im==0:
+            self.createNozzleMask()
+            return 0
+        # no existing file: detect nozzle
         for mode in [0,1,2]: # min, then median, then mean
             try:
                 self.detectNozzle0(diag=diag, suppressSuccess=suppressSuccess, mode=mode)
             except:
+                if diag>1:
+                    traceback.print_exc()
                 pass
             else:
                 return 0
-        # if both failed
+        # if all modes failed:
         self.drawDiagnostics(diag) # show diagnostics
         raise ValueError('Failed to detect nozzle after 3 iterations')
         
     #------------------------------------------------------------------------------------
         
         
-    def maskNozzle(self, frame:np.array, dilate:int=0) -> np.array:
+    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False) -> np.array:
         '''block the nozzle out of the image'''
         frameMasked = cv.bitwise_and(frame,frame,mask = vm.erode(self.nozMask, dilate))
-        out = cv.add(frameMasked, vm.dilate(self.nozCover, dilate)) 
+        if ave:
+            # mask nozzle with whitest value
+            nc = np.copy(frame)*0 # create mask
+            average = frame.max(axis=0).mean(axis=0)
+            nc[0:int(self.yB), self.xL-10:self.xR+10]=average
+        else:
+            nc = self.nozCover
+        out = cv.add(frameMasked, vm.dilate(nc, dilate)) 
         norm = np.zeros(out.shape)
         out = cv.normalize(out,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
         return out
@@ -422,17 +544,19 @@ class vidData:
         self.openStream()
         frame = self.getFrameAtTime(time)
         self.closeStream()
-        frame2 = self.maskNozzle(frame)
+        frame2 = self.maskNozzle(frame, dilate=20, ave=True, **kwargs)
         acrit=1000
         m = 10
-        my = int(frame2.shape[0]*0.25)
+        my = int(frame2.shape[0]*0.4)
+        white = frame2.max(axis=0).max(axis=0)
+        black = frame2.min(axis=0).min(axis=0)
         if s[-1]=='1':
-            frame2[m:-m, -m:]=255 # empty out  right edges so the filaments don't get removed during segmentation
-            frame2[my:-my, -2*m:-m]=0 # fill  right edges so the filaments gets filled
+            frame2[m:-m, -m:]=white # empty out  right edges so the filaments don't get removed during segmentation
+#             frame2[my:-my, -2*m:-m]=black # fill  right edges so the filaments gets filled
         else:
-            frame2[m:-m, :m]=255
-            frame2[my:-my, m:2*m]=0
-        frame2[:m, m:-m]=255 # empty out top so filaments don't get removed
+            frame2[m:-m, :m]=white
+#             frame2[my:-my, m:2*m]=black
+        frame2[:m, m:-m]=white # empty out top so filaments don't get removed
         
         
         filled, markers, finalAt = vm.segmentInterfaces(frame2, acrit=acrit, diag=(diag>1))
@@ -453,7 +577,7 @@ class vidData:
         # find how far the ink projects into bath under nozzle
         underNozzle = contours[(contours.x<self.xR)&(contours.x>self.xL)]
         if len(underNozzle)>0:
-            bottomPeak = underNozzle[underNozzle.y==underNozzle.y.max()]
+            bottomPeak = underNozzle[underNozzle.y==underNozzle.y.max()]       # y value of bottommost point
             projection = -(bottomPeak.iloc[0]['y'] - self.yB)/cfg.const.pxpmm  # positive shift is upward
             projShift = (self.xM - bottomPeak.iloc[0]['x'])/cfg.const.pxpmm    # positive shift is downstream
             if s[-1]=='1':
@@ -482,7 +606,8 @@ class vidData:
         if diag>0:
 #             componentMask = cv.cvtColor(componentMask, cv.COLOR_GRAY2BGR)
             componentMask = frame.copy()
-            self.drawNozzleOnFrame(componentMask, colors=False)
+            self.initLineImage()
+            self.drawNozzleOnFrame(colors=False)
             if len(behind)>0:
                 cv.circle(componentMask,(bottomPeak.iloc[0]['x'],bottomPeak.iloc[0]['y']),5,(0,255,0),5)
                 cv.circle(componentMask,(int(behindBot.x.mean()),int(behindBot.y.mean())),5,(0,0,255),5)
@@ -515,6 +640,7 @@ class vidData:
         
     def measureVideoHoriz(self, diag:int=0, overwrite:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
         '''get info about the ellipses. Returns 1 when video is done. Returns 0 to continue grabbing.'''
+        logging.info(f'measuring horiz frames in {self.folder}')
         fn  = self.vidMeasuresFN('Horiz')
         if os.path.exists(fn) and overwrite==0:
             return
@@ -539,7 +665,7 @@ class vidData:
                 try:
                     framerow, u = self.measureHorizFrame(t, s, f, diag=d, **kwargs)
                 except:
-                    print(s, t)
+#                     print(s, t)
                     traceback.print_exc()
                 if len(framerow)>0:
                     out.append(framerow)
@@ -552,31 +678,7 @@ class vidData:
         # export
         plainExp(fn, self.measures, self.measuresUnits)
         return self.measures, self.measuresUnits
-    
-    def getXSFrame(self, time:float, fn:str) -> np.ndarray:
-        '''obtain and mask a frame for cross-sections. fn is filename'''
-        self.openStream()
-        frame = self.getFrameAtTime(time)
-        self.closeStream()
-        frame = self.maskNozzle(frame, dilate=30)
-        frame = frame[0:int(self.yB)+150, 0:self.xL+30]
-        return frame
-    
 
-    def overwriteXSFrame(self, s:str, dt0:float, diag:bool=False, **kwargs) -> None:
-        '''overwrite the cross-section image file'''
-        if 'time' in kwargs:
-            time = kwargs['time']
-        else:
-            dt = self.prog.loc[2,'t0']-self.prog.loc[1,'t0']
-            row = (self.prog[self.prog.name==s])
-            time = row.iloc[0]['t0']+dt
-        fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
-        frame = self.getXSFrame(time+dt0, fn)
-        cv.imwrite(fn, frame)
-        logging.info(f'Exported {fn}')
-        if diag:
-            imshow(frame)
     
     def measureVideoXS(self, diag:int=0, overwrite:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
         '''get stills from right after the XS lines are printed, and analyze them. overwrite=2 to overwrite images, overwrite=1 to overwrite file'''
@@ -604,7 +706,7 @@ class vidData:
                 dtlist = list(np.arange(-0.2, 0.8, 0.05))
                 while len(dtlist)>0:
                     dt0 = dtlist.pop(0)
-                    frame = self.getXSFrame(time+dt0, fn)
+                    frame = self.getXSFrame(time+dt0)
                     framerow, u = me.xsMeasureIm(frame, 1, 0, f'{os.path.basename(self.folder)}_{s}_{dt0}', s, diag=diag, acrit=300, **kwargs)
                     if len(framerow)>0:
                         if framerow['x0']<40 or framerow['x0']>self.xL-100 or framerow['y0']>self.yB+100:
@@ -628,38 +730,91 @@ class vidData:
         plainExp(filefn, self.measures, self.measuresUnits)
         return self.measures, self.measuresUnits
     
-    def measureAll(self, diag:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
-        '''initialize data and measure the video'''
+    def exportStillVerts(self, diag:int=0, overwrite:int=0, tfrac:float=0.4, **kwargs) -> None:
+        '''get stills from right after the XS lines are printed, and analyze them. overwrite=2 to overwrite images, overwrite=1 to overwrite file'''
+        if len(self.prog)==0:
+            return
+        if not 'name' in self.prog.keys():
+            return
+        dt = self.prog.loc[6,'t0']-self.prog.loc[5,'t0'] # time between lines
+        for s in ['vert1', 'vert2', 'vert3', 'vert4']:
+            fnorig = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
+            if os.path.exists(fnorig):
+                os.rename(fnorig, os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}_30.png'))
+            fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}_{round(100*tfrac)}.png')
+            if overwrite>=2 or not os.path.exists(fn):
+                row = (self.prog[self.prog.name==s])
+                time = row.iloc[0]['t0']    # start time for this line
+                frame = self.getVertFrame(time+dt*tfrac) # 30% through the line
+                cv.imwrite(fn, frame)
+                logging.info(f'Exported {fn}')
+        return 
+    
+    def exportStillHoriz(self, diag:int=0, overwrite:int=0, **kwargs) -> None:
+        '''get stills from right after the XS lines are printed, and analyze them. overwrite=2 to overwrite images, overwrite=1 to overwrite file'''
+        if len(self.prog)==0:
+            return
+        if not 'name' in self.prog.keys():
+            return
+        dt = self.prog.loc[10,'t0']-self.prog.loc[9,'t0'] # time between lines
+        for s in ['horiz0', 'horiz1', 'horiz2']:
+            fn = os.path.join(self.folder, f'{os.path.basename(self.folder)}_vid_{s}.png')
+            if overwrite>=2 or not os.path.exists(fn):
+                row = (self.prog[self.prog.name==s])
+                time = row.iloc[0]['t0']    # start time for this line
+                frame = self.getFrameAtTime(time+dt/2) # halfway through the line
+                cv.imwrite(fn, frame)
+                logging.info(f'Exported {fn}')
+        return 
+    
+    def measureAll(self, diag:int=0, measureHoriz=True, measureXS=True, exportVert=True, exportHoriz=True, **kwargs) -> str:
+        '''initialize data and measure the video. return name of folder if failed'''
         try:
             self.detectNozzle(diag=diag)
         except:
             logging.error(f'Error detecting nozzle in {self.folder}')
-            traceback.print_exc()
-            return
-#         self.measureVideoHoriz(diag=diag, **kwargs)
-        self.measureVideoXS(diag=diag, **kwargs)
+#             traceback.print_exc()
+            return self.folder
+        if measureHoriz:
+            self.measureVideoHoriz(diag=diag, **kwargs)
+        if measureXS:
+            self.measureVideoXS(diag=diag, **kwargs)
+        if exportVert:
+            self.exportStillVerts(diag=diag, **kwargs)
+        if exportHoriz:
+            self.exportStillHoriz(diag=diag, **kwargs)
+        return ''
         
         
-    def importVidMeasures(self) -> Tuple[pd.DataFrame, dict]:
+    def importVidMeasures(self, tag:str) -> Tuple[pd.DataFrame, dict]:
         '''import measurements from file'''
-        self.measures, self.measuresUnits = plainIm(self.vidMeasuresFN(), ic=0)
+        self.measures, self.measuresUnits = plainIm(self.vidMeasuresFN(tag), ic=0)
         
     def summary(self) -> Tuple[dict,dict]:
         '''summarize measurement table into a single row'''
         if len(self.measures)==0:
-            self.importVidMeasures()
+            self.importVidMeasures('horiz')
         if len(self.measures)==0:
             return {}, {}
         data = {}
         units = {}
-        for s in ['projection', 'projShift', 'vertDispBot', 'vertDispTop', 'vertDispMid']:
-            # mean, with 3 sigma outliers removed, normalized by nozzle inner diameter
-            if s in self.measures:
-                data[s+'N'] = removeOutliers(self.measures, s)[s].mean()/cfg.const.di 
-                data[s+'N_SE'] = removeOutliers(self.measures, s)[s].sem()/cfg.const.di 
-                units[s+'N'] = ''
-                units[s+'N_SE'] = ''
         meta,metaunits = self.pv.metarow()
+        for s in ['projection', 'projShift', 'vertDispBot', 'vertDispTop', 'vertDispMid']:
+            # mean, with 3 sigma outliers removed, normalized by estimated filament diameter
+            if s in self.measures:
+                if s=='projection':
+                    norm = meta['dEst']
+                else:
+                    norm = meta['di']
+                ro = removeOutliers(self.measures, s)[s]
+                if len(ro.unique())>1:
+                    data[s+'N'] = ro.mean()/norm
+                    data[s+'N_SE'] = ro.sem()/norm
+                    data[s+'N_N'] = len(ro)
+                    units[s+'N'] = ''
+                    units[s+'N_SE'] = ''
+                    units[s+'N_N'] = ''
+        
         data = {**meta,**data}
         units = {**metaunits,**units}
         return data, units
@@ -667,20 +822,26 @@ class vidData:
 #-----------------------------------------
         
         
-def measureVideosRecursive(topfolder:str, **kwargs) -> None:
-    '''go through all of the videos and measure them'''
+def measureVideosRecursive(topfolder:str, **kwargs) -> List[str]:
+    '''go through all of the videos and measure them. compile a list of folders with errors'''
+    errorFolders = []
     if isSubFolder(topfolder):
         try:
             vd = vidData(topfolder)
-            vd.measureAll(**kwargs)
+            s = vd.measureAll(**kwargs)
         except:
             traceback.print_exc()
+            errorFolders = errorFolders+[topfolder]
             pass
+        if len(s)>0:
+            errorFolders = errorFolders+[topfolder]
     else:
         for f1 in os.listdir(topfolder):
             f1f = os.path.join(topfolder, f1)
             if os.path.isdir(f1f):
-                measureVideosRecursive(f1f, **kwargs)
+                s = measureVideosRecursive(f1f, **kwargs)
+                errorFolders = errorFolders+s
+    return errorFolders
                 
                 
 #----------------------------------------

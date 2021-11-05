@@ -14,6 +14,7 @@ from statsmodels.formula.api import ols
 # Analysis of Variance (ANOVA) on linear models
 from statsmodels.stats.anova import anova_lm
 from sklearn.preprocessing import PolynomialFeatures
+from scipy import stats
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -94,11 +95,19 @@ def linearReg(x:list, y:list, intercept:Union[float, str]='') -> dict:
 
 def regPD(df:pd.DataFrame, xcols:List[str], ycol:str, order:int=1, intercept:Union[float,str]='') -> dict:
     '''linear regression from pandas dataset'''
-    df2 = df[xcols+[ycol]].dropna() # remove any NaNs from the columns of interest
+    df2 = df.dropna(subset = xcols+[ycol]) # remove any NaNs from the columns of interest
     y = df2[ycol]
     X = df2[xcols]
     if order==1:
         return lr(X,y,intercept)
     else:
         return polyMultiFit(X,y,order, intercept)
+    
+    
+def spearman(df:pd.DataFrame, xcol:str, ycol:str) -> dict:
+    '''get spearman rank correlation'''
+    ssi = df.dropna(subset=[xcol, ycol]) # drop na in colums
+    corr, p = stats.spearmanr(ssi[xcol], ssi[ycol])
+    return {'spearman_corr':corr, 'spearman_p':p}
+    
     

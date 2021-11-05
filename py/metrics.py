@@ -658,10 +658,21 @@ def stillsSummary(topfolder:str, exportFolder:str, filename:str='stillsSummary.c
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
 
+def idx0(k:list) -> int:
+    if 'xs_aspect' in k:
+        idx = int(np.argmax(k=='xs_aspect'))
+    elif 'projectionN' in k:
+        idx = int(np.argmax(k=='projectionN'))
+    elif 'horiz_segments' in k:
+        idx = int(np.argmax(k=='horiz_segments'))
+    else:
+        idx = 1
+    return idx
+
 def printStillsKeys(ss:pd.DataFrame) -> None:
     k = ss.keys()
     k = k[~(k.str.contains('_SE'))]
-    idx = int(np.argmax(k=='xs_aspect'))
+    idx = idx0(k)
     controls = k[:idx]
     deps = k[idx:]
     k = ss.keys()
@@ -672,17 +683,16 @@ def printStillsKeys(ss:pd.DataFrame) -> None:
     print()
     print(f'Dependents: {list(deps)}')
 
-def importStillsSummary(diag:bool=False) -> pd.DataFrame:
+def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.DataFrame:
     '''import the stills summary and convert sweep types, capillary numbers'''
-    ss,u = plainIm(os.path.join(cfg.path.fig, 'stillsSummary.csv'), ic=0)
+    ss,u = plainIm(os.path.join(cfg.path.fig, file), ic=0)
     
     ss = ss[ss.date>210500]
     ss = ss[ss.ink_days==1]
     ss.date = ss.date.replace(210728, 210727)
-    
     k = ss.keys()
     k = k[~(k.str.contains('_SE'))]
-    idx = int(np.argmax(k=='xs_aspect'))
+    idx = idx0(k)
     controls = k[:idx]
     deps = k[idx:]
     ss = flipInv(ss)
@@ -698,16 +708,19 @@ def importStillsSummary(diag:bool=False) -> pd.DataFrame:
         printStillsKeys(ss)
     return ss,u
 
+
 def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
     '''find inverse values and invert them (e.g. WeInv)'''
     k = ss.keys()
-    idx = int(np.argmax(k=='xs_aspect'))
+    idx = idx0(k)
     for j, s2 in enumerate(varlist):
         for i,s1 in enumerate(['sup', 'ink']):
             xvar = s1+'_'+s2
             if f'{s1}_{s2}Inv' in ss and not xvar in ss:
                 ss.insert(idx, xvar, 1/ss[f'{s1}_{s2}Inv'])
                 idx+=1
+    if 'int_Ca' not in ss:
+        ss.insert(idx, 'int_Ca', 1/ss['int_CaInv'])
     return ss
 
 def addRatios(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
