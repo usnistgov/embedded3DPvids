@@ -187,17 +187,18 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     '''threshold the grayscale image'''
     if attempt==0:
         # just threshold on intensity
-        allblack = np.product(gray.shape)*5
-        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
-        prod = np.sum(np.sum(thresh))
-        if prod<=allblack: # segmentation removed everything
-            crit = 200
-            allwhite = np.product(gray.shape)*250
-            prod = allwhite
-            while prod>=allwhite and crit>170: # segmentation included everything
-                ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
-                prod = np.sum(np.sum(thresh))
-                crit = crit-10
+#         allblack = np.product(gray.shape)*50
+#         ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
+#         prod = np.sum(np.sum(thresh))
+#         if prod<=allblack: # segmentation removed too much
+#             crit = 180
+#             allwhite = np.product(gray.shape)*80
+#             prod = allwhite
+#             while prod>=allwhite and crit>=170: # segmentation included too much
+#                 ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
+#                 prod = np.sum(np.sum(thresh))
+#                 crit = crit-10
+        ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
@@ -242,7 +243,7 @@ def segmentInterfaces(img:np.array, acrit:float=2500, diag:bool=False, removeVer
     gray = cv.medianBlur(gray, 5)
     attempt = 0
     finalAt = attempt
-    while attempt<5:
+    while attempt<1:
         finalAt = attempt
         thresh = threshes(img, gray, removeVert, attempt)
         if removeBorder:

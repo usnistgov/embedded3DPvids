@@ -11,6 +11,8 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
 import cv2 as cv
+import shutil
+import subprocess
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -63,7 +65,10 @@ def lineName(file:str, tag:str) -> float:
 def getRoughness(componentMask:np.array, diag:int=0) -> float:
     '''measure roughness as perimeter of object / perimeter of convex hull'''
     contours = cv.findContours(componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-    contours = contours[1]
+    if int(cv.__version__[0])>=4:
+        contours = contours[0]
+    else:
+        contours = contours[1]
     contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
     cnt = contours[0]
     cnt = cv.approxPolyDP(cnt, 1, True) # smooth the contour by 1 px
@@ -78,10 +83,6 @@ def getRoughness(componentMask:np.array, diag:int=0) -> float:
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
         cv.drawContours(cm, cnt, -1, (0,255,0), 2)
         cv.drawContours(cm, [hull], -1, (0,0,255), 1)
-#         ellipse = cv.fitEllipse(cnt) # fit the ellipse to the contour for that droplet
-#         cv.ellipse(cm, ellipse,(255,0,0), 2)
-#         contours = cv.findContours(componentMask,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE)
-#         cnt = contours[0]
         x,y,w,h = cv.boundingRect(cnt)
         cm = cm[y-5:y+h+5,x-5:x+w+5]
         imshow(cm)
@@ -210,9 +211,8 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
 #------------------------------------
 
 
-def vertSegment(im:np.array, s:float, maxlen:float, diag:int) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
+def vertSegment(im:np.array, s:float, maxlen:float, diag:int, acrit:int=2500, **kwargs) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
     '''segment out the filament and measure it'''
-    acrit=2500
     im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if len(markers)==0 or markers[0]==1:
         return {}, {}, {}, attempt, [], im2 # nothing to measure here
@@ -244,7 +244,7 @@ def vertSegment(im:np.array, s:float, maxlen:float, diag:int) -> Tuple[pd.DataFr
     
     return df2, componentMeasures, cmunits, attempt, component, im2
     
-def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]:
+def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Tuple[dict,dict]:
     '''measure vertical lines'''
     name = lineName(file, 'vert')
     s = 1/fileScale(file)
@@ -252,10 +252,7 @@ def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]
     maxlen = progDims[progDims.name==('vert'+str(int(name)))].iloc[0]['l']
     maxlen = int(maxlen/s)
     # label connected copmonents
-    df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, s, maxlen, diag)
-#     if len(componentMeasures)==0 or componentMeasures['emptiness']>0.5:
-    if len(componentMeasures)==0:
-        df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt+1, s, maxlen, diag)
+    df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, s, maxlen, diag, **kwargs)
     if len(df2)==0:
         return {}, {}
     w = int(co['w'])
@@ -348,15 +345,15 @@ def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
     ylocs = [-1000,-1000,-1000] # actual positions of lines
     
     # get position of largest segment
-    largesty = float(df0[df0.a==df0.a.max()]['y0'])
+    largesty = float(df0[df0.a==df0.a.max()]['yc'])
     
     # take segments that are far away
-    df = df0[(df0.y0<largesty-100)|(df0.y0>largesty+100)]
+    df = df0[(df0.yc<largesty-100)|(df0.yc>largesty+100)]
     if len(df)>0:
-        secondy = float(df[df.a==df.a.max()]['y0'])
-        df = df[(df.y0<secondy-100)|(df.y0>secondy+100)]
+        secondy = float(df[df.a==df.a.max()]['yc'])
+        df = df[(df.yc<secondy-100)|(df.yc>secondy+100)]
         if len(df)>0:
-            thirdy = float(df[df.a==df.a.max()]['y0'])
+            thirdy = float(df[df.a==df.a.max()]['yc'])
             ylocs = ([largesty, secondy, thirdy])
             ylocs.sort()
         else:
@@ -388,11 +385,11 @@ def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
         
     if diag>1:
         logging.info(f'ylocs: {ylocs}')
-    dflist = [df0[(df0.y0>yloc-margin)&(df0.y0<yloc+margin)] for yloc in ylocs]
+    dflist = [df0[(df0.yc>yloc-margin)&(df0.yc<yloc+margin)] for yloc in ylocs]
     return dflist
 
 
-def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=2000, satelliteCrit:float=0.2, **kwargs) -> Tuple[pd.DataFrame, dict]:
+def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=1000, satelliteCrit:float=0.2, **kwargs) -> Tuple[pd.DataFrame, dict]:
     '''segment the image and take measurements'''
     im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit)
     if len(markers)==0 or markers[0]==1:
@@ -424,12 +421,6 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int
 #     im0 = vc.imcrop(im0, {'dx':0, 'dy':80})
     im0 = vm.removeBorders(im0)
     ret, cmunits, attempt, im2 = horizSegment(im0, progDims, diag, s, **kwargs)
-    if len(ret)<critHorizLines:
-        ret2, cmunits2, attempt, im3 = horizSegment(im0, attempt+1, progDims, diag, s, **kwargs)
-        if len(ret2)>len(ret):
-            ret = ret2
-            cmunits = cmunits2
-            im2 = im3
     
     if len(ret)==0:
         return [], {}
@@ -448,7 +439,7 @@ def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0, **kwargs)
     if st=='xs':
         return xsMeasure(file, diag=diag)
     elif st=='vert':
-        return vertMeasure(file, progDims, diag=diag)
+        return vertMeasure(file, progDims, diag=diag, **kwargs)
     elif st=='horiz':
         return horizMeasure(file, progDims, diag=diag, **kwargs)
     
@@ -466,20 +457,49 @@ def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
     return progDims, units  
 
 
-def measure1Line(folder:str, st:str, i:int, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
-    '''measure just one line'''
+def stitchFile(folder:str, st:str, i:int) -> str:
     try:
         fl = fileList(folder)
     except:
         return
-    progDims, units = importProgDims(folder)
     if st=='horiz':
         sval = 'horizfullStitch'
     else:
         sval = st+str(i+1)+'Stitch'
     file = getattr(fl, sval)
     if len(file)>0:
-        return stitchMeasure(file[0], st, progDims, diag=diag, **kwargs)
+        return file[0]
+    else:
+        return ''
+
+def measure1Line(folder:str, st:str, i:int, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
+    '''measure just one line'''
+    progDims, units = importProgDims(folder)
+    file = stitchFile(folder, st, i)
+    if os.path.exists(file):
+        return stitchMeasure(file, st, progDims, diag=diag, **kwargs)
+    else:
+        return {},{}
+    
+def copyImage(folder:str, st:str, i:int) -> None:
+    '''make a copy of the image'''
+    file = stitchFile(folder, st, i)
+    if not os.path.exists(file):
+        return
+    if not '00' in file:
+        return
+    newfile = file.replace('_00', '_01')
+    if os.path.exists(newfile):
+        return
+    shutil.copyfile(file, newfile)
+    logging.info(f'Created new file {newfile}')
+    
+def openImageInPaint(folder:str, st:str, i:int) -> None:
+    '''open the image in paint'''
+    file = stitchFile(folder, st, i)
+    if not os.path.exists(file):
+        return
+    subprocess.Popen([r'C:\Windows\System32\mspaint.exe', file]);
 
 
 def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:List[str]=['xs', 'vert', 'horiz'], **kwargs) -> None:
