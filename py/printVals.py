@@ -239,7 +239,7 @@ class printVals:
         
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''
-        mlist = ['bn', 'date', 'sigma', 'di', 'do', 'fluFile', 'calibFile']
+        mlist = ['folder', 'bn', 'date', 'sigma', 'di', 'do', 'fluFile', 'calibFile']
         meta = [[i,getattr(self,i)] for i in mlist]
         munits = [[i, self.units[i]] for i in mlist]
         clist = self.constUnits.keys()

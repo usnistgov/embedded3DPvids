@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
+    
+pd.set_option("display.precision", 2)
 
 # info
 __author__ = "Leanne Friedrich"
@@ -115,10 +117,15 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
             ilast = min(maxlen+1, len(sums))
             leaks = sums[ilast:]
             sums = sums[0:ilast]
+    else:
+        leaks = []
 
     emptiness = 1-sum(sums)/sum(widths)     # how much of the middle of the component is empty
     vest = sum([np.pi*(r/2)**2 for r in sums])
-    vleak = sum([np.pi*(r/2)**2 for r in leaks])
+    if len(leaks)>0:
+        vleak = sum([np.pi*(r/2)**2 for r in leaks])
+    else:
+        vleak = 0
     meant = np.mean(sums)                       # mean line thickness
     midrange = sums[int(meant/2):-int(meant/2)] # remove endcaps
     if len(midrange)>0:
@@ -134,9 +141,9 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
 
 #-------------------------------
 
-def xsMeasureIm(im:np.ndarray, s:float, attempt0:int, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
-    '''im is imported image. s is scale as fraction of initial image size. attempt0 indicates type of segmentation to start with in vm.segmentInterfaces'''
-    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=acrit, diag=max(0,diag-1))
+def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
+    '''im is imported image. s is scale as fraction of initial image size. '''
+    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if markers[0]==1:
         return {}, {}
     df = vm.markers2df(markers)
@@ -194,23 +201,19 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
     if 'I_M' in file or 'I_PD' in file:
         im = vc.imcrop(im, 10)
     # label connected components
-    if 'PEG' in file:
-        attempt0 = 4
-    else:
-        attempt0 = 0
     s = 1/fileScale(file)
     title = os.path.basename(file)
     im = vm.normalize(im)
-    return xsMeasureIm(im, s, attempt0, title, name, diag=diag)
+    return xsMeasureIm(im, s, title, name, diag=diag)
     
 
 #------------------------------------
 
 
-def vertSegment(im:np.array, attempt0:int, s:float, maxlen:float, diag:int) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
+def vertSegment(im:np.array, s:float, maxlen:float, diag:int) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
     '''segment out the filament and measure it'''
     acrit=2500
-    im2, markers, attempt = vm.segmentInterfaces(im, attempt0=attempt0, acrit=acrit, diag=max(0,diag-1))
+    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if len(markers)==0 or markers[0]==1:
         return {}, {}, {}, attempt, [], im2 # nothing to measure here
     df = vm.markers2df(markers)
@@ -221,9 +224,24 @@ def vertSegment(im:np.array, attempt0:int, s:float, maxlen:float, diag:int) -> T
     if len(df2)==0:
         return {}, {}, {}, attempt, [], im2
     filI = df2.a.idxmax() # index of filament label, largest remaining object
-    componentMask = (markers[1] == filI).astype("uint8") * 255
-    componentMeasures, cmunits = measureComponent(componentMask, False, s, maxlen=maxlen, reverse=True, diag=max(0,diag-1))
     component = df2.loc[filI]
+    inline = df2[(df2.x0>component['x0']-50)&(df2.x0<component['x0']+50)] # other objects inline with the biggest object
+#     componentMask = (markers[1] == filI).astype("uint8") * 255
+
+    # get combined mask of all objects in line
+    masks = [(markers[1] == i).astype("uint8") * 255 for i,row in inline.iterrows()]
+    componentMask = masks[0]
+    if len(masks)>1:
+        for mask in masks[1:]:
+            componentMask = cv.add(componentMask, mask)
+       
+    component = pd.Series({'h':inline.h.sum(), 'w':inline.w.max(), \
+                           'x0':inline.x0.min(), 'y0':inline.y0.min(), \
+                           'a':inline.a.sum(),\
+                           'yc':sum(inline.a * inline.yc)/sum(inline.a),\
+                           'xc':sum(inline.a * inline.xc)/sum(inline.a)})       
+    componentMeasures, cmunits = measureComponent(componentMask, False, s, maxlen=maxlen, reverse=True, diag=max(0,diag-1))
+    
     return df2, componentMeasures, cmunits, attempt, component, im2
     
 def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]:
@@ -234,13 +252,7 @@ def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0) -> Tuple[dict,dict]
     maxlen = progDims[progDims.name==('vert'+str(int(name)))].iloc[0]['l']
     maxlen = int(maxlen/s)
     # label connected copmonents
-    if 'LapRD LapRD' in file:
-        attempt0 = 1
-    elif 'PEG' in file:
-        attempt0 = 0
-    else:
-        attempt0 = 0
-    df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt0, s, maxlen, diag)
+    df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, s, maxlen, diag)
 #     if len(componentMeasures)==0 or componentMeasures['emptiness']>0.5:
     if len(componentMeasures)==0:
         df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, attempt+1, s, maxlen, diag)
@@ -282,10 +294,11 @@ def markHorizOnIm(im2:np.array, row:pd.Series) -> np.array:
     return im2
     
 
-def horizLineMeasure(df:pd.DataFrame, y:float, margin:float, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
+# def horizLineMeasure(df0:pd.DataFrame, y:float, margin:float, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
+def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
     '''measure one horizontal line'''
-    df = df[(df.yc>y-margin)&(df.yc<y+margin)]
-    df = df[(df.a>0.2*df.a.max())]  # eliminate tiny satellite droplets
+#     df = df0[(df0.yc>y-margin)&(df0.yc<y+margin)]
+#     print(df)
     numlines = len(df)
     measures = []
     cmunits = {}
@@ -323,24 +336,82 @@ def horizLineMeasure(df:pd.DataFrame, y:float, margin:float, labeled:np.array, i
     ret = {'line':j, 'segments':numlines, 'maxlen':maxlen, 'totlen':totlen, 'maxarea':maxarea, 'totarea':totarea, 'roughness':roughness, 'meanT':meanT, 'stdevT':stdevT, 'minmaxT':minmaxT, 'vest':vest}
     return ret, cmunits
 
-def horizSegment(im0:np.array, attempt0:int, progDims, diag:int, s:float) -> Tuple[pd.DataFrame, dict]:
+def closestIndex(val:float, l1:list) -> int:
+    '''index of closest value'''
+    l2 = [abs(x-val) for x in l1]
+    return l2.index(min(l2))
+
+def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
+    '''split the table of segments into the three horizontal lines'''
+    
+    linelocs = [275, 514, 756] # expected positions of lines
+    ylocs = [-1000,-1000,-1000] # actual positions of lines
+    
+    # get position of largest segment
+    largesty = float(df0[df0.a==df0.a.max()]['y0'])
+    
+    # take segments that are far away
+    df = df0[(df0.y0<largesty-100)|(df0.y0>largesty+100)]
+    if len(df)>0:
+        secondy = float(df[df.a==df.a.max()]['y0'])
+        df = df[(df.y0<secondy-100)|(df.y0>secondy+100)]
+        if len(df)>0:
+            thirdy = float(df[df.a==df.a.max()]['y0'])
+            ylocs = ([largesty, secondy, thirdy])
+            ylocs.sort()
+        else:
+            # only 2 lines
+            largestI = closestIndex(largesty, linelocs)
+            secondI = closestIndex(secondy, linelocs)
+            if secondI==largestI:
+                if secondI==2:
+                    if secondy>largesty:
+                        largestI = largestI-1
+                    else:
+                        secondI = secondI-1
+                elif secondI==0:
+                    if secondy>largesty:
+                        secondI = secondI+1
+                    else:
+                        largestI = largestI+1
+                else:
+                    if secondy>largesty:
+                        secondI = secondI+1
+                    else:
+                        secondI = secondI-1
+            ylocs[largestI] = largesty
+            ylocs[secondI] = secondy
+    else:
+        # everything is in this line
+        largestI = closestIndex(largesty, linelocs)
+        ylocs[largestI] = largesty
+        
+    if diag>1:
+        logging.info(f'ylocs: {ylocs}')
+    dflist = [df0[(df0.y0>yloc-margin)&(df0.y0<yloc+margin)] for yloc in ylocs]
+    return dflist
+
+
+def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=2000, satelliteCrit:float=0.2, **kwargs) -> Tuple[pd.DataFrame, dict]:
     '''segment the image and take measurements'''
-    im2, markers, attempt = vm.segmentInterfaces(im0, attempt0=attempt0, diag=max(0,diag-1), removeVert=True, acrit=2000)
-    if markers[0]==1:
+    im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit)
+    if len(markers)==0 or markers[0]==1:
         return [], {}, attempt, im2
     labeled = markers[1]
     df = vm.markers2df(markers)
-    linelocs = [275, 514, 756] # expected positions of lines
-    margin = 150
+    df = df[df.a>acrit]
+    df = df[(df.a>satelliteCrit*df.a.max())]  # eliminate tiny satellite droplets
     if diag:
         im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
     ret = []
     cmunits = {}
-    for j,y in enumerate(linelocs):
-        r,cmu = horizLineMeasure(df, y, margin,labeled, im2, diag, s, j, progDims)
-        if len(r)>0:
-            ret.append(r)
-            cmunits = cmu
+    dfsplit = splitLines(df, diag=diag) # split segments into lines
+    for j,df in enumerate(dfsplit):
+        if len(df)>0:
+            r,cmu = horizLineMeasure(df, labeled, im2, diag, s, j, progDims)
+            if len(r)>0:
+                ret.append(r)
+                cmunits = cmu
     return ret, cmunits, attempt, im2
     
 
@@ -352,15 +423,9 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int
 #     im0[0, 0] = np.zeros(im0[0, 0].shape)
 #     im0 = vc.imcrop(im0, {'dx':0, 'dy':80})
     im0 = vm.removeBorders(im0)
-    if 'LapRD LapRD' in file:
-        attempt0 = 0
-    elif 'PEG' in file:
-        attempt0 = 3
-    else:
-        attempt0 = 0
-    ret, cmunits, attempt, im2 = horizSegment(im0, attempt0, progDims, diag, s)
+    ret, cmunits, attempt, im2 = horizSegment(im0, progDims, diag, s, **kwargs)
     if len(ret)<critHorizLines:
-        ret2, cmunits2, attempt, im3 = horizSegment(im0, attempt+1, progDims, diag, s)
+        ret2, cmunits2, attempt, im3 = horizSegment(im0, attempt+1, progDims, diag, s, **kwargs)
         if len(ret2)>len(ret):
             ret = ret2
             cmunits = cmunits2
@@ -372,6 +437,8 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int
         imshow(im, im2)
         plt.title(os.path.basename(file))
     units = {'line':'', 'segments':'', 'maxlen':'px', 'totlen':'px', 'maxarea':'px', 'totarea':'px', 'roughness':cmunits['roughness'], 'meanT':cmunits['meanT'], 'stdevT':cmunits['stdevT'], 'minmaxT':cmunits['minmaxT'], 'vest':'px^3'}
+    if diag>=2:
+        display(pd.DataFrame(ret))
     return pd.DataFrame(ret), units
 
 #--------------------------------
@@ -621,21 +688,24 @@ def checkAndDiagnoseRecursive(topfolder:str, redo:bool=False) -> None:
         for f in os.listdir(topfolder):
             f1f = os.path.join(topfolder, f)
             if os.path.isdir(f1f):
-                checkAndDiagnoseRecursive(f1f, redo=redo)
+                checkAndDiagnoseRecursive(f1f, redo=redo) 
                 
+def returnNewSummary(pv):
+    t,u = pv.summary()
+    return pd.DataFrame([t]),u
                 
 
-def stillsSummaryRecursive(topfolder:str) -> pd.DataFrame:
+def stillsSummaryRecursive(topfolder:str) -> Tuple[pd.DataFrame, dict]:
     '''go through all of the folders and summarize the stills'''
     if isSubFolder(topfolder):
         try:
             pv = printVals(topfolder)
             t,u = pv.summary()
+            return pd.DataFrame([t]),u
         except:
             traceback.print_exc()
             logging.warning(f'failed to summarize {topfolder}')
             return {}, {}
-        return [t],u
     elif os.path.isdir(topfolder):
         tt = []
         u = {}
@@ -643,20 +713,46 @@ def stillsSummaryRecursive(topfolder:str) -> pd.DataFrame:
         for f in os.listdir(topfolder):
             f1f = os.path.join(topfolder, f)
             if os.path.isdir(f1f):
+                # recurse into next folder level
                 t,u0=stillsSummaryRecursive(f1f)
                 if len(t)>0:
-                    tt = tt+t
+                    if len(tt)>0:
+                        # combine dataframes
+                        tt = pd.concat([tt,t], ignore_index=True)
+                    else:
+                        # adopt this dataframe
+                        tt = t
                     if len(u0)>len(u):
                         u = dict(u, **u0)
         return tt, u
     
-def stillsSummary(topfolder:str, exportFolder:str, filename:str='stillsSummary.csv') -> pd.DataFrame:
+def stillsSummary(topfolder:str, exportFolder:str, newfolders:list=[], filename:str='stillsSummary.csv') -> pd.DataFrame:
     '''go through all of the folders and summarize the stills'''
-    tt,units = stillsSummaryRecursive(topfolder)
-    tt = pd.DataFrame(tt)
+    outfn = os.path.join(exportFolder, filename) # file to export to
+    if os.path.exists(outfn) and len(newfolders)>0:
+        # import existing table and only get values from new folders
+        ss,u = plainIm(outfn, ic=0)
+        for f in newfolders:
+            tt,units = stillsSummaryRecursive(f)
+            newrows = []
+            for i,row in tt.iterrows():
+                if row['folder'] in list(ss.folder):
+                    # overwrite existing row
+                    ss.loc[ss.folder==row['folder'], ss.keys()] = row[ss.keys()]
+                else:
+                    # add new row
+                    newrows.append(i)
+            if len(newrows)>0:
+                # add new rows to table
+                ss = pd.concat([ss, tt.loc[newrows]])
+    else:
+        # create an entirely new table
+        ss,units = stillsSummaryRecursive(topfolder)
+        
+    # export results
     if os.path.exists(exportFolder):
-        plainExp(os.path.join(exportFolder, filename), tt, units)
-    return tt,units
+        plainExp(outfn, ss, units)
+    return ss,units
 
 def idx0(k:list) -> int:
     if 'xs_aspect' in k:
@@ -696,9 +792,10 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
     controls = k[:idx]
     deps = k[idx:]
     ss = flipInv(ss)
-    ss.insert(idx+2, 'sweepType', ['visc_'+str(i['sigma']) for j,i in ss.iterrows()])
+    ss.insert(idx+2, 'sweepType', ['visc_'+str(int(i['sigma'])) for j,i in ss.iterrows()])
     ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_0_high_visc_ratio'
     ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_0_low_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_3.00_S_3.00_VI'),'sweepType'] = 'speed_0_int_visc_ratio'
     ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_0_high_v_ratio'
     ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_20_low_visc_ratio'
     ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_20_high_visc_ratio'

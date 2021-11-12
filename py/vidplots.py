@@ -381,6 +381,7 @@ def picFileFromFolder(folder:str, tag:str) -> str:
     if not 'raw' in tag:
         for f in os.listdir(folder):
             if tag in f and not ('vid' not in tag and 'vid' in f):
+                # use last image in folder that has the tag
                 imfile = os.path.join(folder, f)
     if not os.path.exists(imfile):
         # no file in the main folder. search archives

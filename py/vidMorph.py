@@ -113,16 +113,21 @@ def onlyBorderComponents(thresh:np.array) -> np.array:
     '''only include the components that are touching the border'''
     return cv.subtract(thresh, fillComponents(thresh))
 
+def imAve(im:np.array) -> float:
+    '''average value of image'''
+    return im.mean(axis=0).mean(axis=0)
+
 def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
     '''remove borders from color image'''
     
     # create a background image
-    average = im.mean(axis=0).mean(axis=0)
+    average = imAve(im)
     avim = np.ones(shape=im.shape, dtype=np.uint8)*np.uint8(average)
     
     # find the border
     gray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
     ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+#     ret, thresh = cv.threshold(gray,100,255,cv.THRESH_BINARY_INV)
     thresh = dilate(thresh,10)
     thresh = onlyBorderComponents(thresh)
     thresh = cv.medianBlur(thresh,31)
@@ -183,10 +188,17 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     '''threshold the grayscale image'''
     if attempt==0:
         # just threshold on intensity
-#         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)  
-#         ret, thresh = cv.threshold(gray,127,255,cv.THRESH_BINARY_INV)  
-        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV) 
-#         thresh = closeVerticalTop(thresh)
+        allblack = np.product(gray.shape)*5
+        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
+        prod = np.sum(np.sum(thresh))
+        if prod<=allblack: # segmentation removed everything
+            crit = 200
+            allwhite = np.product(gray.shape)*250
+            prod = allwhite
+            while prod>=allwhite and crit>170: # segmentation included everything
+                ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
+                prod = np.sum(np.sum(thresh))
+                crit = crit-10
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
@@ -222,16 +234,14 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     thresh = closeVerticalTop(thresh)
     return thresh
 
-def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=False, removeVert:bool=False, removeBorder:bool=True) -> np.array:
+def segmentInterfaces(img:np.array, acrit:float=2500, diag:bool=False, removeVert:bool=False, removeBorder:bool=True) -> np.array:
     '''from a color image, segment out the ink, and label each distinct fluid segment'''
-    if attempt0>=5:
-        return [], [], attempt0
     if len(img.shape)==3:
         gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
     gray = cv.medianBlur(gray, 5)
-    attempt = attempt0
+    attempt = 0
     finalAt = attempt
     while attempt<5:
         finalAt = attempt
@@ -251,7 +261,7 @@ def segmentInterfaces(img:np.array, acrit:float=2500, attempt0:int=0, diag:bool=
                 # poor segmentation. redo with adaptive thresholding.
                 attempt=attempt+1
             else:
-                attempt = 5
+                attempt = 6
         else:
             attempt = attempt+1
     return filled, markers, finalAt

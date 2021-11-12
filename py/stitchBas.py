@@ -50,7 +50,7 @@ def colNum(file:str)->int:
     
 def fileScale(file:str) -> str:
     '''get the scale from the file name'''
-    if 'vid' in file:
+    if 'vid' in os.path.basename(file):
         return '1'
     try:
         scale = float(re.split('_', os.path.basename(file))[-2])
@@ -163,7 +163,7 @@ class fileList:
         else:
             # no camera type: this is a stitch
             for st in self.stlist():
-                if st+'_' in f:
+                if st+'_' in f and not '_vid_' in f:
                     # if the string is in the basename, this is a stitch
                     self.addIf(getattr(self, st+'Stitch'), f1)
                     return
@@ -383,7 +383,8 @@ class fileList:
             
     def printGroups(self) -> None:
         '''print file dates in all groups'''
-        
+        if len(self.stlist())==0:
+            logging.info(f'No groups sorted. {len(self.basStill)} stills')
         for s in ['Still', 'Stitch']:
             for st in self.stlist(s2=s):
                 self.printFiles(st)
@@ -517,7 +518,8 @@ class fileList:
             elif self.horizCols==6:
                 dx = 2*274
             elif self.horizCols==8:
-                dx = 424
+#                 dx = 424
+                dx = 124
             s.matcher.setDefaults(dx*scale*scaleOrig, 0*scale*scaleOrig)
             s.matcher.resetLastH()
         elif 'horizfull'==st:
