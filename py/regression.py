@@ -9,10 +9,6 @@ import sys
 import logging
 from typing import List, Dict, Tuple, Union, Any, TextIO
 from sklearn.linear_model import LinearRegression
-# For statistics. Requires statsmodels 5.0 or more
-from statsmodels.formula.api import ols
-# Analysis of Variance (ANOVA) on linear models
-from statsmodels.stats.anova import anova_lm
 from sklearn.preprocessing import PolynomialFeatures
 from scipy import stats
 

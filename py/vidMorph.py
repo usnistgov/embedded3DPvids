@@ -3,7 +3,6 @@
 
 # external packages
 import cv2 as cv
-import imutils
 import numpy as np 
 import os
 import sys

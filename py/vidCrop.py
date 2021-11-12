@@ -3,8 +3,6 @@
 
 # external packages
 import cv2 as cv
-from imutils.video import FPS
-import imutils
 import numpy as np 
 import os
 import sys
