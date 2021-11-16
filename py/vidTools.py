@@ -11,7 +11,6 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
 import cv2 as cv
-import imutils
 import csv
 
 # local packages
@@ -805,7 +804,8 @@ class vidData:
                 if s=='projection':
                     norm = meta['dEst']
                 else:
-                    norm = meta['di']
+#                     norm = meta['di']
+                    norm = meta['dEst']
                 ro = removeOutliers(self.measures, s)[s]
                 if len(ro.unique())>1:
                     data[s+'N'] = ro.mean()/norm
@@ -862,6 +862,7 @@ def summarizeVideosRecursive(topfolder:str) -> None:
             traceback.print_exc()
             pass
     else:
+        logging.info(topfolder)
         data = []
         units = []
         for f1 in os.listdir(topfolder):

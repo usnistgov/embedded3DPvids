@@ -116,20 +116,26 @@ def imAve(im:np.array) -> float:
     '''average value of image'''
     return im.mean(axis=0).mean(axis=0)
 
+def imMax(im:np.array) -> float:
+    '''max value of image'''
+    return im.max(axis=0).max(axis=0)
+
 def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
     '''remove borders from color image'''
     
     # create a background image
-    average = imAve(im)
-    avim = np.ones(shape=im.shape, dtype=np.uint8)*np.uint8(average)
+    white = imMax(im)
+    avim = np.ones(shape=im.shape, dtype=np.uint8)*np.uint8(white)
     
     # find the border
     gray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
     ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-#     ret, thresh = cv.threshold(gray,100,255,cv.THRESH_BINARY_INV)
+    thresh[:, -100:] = np.ones(shape=(thresh[:, -100:]).shape, dtype=np.uint8)*255 # cutoff right 100 pixels
+    thresh[800:, :] = np.ones(shape=(thresh[800:, :]).shape, dtype=np.uint8)*255 # cutoff bottom 100 pixels
     thresh = dilate(thresh,10)
     thresh = onlyBorderComponents(thresh)
     thresh = cv.medianBlur(thresh,31)
+    
     t_inv = cv.bitwise_not(thresh)
     
     # remove border from image
@@ -186,19 +192,20 @@ def verticalFilter(gray:np.array) -> np.array:
 def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     '''threshold the grayscale image'''
     if attempt==0:
+#         ret, thresh = cv.threshold(gray,180,255,cv.THRESH_BINARY_INV)
         # just threshold on intensity
-#         allblack = np.product(gray.shape)*50
-#         ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
-#         prod = np.sum(np.sum(thresh))
-#         if prod<=allblack: # segmentation removed too much
-#             crit = 180
-#             allwhite = np.product(gray.shape)*80
-#             prod = allwhite
-#             while prod>=allwhite and crit>=170: # segmentation included too much
-#                 ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
-#                 prod = np.sum(np.sum(thresh))
-#                 crit = crit-10
-        ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+        allblack = np.product(gray.shape)*50
+        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
+        prod = np.sum(np.sum(thresh))
+        if prod<=allblack: # segmentation removed too much
+            crit = 190
+            allwhite = np.product(gray.shape)*80
+            prod = allwhite
+            while prod>=allwhite and crit>=170: # segmentation included too much
+                ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
+                prod = np.sum(np.sum(thresh))
+                crit = crit-10
+#         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)

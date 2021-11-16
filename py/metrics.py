@@ -345,6 +345,8 @@ def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
     ylocs = [-1000,-1000,-1000] # actual positions of lines
     
     # get position of largest segment
+    if len(df0)==0:
+        return df0
     largesty = float(df0[df0.a==df0.a.max()]['yc'])
     
     # take segments that are far away
@@ -402,6 +404,8 @@ def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=1000, sa
         im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
     ret = []
     cmunits = {}
+    if len(df)==0:
+        return [],{},attempt,im2
     dfsplit = splitLines(df, diag=diag) # split segments into lines
     for j,df in enumerate(dfsplit):
         if len(df)>0:
@@ -754,6 +758,7 @@ def stillsSummary(topfolder:str, exportFolder:str, newfolders:list=[], filename:
         ss,u = plainIm(outfn, ic=0)
         for f in newfolders:
             tt,units = stillsSummaryRecursive(f)
+            print(tt)
             newrows = []
             for i,row in tt.iterrows():
                 if row['folder'] in list(ss.folder):

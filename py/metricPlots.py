@@ -96,7 +96,7 @@ def simplifyType(s:Union[str, pd.DataFrame]):
         return spl[0]+'_'+spl[1]
     else:
         # convert all strings in sweepType column
-        s['sweepType'] = [simplifyType(si) for si in s['sweepType']]
+        s.loc[:,'sweepType'] = [simplifyType(si) for si in s['sweepType']]
 
 
 def pooledSE(df:pd.DataFrame, var:str) -> None:
@@ -161,7 +161,8 @@ def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
     return xl
 
 def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool, dx:float, dy:float, rigid:bool=False) -> pd.DataFrame:
-    '''convert the data to an evenly spaced grid'''
+    '''convert the data to an evenly spaced grid. 
+    rigid=True means that we use the center of the square as the x,y value and use no error. This is for color maps.'''
     xl = evenlySpace(ss2, xvar, logx, dx)
     yl = evenlySpace(ss2, yvar, logy, dy)
     df2 = []
@@ -195,6 +196,40 @@ def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool,
                 else:
                     c0 = 0
                 df2.append({'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0})
+    df2 = pd.DataFrame(df2)
+    return df2
+
+def toGroups(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool, dx:float, dy:float) -> pd.DataFrame:
+    '''group the data into groups of equal size and get errors'''
+    if not ((dx==1) or (dy==1)):
+        # x or y need to be averaged for groups to work. if both are split, use a grid
+        return toGrid(ss, xvar, yvar, zvar, logx, logy, dx, dy)
+    ss2 = ss.copy()
+    if dy==1:
+        ss2.sort_values(by=xvar, inplace=True) # sort the dataframe by x values
+        active = dx
+    else:
+        ss2.sort_values(by=yvar, inplace=True) # sort the dataframe by x values
+        active = dy
+    if active>0:
+        pergrp = int(np.ceil(len(ss2)*active)) # items per group
+        numgrps = int(np.ceil(1/active))
+    else:
+        pergrp = 1
+        numgrps = len(ss2)
+    df2 = []
+    for i in range(numgrps):
+        ss3 = ss2.iloc[((i-1)*pergrp):min(len(ss2),(i*pergrp))]
+        xm, xerr = pooledSE(ss3, xvar)
+        ym, yerr = pooledSE(ss3, yvar)
+        if zvar in ss3:
+            try:
+                c0, _ = pooledSE(ss3, zvar)
+            except:
+                c0 = 0
+        else:
+            c0 = 0
+        df2.append({'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0})
     df2 = pd.DataFrame(df2)
     return df2
 
@@ -335,7 +370,7 @@ def idealLines(**kwargs) -> None:
             varargs['label']='ideal'
         kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
         
-def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, **kwargs):
+def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, **kwargs):
     '''scatter plot. 
     colorBy is the variable to color by. gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
     xvar is the x variable name, yvar is the y variable name. 
@@ -378,7 +413,10 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
             ss2 = ss1
 
         if len(ss2)>0:
-            df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
+            if grid:
+                df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
+            else:
+                df2 = toGroups(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
             sc = plotSeries(df2, gradColor, ax, cmapname, dx, dy, varargs)
       
     # add verticals, horizontals
@@ -437,7 +475,7 @@ def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
     
 def subFigureLabel(ax, label:str) -> None:
     '''add a subfigure label to the top left corner'''
-    ax.text(0.05, 0.95, label, fontsize=12, transform=ax.transAxes, horizontalAlignment='left', verticalAlignment='top')
+    ax.text(0.05, 0.95, label, fontsize=12, transform=ax.transAxes, horizontalalignment='left', verticalalignment='top')
     
 def subFigureLabels(axs) -> None:
     '''add subfigure labels to all axes'''
@@ -520,14 +558,18 @@ def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **
             for j,st in enumerate(u):
                 color = cmap(1*i + (0.4-i)*j/len(u))
                 ma = getMarker(j, color)
-                kwargs = {**kwargs0, **ma}
-                scatterSS(ss0[ss0.sweepType==st], xvar, yvar, 'sweepType', cmapname=cmapname, **kwargs)
+                kwargs1 = {**kwargs0, **ma}
+                scatterSS(ss0[ss0.sweepType==st], xvar, yvar, 'sweepType', cmapname=cmapname, **kwargs1)
                 if 'yideal' in kwargs0:
                     kwargs0.pop('yideal')
                 if 'xideal' in kwargs0:
                     kwargs0.pop('xideal')
     else:
         scatterSS(ss[(ss.sweepType.str.startswith('speed'))], xvar, yvar, 'sweepType', color='#555555', **kwargs0)
+        if 'yideal' in kwargs0:
+            kwargs0.pop('yideal')
+        if 'xideal' in kwargs0:
+            kwargs0.pop('xideal')
         scatterSS(ss[(ss.vRatio==1)], xvar, yvar, 'ink_type', **kwargs0)
     return fig, ax
 
@@ -647,6 +689,7 @@ def regRow(ssi:pd.DataFrame, xcol:str, ycol:str) -> dict:
 
 def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), **kwargs) -> List[pd.DataFrame]:
     ss0 = ss.copy()
+    ss0.dropna(subset=[yvar], inplace=True)
     ss0 = ss0[ss0.ink_days==1]
     ss0 = ss0.sort_values(by='sigma')
     ssca1 = ss0.copy()
@@ -656,132 +699,138 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
     dflist = []
     for k, ssi in enumerate([ssca1, sslap]):
         dfall = []
-        
-        # define y variables
-        if logy:
-            ssi = me.addLogs(ssi, [yvar])
-            ycol = yvar+'_log'
-        else:
-            ycol = yvar
-            
-        # define x variables
-        if k==0:
-            varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
-        else:
-            varlist = ['Re', 'Bm', 'visc0']
-            
-        # add logs and ratios
-        for i,s1 in enumerate(['sup', 'ink']):
-            ssi = me.addLogs(ssi, [s1+'_'+v for v in varlist])
-        for i,s1 in enumerate(['Prod', 'Ratio']):
-            ssi = me.addRatios(ssi, varlist=varlist, operator=s1)
-            ssi = me.addLogs(ssi, [v+s1 for v in varlist])
-            
-        
-        # go through each variable and get sup, ink, product, ratio
-        for j, s2 in enumerate(varlist):
-            df = []
-            if s2=='dPR':
-                s2i = 'd_{PR'
-            elif s2=='dnorm':
-                s2i = 'd_{Est}/d_{PR'
-            elif s2=='visc0':
-                s2i = '\eta'
-            else:
-                s2i = s2
-                
-            if s2=='Ca':
-                ssi = me.addLogs(ssi, ['int_Ca'])
-                reg = regRow(ssi, 'int_Ca_log', ycol)
-                reg['title'] = '$Ca$'
-                df.append(reg)
-            
-            # 2 variable correlation
-#             reg = rg.regPD(ssi, [f'ink_{s2}_log', f'sup_{s2}_log'], yvar)
-#             if s2i[-4:]=='_{PR':
-#                 reg['title'] = '$'+s2i+',ink}, '+s2i+',sup}$'
-#             else:
-#                 reg['title'] = '$'+s2i+'_{ink}, '+s2i+'_{sup}$'
-#             reg['coeff'] = ('{:0.2f}'.format(reg.pop('b0')),  '{:0.2f}'.format(reg.pop('b1')))
-#             df.append(reg)
-            
-            # single variable correlation
-            for s1 in ['ink_', 'sup_']:
-                xcol = f'{s1}{s2}_log'
-                reg = regRow(ssi, xcol, ycol)
-                if s2i[-4:]=='_{PR':
-                    reg['title']='$'+s2i+','+s1[:-1]+'}$'
+        if len(ssi[yvar].unique())<2:
+            if printOut:
+                if k==0:
+                    logging.info(f'All {yvar} values the same for nonzero surface tension\n---------------------------\n\n')
                 else:
-                    reg['title'] = '$'+s2i+'_{'+s1[:-1]+'}$'
-                df.append(reg)
-                
-            # products and ratios
-            for s1 in ['Prod', 'Ratio']:
-                xcol = f'{s2}{s1}_log'
-                reg = regRow(ssi, xcol, ycol)
-                op = '' if s1=='Prod' else '/'
-                if s2i[-4:]=='_{PR':
-                    s2ii = s2i+','
-                else:
-                    s2ii = s2i+'_{'
-                reg['title'] = '$'+s2ii+'ink}'+op+s2ii+'sup}$'
-                df.append(reg)
-            df = pd.DataFrame(df)
-            
-            # label best fit
-            crit = ((abs(df.spearman_corr)>0.9*abs(df.spearman_corr).max())&(df.spearman_p<0.05)&(abs(df.spearman_corr)>0.5))
-            df.spearman_p = ['{:0.1e}'.format(i) for i in df.spearman_p]
-            df.spearman_corr = ['{:0.2f}'.format(i) for i in df.spearman_corr]
-            df.r2 = ['{:0.2f}'.format(i) for i in df.r2]
-            for sname in ['title', 'r2', 'spearman_corr', 'spearman_p']:
-                # bold rows that are best fit
-                df.loc[crit,sname] = ['$\\bm{'+(i[1:-1] if i[0]=='$' else i)+'}$' for i in df.loc[crit,sname]]
-            if len(dfall)==0:
-                dfall = df
+                    logging.info(f'All {yvar} values the same for zero surface tension\n---------------------------\n\n')
+        else:
+            # define y variables
+            if logy:
+                ssi = me.addLogs(ssi, [yvar])
+                ycol = yvar+'_log'
             else:
-                dfall = pd.concat([dfall, df])
-                
-        # combine into table
-        df = dfall
-        df = df[['title', 'r2', 'coeff', 'c', 'spearman_corr', 'spearman_p']]
-        df = df.rename(columns={'r2': '$r^2$', 'title':'variables', 'coeff':'b', 'spearman_corr':'spearman coeff', 'spearman_p':'spearman p'})
-        dflist.append(df)
-        if 'nickname' in kwargs:
-            nickname = kwargs['nickname']
-        else:
-            nickname = yvar
-        shortcaption = f'Linear regressions for {nickname}'
-        if k==0:
-            shortcaption+=' at nonzero surface tension'
-            label = f'tab:{yvar}RegNonZero'
-        else:
-            shortcaption+=' at zero surface tension'
-            label = f'tab:{yvar}RegZero'
-        longcaption = r'Table of linear regressions of log-scaled variables and Spearman rank correlations for \textbf{'+nickname+r'} at non-zero surface tension. For example, ${Re}_{ink}$ indicates a regression fit to $h/w = 10^c*Re_{ink}^b$. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \ref{tab:variableDefs}.'
-        
-        dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label)
-        dftext = dftext.replace('\\toprule\n', '')
-        dftext = dftext.replace('\\midrule\n', '')
-        dftext = dftext.replace('\\bottomrule\n', '')
-        dftext = dftext.replace('\begin{table}', '\begin{table}[H]')
-        ctr = -10
-        dftextOut = ''
-        for line in iter(dftext.splitlines()):
-            dftextOut = dftextOut+line+'\n'
-            ctr+=1
-            if 'variables' in line:
-                ctr = 0
-            if 'bm{Ca}' in line or '$Ca$' in line:
-                ctr = 0
-            if ctr==4 and not line.startswith('\\end'):
-                dftextOut = dftextOut+'\t\t\\hline\n'
-                ctr=0
-        if printOut:
-            print(dftextOut)
-        if export:
-            fn = os.path.join(exportFolder, label[4:]+'.tex')
-            file2 = open(fn ,"w")
-            file2.write(dftextOut)
-            file2.close()
-            logging.info(f'Exported {fn}')
+                ycol = yvar
+
+            # define x variables
+            if k==0:
+                varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
+            else:
+                varlist = ['Re', 'Bm', 'visc0']
+
+            # add logs and ratios
+            for i,s1 in enumerate(['sup', 'ink']):
+                ssi = me.addLogs(ssi, [s1+'_'+v for v in varlist])
+            for i,s1 in enumerate(['Prod', 'Ratio']):
+                ssi = me.addRatios(ssi, varlist=varlist, operator=s1)
+                ssi = me.addLogs(ssi, [v+s1 for v in varlist])
+
+
+            # go through each variable and get sup, ink, product, ratio
+            for j, s2 in enumerate(varlist):
+                df = []
+                if s2=='dPR':
+                    s2i = 'd_{PR'
+                elif s2=='dnorm':
+                    s2i = 'd_{Est}/d_{PR'
+                elif s2=='visc0':
+                    s2i = '\eta'
+                else:
+                    s2i = s2
+
+                if s2=='Ca':
+                    ssi = me.addLogs(ssi, ['int_Ca'])
+                    reg = regRow(ssi, 'int_Ca_log', ycol)
+                    reg['title'] = '$Ca$'
+                    df.append(reg)
+
+                # 2 variable correlation
+    #             reg = rg.regPD(ssi, [f'ink_{s2}_log', f'sup_{s2}_log'], yvar)
+    #             if s2i[-4:]=='_{PR':
+    #                 reg['title'] = '$'+s2i+',ink}, '+s2i+',sup}$'
+    #             else:
+    #                 reg['title'] = '$'+s2i+'_{ink}, '+s2i+'_{sup}$'
+    #             reg['coeff'] = ('{:0.2f}'.format(reg.pop('b0')),  '{:0.2f}'.format(reg.pop('b1')))
+    #             df.append(reg)
+
+                # single variable correlation
+                for s1 in ['ink_', 'sup_']:
+                    xcol = f'{s1}{s2}_log'
+                    reg = regRow(ssi, xcol, ycol)
+                    if s2i[-4:]=='_{PR':
+                        reg['title']='$'+s2i+','+s1[:-1]+'}$'
+                    else:
+                        reg['title'] = '$'+s2i+'_{'+s1[:-1]+'}$'
+                    df.append(reg)
+
+                # products and ratios
+                for s1 in ['Prod', 'Ratio']:
+                    xcol = f'{s2}{s1}_log'
+                    reg = regRow(ssi, xcol, ycol)
+                    op = '' if s1=='Prod' else '/'
+                    if s2i[-4:]=='_{PR':
+                        s2ii = s2i+','
+                    else:
+                        s2ii = s2i+'_{'
+                    reg['title'] = '$'+s2ii+'ink}'+op+s2ii+'sup}$'
+                    df.append(reg)
+                df = pd.DataFrame(df)
+
+                # label best fit
+                crit = ((abs(df.spearman_corr)>0.9*abs(df.spearman_corr).max())&(df.spearman_p<0.05)&(abs(df.spearman_corr)>0.5))
+                df.spearman_p = ['{:0.1e}'.format(i) for i in df.spearman_p]
+                df.spearman_corr = ['{:0.2f}'.format(i) for i in df.spearman_corr]
+                df.r2 = ['{:0.2f}'.format(i) for i in df.r2]
+                for sname in ['title', 'r2', 'spearman_corr', 'spearman_p']:
+                    # bold rows that are best fit
+                    df.loc[crit,sname] = ['$\\bm{'+(i[1:-1] if i[0]=='$' else i)+'}$' for i in df.loc[crit,sname]]
+                if len(dfall)==0:
+                    dfall = df
+                else:
+                    dfall = pd.concat([dfall, df])
+
+            # combine into table
+            df = dfall
+            df = df[['title', 'r2', 'coeff', 'c', 'spearman_corr', 'spearman_p']]
+            df = df.rename(columns={'r2': '$r^2$', 'title':'variables', 'coeff':'b', 'spearman_corr':'spearman coeff', 'spearman_p':'spearman p'})
+            dflist.append(df)
+            if 'nickname' in kwargs:
+                nickname = kwargs['nickname']
+            else:
+                nickname = yvar
+            shortcaption = f'Linear regressions for {nickname}'
+            if k==0:
+                shortcaption+=' at nonzero surface tension'
+                label = f'tab:{yvar}RegNonZero'
+            else:
+                shortcaption+=' at zero surface tension'
+                label = f'tab:{yvar}RegZero'
+            longcaption = r'Table of linear regressions of log-scaled variables and Spearman rank correlations for \textbf{'+nickname+r'} at non-zero surface tension. For example, ${Re}_{ink}$ indicates a regression fit to $h/w = 10^c*Re_{ink}^b$. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \ref{tab:variableDefs}.'
+
+            dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label)
+            dftext = dftext.replace('\\toprule\n', '')
+            dftext = dftext.replace('\\midrule\n', '')
+            dftext = dftext.replace('\\bottomrule\n', '')
+            dftext = dftext.replace('\begin{table}', '\begin{table}[H]')
+            ctr = -10
+            dftextOut = ''
+            for line in iter(dftext.splitlines()):
+                dftextOut = dftextOut+line+'\n'
+                ctr+=1
+                if 'variables' in line:
+                    ctr = 0
+                if 'bm{Ca}' in line or '$Ca$' in line:
+                    ctr = 0
+                if ctr==4 and not line.startswith('\\end'):
+                    dftextOut = dftextOut+'\t\t\\hline\n'
+                    ctr=0
+            if printOut:
+                print(dftextOut)
+            if export:
+                fn = os.path.join(exportFolder, label[4:]+'.tex')
+                file2 = open(fn ,"w")
+                file2.write(dftextOut)
+                file2.close()
+                logging.info(f'Exported {fn}\n---------------------------\n\n')
     return dflist
