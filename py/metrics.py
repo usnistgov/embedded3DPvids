@@ -81,8 +81,9 @@ def getRoughness(componentMask:np.array, diag:int=0) -> float:
     if diag and perimeter>1000:
         cm = componentMask.copy()
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
-        cv.drawContours(cm, cnt, -1, (0,255,0), 2)
-        cv.drawContours(cm, [hull], -1, (0,0,255), 1)
+        cv.drawContours(cm, [hull], -1, (110, 245, 209), 6)
+        cv.drawContours(cm, cnt, -1, (186, 6, 162), 6)
+        
         x,y,w,h = cv.boundingRect(cnt)
         cm = cm[y-5:y+h+5,x-5:x+w+5]
         imshow(cm)
@@ -393,7 +394,7 @@ def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
 
 def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=1000, satelliteCrit:float=0.2, **kwargs) -> Tuple[pd.DataFrame, dict]:
     '''segment the image and take measurements'''
-    im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit)
+    im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit, **kwargs)
     if len(markers)==0 or markers[0]==1:
         return [], {}, attempt, im2
     labeled = markers[1]
@@ -504,6 +505,10 @@ def openImageInPaint(folder:str, st:str, i:int) -> None:
     if not os.path.exists(file):
         return
     subprocess.Popen([r'C:\Windows\System32\mspaint.exe', file]);
+    
+def openExplorer(folder:str) -> None:
+    '''open the folder in explorer'''
+    subprocess.Popen(['explorer', folder.replace(r"/", "\\")], shell=True);
 
 
 def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:List[str]=['xs', 'vert', 'horiz'], **kwargs) -> None:
@@ -512,13 +517,14 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
         return
     try:
         fl = fileList(folder)
-    except:
+    except Exception as e:
         return
     if fl.date<210500:
         return
     if 'dates' in kwargs and not fl.date in kwargs['dates']:
         return
     progDims, units = importProgDims(folder)
+    
     logging.info(f'Measuring {os.path.basename(folder)}')
     for st in ['xs', 'vert']:
         fn = fnMeasures(folder, st)

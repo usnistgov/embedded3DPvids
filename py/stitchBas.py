@@ -296,7 +296,7 @@ class fileList:
                 if numfiles>0:
                     setattr(self, s+'PerCol', numfiles)
                 else:
-                    raise ValueError(f'{self.folder}: Cannot calculate files per column for {s}')
+                    return ValueError(f'{self.folder}: Cannot calculate files per column for {s}')
             return 
 
 

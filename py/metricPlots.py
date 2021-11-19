@@ -125,7 +125,10 @@ def onePointSpacing(xl0:list) -> list:
     '''produce a list to encompass a single point'''
     xl0.sort()
     if len(xl0)>1:
-        xl = [xl0[i]-0.49*(xl0[i+1]-xl0[i]) for i in range(len(xl0)-1)] + [xl0[-1]+i*(xl0[-1]-xl0[-2]) for i in [-0.49, 0.49]]
+        firstpoint = [xl0[0] - (xl0[1]-xl0[0])/2]
+        lastpoint = [xl0[-1] + (xl0[-1]-xl0[-2])/2]
+        midpoints = [(xl0[i]+xl0[i+1])/2 for i in range(len(xl0)-1)]
+        xl = firstpoint + midpoints + lastpoint
     else:
         xl = [xl0[0]-1, xl0[0]+1]
     return xl
@@ -158,6 +161,7 @@ def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
     else:
         xl0 = list(s3.unique())
         return onePointSpacing(xl0)
+    xl.sort()
     return xl
 
 def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool, dx:float, dy:float, rigid:bool=False) -> pd.DataFrame:
@@ -321,19 +325,15 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
             if sname in kwargs:
                 varargs[sname] = kwargs[sname]
             else:
-                if (sname=='edgecolors' and not i==1) or (i==1 and sname=='facecolors'):
+                if ((sname=='edgecolors' and not i==1) or (i==1 and sname=='facecolors'))  and not ('marker' in kwargs and kwargs['marker']==1):
                     varargs[sname] = 'none'
                 else:
                     varargs[sname]=color  
     elif gradColor==1:
         # color by gradient
         varargs = {}
-
     if 'markersize' in kwargs:
         varargs['s']=kwargs['markersize']
-#         if 'marker' in varargs:
-#             # markers don't work with size, for some reason
-#             varargs.pop('marker')
     return varargs
         
 def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict) :
@@ -430,6 +430,8 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
         if len(labels)>0 and not ('legend' in kwargs and kwargs['legend']==False):
             if len(fig.axes)==1 or ('legendloc' in kwargs and kwargs['legendloc']=='right'):
                 ax.legend(bbox_to_anchor=(1.05,1), loc='upper left', title=colorBy.replace('_',  ' '), frameon=False)
+            elif ('legendloc' in kwargs and kwargs['legendloc']=='inset'):
+                ax.legend(bbox_to_anchor=(1,0), loc='lower right', frameon=True)
             else:
                 ax.legend(bbox_to_anchor=(0,1), loc='lower left', title=colorBy.replace('_',  ' '), frameon=False)
                 

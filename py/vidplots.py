@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
 import cv2 as cv
+import matplotlib.ticker as mticker
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -246,6 +247,7 @@ class comboPlot(folderPlots):
             if i==0 or (not self.ylabels[i]==self.ylabels[i-1]):
                 # if first plot or ylabel is different:
                 ax.set_ylabel(self.ylabels[i], fontname="Arial", fontsize=10)
+                ax.yaxis.set_major_locator(mticker.FixedLocator(self.ylistsreal[i]))
                 ax.set_yticklabels(self.ylists[i], fontname="Arial", fontsize=10)
 
             # the way comboPlots is set up, it has one big plot, 
@@ -258,7 +260,8 @@ class comboPlot(folderPlots):
             # this is the relabeling step
             ax.set_xticks(self.xmlists[i], minor=False)
             ax.set_yticks(self.ymlists[i], minor=False)
-            
+
+            ax.xaxis.set_major_locator(mticker.FixedLocator(self.xlistsreal[i]))
             ax.set_xticklabels(self.xlists[i], fontname="Arial", fontsize=10)  
             if len(self.xrtots[i])==2:
                 ax.set_xlim(self.xrtots[i]) # set the limits to the whole bounds
@@ -650,7 +653,7 @@ def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
     cp.clean()
 
 
-def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs) -> None:
+def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs):
     '''plot all pictures for simulations in a folder, but use automatic settings for cropping and spacing and export the result
     topFolder is the folder that holds the simulations
     exportFolder is the folder to export the images to
@@ -682,3 +685,5 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
         
     if not showFig:
         plt.close()
+        
+    return cp.fig

@@ -130,7 +130,7 @@ def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
     # find the border
     gray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
     ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-    thresh[:, -100:] = np.ones(shape=(thresh[:, -100:]).shape, dtype=np.uint8)*255 # cutoff right 100 pixels
+#     thresh[:, -100:] = np.ones(shape=(thresh[:, -100:]).shape, dtype=np.uint8)*255 # cutoff right 100 pixels
     thresh[800:, :] = np.ones(shape=(thresh[800:, :]).shape, dtype=np.uint8)*255 # cutoff bottom 100 pixels
     thresh = dilate(thresh,10)
     thresh = onlyBorderComponents(thresh)
@@ -189,23 +189,25 @@ def verticalFilter(gray:np.array) -> np.array:
 
 
 
-def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
+def threshes(img:np.array, gray:np.array, removeVert, attempt, botthresh:int=150, topthresh:int=200, whiteval:int=80, diag:int=0, **kwargs) -> np.array:
     '''threshold the grayscale image'''
     if attempt==0:
 #         ret, thresh = cv.threshold(gray,180,255,cv.THRESH_BINARY_INV)
         # just threshold on intensity
-        allblack = np.product(gray.shape)*50
-        ret, thresh = cv.threshold(gray,150,255,cv.THRESH_BINARY_INV)
-        prod = np.sum(np.sum(thresh))
-        if prod<=allblack: # segmentation removed too much
-            crit = 190
-            allwhite = np.product(gray.shape)*80
-            prod = allwhite
-            while prod>=allwhite and crit>=170: # segmentation included too much
-                ret, thresh = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
-                prod = np.sum(np.sum(thresh))
-                crit = crit-10
+        crit = topthresh
+        allwhite = np.product(gray.shape)*whiteval
+        prod = allwhite
+        while prod>=allwhite and crit>100: # segmentation included too much
+            ret, thresh1 = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
+            ret, thresh2 = cv.threshold(gray,crit+10,255,cv.THRESH_BINARY_INV)
+            thresh = np.ones(shape=thresh2.shape, dtype=np.uint8)
+            thresh[:600,:] = thresh2[:600,:] # use higher threshold for top 2 lines
+            thresh[600:,:] = thresh1[600:,:] # use lower threshold for bottom line
+            prod = np.sum(np.sum(thresh))
+            crit = crit-10
 #         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+        if diag>0:
+            logging.info(f'Threshold: {crit+10}, product: {prod}, white:{allwhite}')
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
@@ -241,7 +243,7 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt) -> np.array:
     thresh = closeVerticalTop(thresh)
     return thresh
 
-def segmentInterfaces(img:np.array, acrit:float=2500, diag:bool=False, removeVert:bool=False, removeBorder:bool=True) -> np.array:
+def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, **kwargs) -> np.array:
     '''from a color image, segment out the ink, and label each distinct fluid segment'''
     if len(img.shape)==3:
         gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
@@ -252,14 +254,14 @@ def segmentInterfaces(img:np.array, acrit:float=2500, diag:bool=False, removeVer
     finalAt = attempt
     while attempt<1:
         finalAt = attempt
-        thresh = threshes(img, gray, removeVert, attempt)
+        thresh = threshes(img, gray, removeVert, attempt, diag=diag, **kwargs)
         if removeBorder:
             filled = fillComponents(thresh)    
         else:
             filled = thresh.copy()
         markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
 
-        if diag:
+        if diag>0:
             imshow(img, gray, thresh, filled)
             plt.title(f'attempt:{attempt}')
         if markers[0]>1:
