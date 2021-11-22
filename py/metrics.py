@@ -836,6 +836,20 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
         printStillsKeys(ss)
     return ss,u
 
+def plainTypes(sslap:pd.DataFrame) -> pd.DataFrame:
+    '''convert types to cleaner form for plot legends'''
+    sslap.loc[sslap.sweepType=='speed_20', 'sweepType'] = 'speed sweep, mineral oil'
+    sslap.loc[sslap.ink_type=='PDMS_3_mineral_25', 'ink_type'] = 'PDMS/mineral oil'
+    sslap.loc[sslap.ink_type=='PDMS_3_silicone_25', 'ink_type'] = 'PDMS/silicone oil'
+    sslap.loc[sslap.ink_type=='mineral oil_Span 20', 'ink_type'] = 'mineral oil/Span'
+    sslap.loc[sslap.ink_type=='PEGDA_40', 'ink_type'] = 'PEGDA'
+    sslap.loc[sslap.ink_type=='water', 'ink_type'] = 'water/Lap'
+    sslap.loc[sslap.sweepType=='speed_20_low_visc_ratio', 'sweepType'] = 'mineral oil, low $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_20_high_visc_ratio', 'sweepType'] = 'mineral oil, high $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_0_high_visc_ratio', 'sweepType'] = 'water/Laponite, high $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_0_low_visc_ratio', 'sweepType'] = 'water/Laponite, low $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_0_int_visc_ratio', 'sweepType'] = 'water/Laponite, med $\eta_i/\eta_s$'
+
 
 def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
     '''find inverse values and invert them (e.g. WeInv)'''
