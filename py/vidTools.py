@@ -518,7 +518,7 @@ class vidData:
     #------------------------------------------------------------------------------------
         
         
-    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False) -> np.array:
+    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False, **kwargs) -> np.array:
         '''block the nozzle out of the image'''
         frameMasked = cv.bitwise_and(frame,frame,mask = vm.erode(self.nozMask, dilate))
         if ave:
@@ -538,40 +538,55 @@ class vidData:
         behindX is distance behind nozzle at which to get vertical displacement.
         s is the name of the line, e.g. horiz0
         f is the fraction representing how far within the line we are'''
+        
+        out = {'name':s, 'time':time, 'frac':f, 'behindX':behindX} # initialize row w/ metadata
+        
         if len(self.nozMask)==0:
             self.detectNozzle()
+            
+        # get the frame
         self.openStream()
         frame = self.getFrameAtTime(time)
         self.closeStream()
+        
+        # mask the nozzle
         frame2 = self.maskNozzle(frame, dilate=20, ave=True, **kwargs)
         acrit=1000
         m = 10
-        my = int(frame2.shape[0]*0.4)
+        my0 = (self.yB-200)
+        myf = (self.yB+20)
         white = frame2.max(axis=0).max(axis=0)
         black = frame2.min(axis=0).min(axis=0)
         if s[-1]=='1':
-            frame2[m:-m, -m:]=white # empty out  right edges so the filaments don't get removed during segmentation
-#             frame2[my:-my, -2*m:-m]=black # fill  right edges so the filaments gets filled
+            frame2[m:-m, -m:] = white # empty out  right edges so the filaments don't get removed during segmentation
+            frame2[my0:myf, -2*m:-m] = black # fill right edges so the filaments get filled in
+            frame2[my0:myf, self.xR+20:self.xR+m+20] = black # fill right edge of nozzle so the filaments get filled in
         else:
-            frame2[m:-m, :m]=white
-#             frame2[my:-my, m:2*m]=black
-        frame2[:m, m:-m]=white # empty out top so filaments don't get removed
+            frame2[m:-m, :m] = white # empty out left edges 
+            frame2[my0:myf, m:2*m] = black # fill left edges so the filaments get filled in
+            frame2[my0:myf, self.xL-m-20:self.xL-20] = black # fill left edge of nozzle so the filaments get filled in
+        frame2[:m, m:-m] = white # empty out top so filaments don't get removed
         
-        
-        filled, markers, finalAt = vm.segmentInterfaces(frame2, acrit=acrit, diag=(diag>1))
+        # segment the filament out
+        filled, markers, finalAt = vm.segmentInterfaces(frame2, acrit=acrit, diag=(diag>1), **kwargs)
         df = vm.markers2df(markers) # convert to dataframe
         df = df[df.a>acrit]
-        out = {'name':s, 'time':time, 'frac':f, 'behindX':behindX}
         if len(df)==0:
+            # nothing detected
             return {},{}
+        
         filI = df.a.idxmax() # index of filament label, largest remaining object
         componentMask = (markers[1] == filI).astype("uint8") * 255 # get largest object
         componentMask = vm.openMorph(componentMask, 5) # remove burrs
         contours = cv.findContours(componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-        contours = np.array(contours[1]) # turn into an array
+        if int(cv.__version__[0])>=4:
+            contours = contours[0] # turn into an array
+        else:
+            contours = np.array(contours[1])
         contours = np.concatenate(contours) # turn into a list of points
         contours = contours.reshape((contours.shape[0],2)) # reshape
         contours = pd.DataFrame(contours, columns=['x','y']) # list of points on contour
+#         contours = pd.concat([contours.groupby(by='x', as_index=False).min(), contours.groupby(by='x', as_index=False).max()]).reset_index(drop=True) # only take top and bottom point at each x
         
         # find how far the ink projects into bath under nozzle
         underNozzle = contours[(contours.x<self.xR)&(contours.x>self.xL)]
@@ -608,12 +623,12 @@ class vidData:
             self.initLineImage()
             self.drawNozzleOnFrame(colors=False)
             if len(behind)>0:
-                cv.circle(componentMask,(bottomPeak.iloc[0]['x'],bottomPeak.iloc[0]['y']),5,(0,255,0),5)
                 cv.circle(componentMask,(int(behindBot.x.mean()),int(behindBot.y.mean())),5,(0,0,255),5)
                 cv.circle(componentMask,(int(behind.x.mean()),int((behindBot.y.mean()+behindTop.y.mean())/2)),5,(255,0,255),5)
                 cv.circle(componentMask,(int(behindTop.x.mean()),int(behindTop.y.mean())),5,(255,0,0),5)
             imshow(componentMask)
             if len(underNozzle)>0:
+                cv.circle(componentMask,(bottomPeak.iloc[0]['x'],bottomPeak.iloc[0]['y']),5,(0,255,0),5)
                 plt.plot(underNozzle['x'], underNozzle['y'], color='g')
             if len(behind)>0:
                 plt.plot(behindBot['x'], behindBot['y'], color='r')

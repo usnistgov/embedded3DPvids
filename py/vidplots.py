@@ -244,10 +244,11 @@ class comboPlot(folderPlots):
         # put x labels on all plots
         for i, ax in enumerate(self.axs):
             ax.set_xlabel(self.xlabels[i], fontname="Arial", fontsize=10)
+            
             if i==0 or (not self.ylabels[i]==self.ylabels[i-1]):
                 # if first plot or ylabel is different:
                 ax.set_ylabel(self.ylabels[i], fontname="Arial", fontsize=10)
-                ax.yaxis.set_major_locator(mticker.FixedLocator(self.ylistsreal[i]))
+                ax.yaxis.set_major_locator(mticker.FixedLocator(self.ymlists[i]))
                 ax.set_yticklabels(self.ylists[i], fontname="Arial", fontsize=10)
 
             # the way comboPlots is set up, it has one big plot, 
@@ -261,7 +262,7 @@ class comboPlot(folderPlots):
             ax.set_xticks(self.xmlists[i], minor=False)
             ax.set_yticks(self.ymlists[i], minor=False)
 
-            ax.xaxis.set_major_locator(mticker.FixedLocator(self.xlistsreal[i]))
+            ax.xaxis.set_major_locator(mticker.FixedLocator(self.xmlists[i]))
             ax.set_xticklabels(self.xlists[i], fontname="Arial", fontsize=10)  
             if len(self.xrtots[i])==2:
                 ax.set_xlim(self.xrtots[i]) # set the limits to the whole bounds

@@ -195,7 +195,8 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt, botthresh:int=150
 #         ret, thresh = cv.threshold(gray,180,255,cv.THRESH_BINARY_INV)
         # just threshold on intensity
         crit = topthresh
-        allwhite = np.product(gray.shape)*whiteval
+        impx = np.product(gray.shape)
+        allwhite = impx*whiteval
         prod = allwhite
         while prod>=allwhite and crit>100: # segmentation included too much
             ret, thresh1 = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
@@ -207,7 +208,7 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt, botthresh:int=150
             crit = crit-10
 #         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
         if diag>0:
-            logging.info(f'Threshold: {crit+10}, product: {prod}, white:{allwhite}')
+            logging.info(f'Threshold: {crit+10}, product: {prod/impx}, white:{whiteval}')
     elif attempt==1:
         # adaptive threshold, for local contrast points
         thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)

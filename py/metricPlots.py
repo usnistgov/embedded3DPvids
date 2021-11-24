@@ -411,6 +411,8 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
             varargs['label']=val
         else:
             ss2 = ss1
+            if 'label' in kwargs:
+                varargs['label'] = kwargs['label']
 
         if len(ss2)>0:
             if grid:
@@ -479,7 +481,7 @@ def subFigureLabel(ax, label:str) -> None:
     '''add a subfigure label to the top left corner'''
     ax.text(0.05, 0.95, label, fontsize=12, transform=ax.transAxes, horizontalalignment='left', verticalalignment='top')
     
-def subFigureLabels(axs) -> None:
+def subFigureLabels(axs, horiz:bool=True) -> None:
     '''add subfigure labels to all axes'''
     alphabet_string = string.ascii_uppercase
     alphabet_list = list(alphabet_string)
@@ -488,10 +490,17 @@ def subFigureLabels(axs) -> None:
         for ax in axs:
             subFigureLabel(ax, alphabet_list.pop(0))
     else:
-        # 2d array
-        for axrow in axs:
-            for ax in axrow:
-                subFigureLabel(ax, alphabet_list.pop(0))
+        if horiz:
+            # 2d array
+            for axrow in axs:
+                for ax in axrow:
+                    subFigureLabel(ax, alphabet_list.pop(0))
+        else:
+            w = len(axs[0])
+            h = len(axs)
+            for i in range(w):
+                for j in range(h):
+                    subFigureLabel(axs[j][i], alphabet_list.pop(0))
     
     
 def calcTicks(lim:Tuple[float]):

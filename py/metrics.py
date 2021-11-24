@@ -798,12 +798,9 @@ def idx0(k:list) -> int:
 
 def printStillsKeys(ss:pd.DataFrame) -> None:
     k = ss.keys()
-    k = k[~(k.str.contains('_SE'))]
+    k = k[~(k.str.endswith('_SE'))]
+    k = k[~(k.str.endswith('_N'))]
     idx = idx0(k)
-    controls = k[:idx]
-    deps = k[idx:]
-    k = ss.keys()
-    k = k[~(k.str.contains('_SE'))]
     controls = k[:idx]
     deps = k[idx:]
     print(f'Independents: {list(controls)}')
@@ -819,6 +816,7 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
     ss.date = ss.date.replace(210728, 210727)
     k = ss.keys()
     k = k[~(k.str.contains('_SE'))]
+    k = k[~(k.str.endswith('_N'))]
     idx = idx0(k)
     controls = k[:idx]
     deps = k[idx:]
@@ -839,6 +837,9 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
 def plainTypes(sslap:pd.DataFrame) -> pd.DataFrame:
     '''convert types to cleaner form for plot legends'''
     sslap.loc[sslap.sweepType=='speed_20', 'sweepType'] = 'speed sweep, mineral oil'
+    sslap.loc[sslap.sweepType=='visc_0', 'sweepType'] = 'visc sweep, water/Lap'
+    sslap.loc[sslap.sweepType=='visc_PEG', 'sweepType'] = 'visc sweep, PEGDA'
+    sslap.loc[sslap.sweepType=='speed_0', 'sweepType'] = 'speed sweep, water/Lap'
     sslap.loc[sslap.ink_type=='PDMS_3_mineral_25', 'ink_type'] = 'PDMS/mineral oil'
     sslap.loc[sslap.ink_type=='PDMS_3_silicone_25', 'ink_type'] = 'PDMS/silicone oil'
     sslap.loc[sslap.ink_type=='mineral oil_Span 20', 'ink_type'] = 'mineral oil/Span'
