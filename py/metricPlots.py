@@ -336,7 +336,7 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
         varargs['s']=kwargs['markersize']
     return varargs
         
-def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict) :
+def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict, lines:bool=False) :
     '''df2 is already sorted into x,y,c where c is color'''
     if len(df2)==0:
         return
@@ -353,11 +353,13 @@ def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, vararg
                 color = cmap((row['c']-cmin)/(cmax-cmin))
                 sc = ax.errorbar([row['x']],[row['y']], xerr=[row['xerr']], yerr=[row['yerr']],linestyle='None', color=color,**varargs)
     else:
-        sc = ax.scatter(df2['x'],df2['y'], **varargs)
+        sc = ax.scatter(df2['x'],df2['y'],  **varargs)
         for s in ['label', 'facecolors', 'edgecolors', 's', 'fillstyle','marker']:
             if s in varargs:
                 varargs.pop(s)
         sc = ax.errorbar(df2['x'],df2['y'], xerr=df2['xerr'], yerr=df2['yerr'],linestyle='None',marker='', elinewidth=1, **varargs)
+    if lines:
+        sc = ax.plot(df2['x'], df2['y'], **varargs)
     return sc
 
 def idealLines(**kwargs) -> None:
@@ -370,7 +372,7 @@ def idealLines(**kwargs) -> None:
             varargs['label']='ideal'
         kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
         
-def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, **kwargs):
+def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, lines:bool=False, **kwargs):
     '''scatter plot. 
     colorBy is the variable to color by. gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
     xvar is the x variable name, yvar is the y variable name. 
@@ -419,7 +421,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
                 df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
             else:
                 df2 = toGroups(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
-            sc = plotSeries(df2, gradColor, ax, cmapname, dx, dy, varargs)
+            sc = plotSeries(df2, gradColor, ax, cmapname, dx, dy, varargs, lines=lines)
       
     # add verticals, horizontals
     idealLines(**kwargs)
@@ -663,7 +665,10 @@ def colorMeshSS(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool=False, 
         return fig, ax
     df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy, rigid=(dx>0 or dy>0))
     piv = pd.pivot_table(df2, index='y', columns='x', values='c')
-    sc = ax.pcolormesh(piv, cmap=cmapname)
+    if 'vmin' in kwargs and 'vmax' in kwargs:
+        sc = ax.pcolormesh(piv, cmap=cmapname, vmin=kwargs['vmin'], vmax=kwargs['vmax'])
+    else:
+        sc = ax.pcolormesh(piv, cmap=cmapname)
     if dx>0:
         xpos, xticks = getMeshTicks(piv, True, logx)
     else:
