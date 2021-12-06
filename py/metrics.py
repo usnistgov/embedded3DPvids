@@ -867,6 +867,7 @@ def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd
     return ss
 
 def addRatios(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
+    '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
     k = ss.keys()
     idx = int(np.argmax(k=='xs_aspect'))
     for j, s2 in enumerate(varlist):

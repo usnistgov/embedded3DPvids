@@ -703,7 +703,7 @@ def regRow(ssi:pd.DataFrame, xcol:str, ycol:str) -> dict:
     reg = {**reg, **spear}
     return reg
 
-def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), **kwargs) -> List[pd.DataFrame]:
+def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', **kwargs) -> List[pd.DataFrame]:
     ss0 = ss.copy()
     ss0.dropna(subset=[yvar], inplace=True)
     ss0 = ss0[ss0.ink_days==1]
@@ -712,6 +712,12 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
     ssca1 = ssca1[ssca1.sigma>0]
     sslap = ss0.copy()
     sslap = sslap[sslap.ink_base=='water']
+    
+    # add interfacial Ca estimates for water
+    sslap.loc[sslap.sigma==0,'sigma'] = 2
+    sslap['int_Ca'] = sslap['ink_v']*sslap['sup_visc0']/sslap['sigma']
+    sslap['sup_Ca'] = sslap['sup_v']*sslap['sup_visc0']/sslap['sigma']
+    sslap['ink_Ca'] = sslap['ink_v']*sslap['ink_visc0']/sslap['sigma']
     dflist = []
     for k, ssi in enumerate([ssca1, sslap]):
         dfall = []
@@ -733,7 +739,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
             if k==0:
                 varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
             else:
-                varlist = ['Re', 'Bm', 'visc0']
+                varlist = ['Re', 'Bm', 'visc0', 'Ca']
 
             # add logs and ratios
             for i,s1 in enumerate(['sup', 'ink']):
@@ -817,18 +823,26 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 nickname = yvar
             shortcaption = f'Linear regressions for {nickname}'
             if k==0:
-                shortcaption+=' at nonzero surface tension'
-                label = f'tab:{yvar}RegNonZero'
+                st = ' at nonzero surface tension.'
+                
+                label = f'tab:{yvar}{tag}RegNonZero'
             else:
-                shortcaption+=' at zero surface tension'
-                label = f'tab:{yvar}RegZero'
-            longcaption = r'Table of linear regressions of log-scaled variables and Spearman rank correlations for \textbf{'+nickname+r'} at non-zero surface tension. For example, ${Re}_{ink}$ indicates a regression fit to $h/w = 10^c*Re_{ink}^b$. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \ref{tab:variableDefs}.'
+                st =' in water/Laponite inks, where surface tension was estimated to be \SI{2}{mJ/m^2}.'
+                label = f'tab:{yvar}{tag}RegZero'
+            shortcaption+=st
+            if logy:
+                regexample = '$y = 10^c*Re_{ink}^b$'
+                v1 = 'x and y'
+            else:
+                regexample = '$y = b*log_{10}(Re_{ink}) + c$'
+                v1 = 'x'
+            longcaption = r'Table of linear regressions of log-scaled '+v1+' variables and Spearman rank correlations for \\textbf{'+nickname+r'}'+st+' For example, ${Re}_{ink}$ indicates a regression fit to '+regexample+'. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \\ref{tab:variableDefs}.'
 
-            dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label)
+            dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label, position='H')
             dftext = dftext.replace('\\toprule\n', '')
             dftext = dftext.replace('\\midrule\n', '')
             dftext = dftext.replace('\\bottomrule\n', '')
-            dftext = dftext.replace('\begin{table}', '\begin{table}[H]')
+            dftext = dftext.replace(r'\begin{table}', r'\begin{table}[H]')
             ctr = -10
             dftextOut = ''
             for line in iter(dftext.splitlines()):
