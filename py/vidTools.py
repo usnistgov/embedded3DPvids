@@ -566,6 +566,7 @@ class vidData:
             frame2[my0:myf, m:2*m] = black # fill left edges so the filaments get filled in
             frame2[my0:myf, self.xL-m-20:self.xL-20] = black # fill left edge of nozzle so the filaments get filled in
         frame2[:m, m:-m] = white # empty out top so filaments don't get removed
+        frame2[self.yB:myf, self.xL-20:self.xR+20] = black # fill bottom edge of nozzle
         
         # segment the filament out
         filled, markers, finalAt = vm.segmentInterfaces(frame2, acrit=acrit, diag=(diag>1), **kwargs)

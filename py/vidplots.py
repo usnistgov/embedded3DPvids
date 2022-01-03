@@ -338,7 +338,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     bn = os.path.basename(topfolder)
     s = ''
     for k in kwargs:
-        if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize', 'crops'] and type(kwargs[k]) is not dict:
+        if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize', 'crops', 'export'] and type(kwargs[k]) is not dict:
             s = s + k + '_'+str(kwargs[k])+'_'
     s = s[0:-1]
     s = s.replace('*', 'x')

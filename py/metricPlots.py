@@ -18,6 +18,7 @@ import numpy as np
 import seaborn as sns
 import string
 from scipy import stats
+import csv
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -136,6 +137,10 @@ def onePointSpacing(xl0:list) -> list:
 def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
     '''produce an evenly spaced list'''
     s3 = ss2[xvar].dropna()
+    if logx:
+        s3 = s3[s3>0]
+        if len(s3)==0:
+            return []
     if (dx>0 and dx<1) and len(s3.unique())>1:
         if logx:
             s3 = s3[s3>0]
@@ -168,11 +173,15 @@ def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool,
     '''convert the data to an evenly spaced grid. 
     rigid=True means that we use the center of the square as the x,y value and use no error. This is for color maps.'''
     xl = evenlySpace(ss2, xvar, logx, dx)
+    if len(xl)==0:
+        return []
     yl = evenlySpace(ss2, yvar, logy, dy)
     df2 = []
     for j,y in enumerate(yl[:-1]):
         for i,x in enumerate(xl[:-1]):
             ss3 = ss2.copy()
+            if logx:
+                ss3 = ss3[ss3[xvar]>0]
             if dx<1:
                 ss3 = ss3[(ss3[xvar]>=x)&(ss3[xvar]<xl[i+1])]
             if dy<1:
@@ -243,7 +252,10 @@ def setUpAxes(xvar:str, yvar:str, **kwargs):
     if 'fig' in kwargs:
         fig = kwargs['fig']
     else:
-        fig = plt.figure()
+        if 'figsize' in kwargs:
+            fig = plt.figure(figsize=kwargs['figsize'])
+        else:
+            fig = plt.figure()
         kwargs['fig'] = fig
     if 'ax' in kwargs:
         ax = kwargs['ax']
@@ -339,6 +351,7 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
 def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict, lines:bool=False) :
     '''df2 is already sorted into x,y,c where c is color'''
     if len(df2)==0:
+        sc = ax.scatter(np.NaN, np.NaN, **varargs)
         return
     if gradColor==1:
         # gradient coloring
@@ -390,7 +403,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     
     # remove NA from table
     if not colorBy in ss:
-        logging.warning(f'variable {colorBy} is not in table')
+#         logging.warning(f'variable {colorBy} is not in table')
         gradColor = 2
         ss1 = ss1[[xvar,yvar]].dropna()  
     else:
@@ -434,6 +447,10 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
         if len(labels)>0 and not ('legend' in kwargs and kwargs['legend']==False):
             if len(fig.axes)==1 or ('legendloc' in kwargs and kwargs['legendloc']=='right'):
                 ax.legend(bbox_to_anchor=(1.05,1), loc='upper left', title=colorBy.replace('_',  ' '), frameon=False)
+            elif ('legendloc' in kwargs and kwargs['legendloc']=='above'):
+                ax.legend(bbox_to_anchor=(0,1), loc='lower left', title=colorBy.replace('_',  ' '), frameon=False)
+            elif ('legendloc' in kwargs and kwargs['legendloc']=='below'):
+                ax.legend(bbox_to_anchor=(0,-0.5), loc='upper left', title=colorBy.replace('_',  ' '), frameon=False)
             elif ('legendloc' in kwargs and kwargs['legendloc']=='inset'):
                 ax.legend(bbox_to_anchor=(1,0), loc='lower right', frameon=True)
             else:
@@ -479,30 +496,40 @@ def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
     ax.plot(xlist, ylist, color='black')
     ax.text(0.9, 0.9, 'r$^2$ = {:0.2}'.format(reg['r2']), transform=ax.transAxes)
     
-def subFigureLabel(ax, label:str) -> None:
+def subFigureLabel(ax, label:str, inside:bool=True) -> None:
     '''add a subfigure label to the top left corner'''
-    ax.text(0.05, 0.95, label, fontsize=12, transform=ax.transAxes, horizontalalignment='left', verticalalignment='top')
+    if inside:
+        x=0.05
+        y = 0.95
+        ha = 'left'
+        va = 'top'
+    else:
+        x = -0.05
+        y = 1.05
+        ha = 'right'
+        va = 'bottom'
+    ax.text(x, y, label, fontsize=12, transform=ax.transAxes, horizontalalignment=ha, verticalalignment=va)
     
-def subFigureLabels(axs, horiz:bool=True) -> None:
+def subFigureLabels(axs, horiz:bool=True, inside:bool=True) -> None:
     '''add subfigure labels to all axes'''
     alphabet_string = string.ascii_uppercase
     alphabet_list = list(alphabet_string)
     if len(axs.shape)==1:
         # single row
         for ax in axs:
-            subFigureLabel(ax, alphabet_list.pop(0))
+            subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
     else:
         if horiz:
             # 2d array
             for axrow in axs:
                 for ax in axrow:
-                    subFigureLabel(ax, alphabet_list.pop(0))
+                    subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
         else:
             w = len(axs[0])
             h = len(axs)
             for i in range(w):
                 for j in range(h):
-                    subFigureLabel(axs[j][i], alphabet_list.pop(0))
+                    subFigureLabel(axs[j][i], alphabet_list.pop(0), inside=inside)
     
     
 def calcTicks(lim:Tuple[float]):
@@ -555,17 +582,25 @@ def fixTicks(ax, logx:bool, logy:bool):
             ax.set_yticklabels(ticks)
         ax.xaxis.set_minor_locator(locmin)
         ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        
+        
+def speedSweeps(ss:pd.DataFrame) -> pd.DataFrame:
+    '''only get the speedsweeps'''
+    return ss[(ss.sweepType.str.startswith('speed'))|(ss.sweepType.str.startswith('$v$ sweep'))|(ss.sweepType.str.startswith('$v$, '))]
+
+def viscSweeps(ss:pd.DataFrame) -> pd.DataFrame:
+    return ss[ss.sweepType.str.startswith('visc')|(ss.sweepType.str.startswith('$\\eta$ sweep'))|(ss.sweepType.str.startswith('$\\eta$, '))]
+    
 
 def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **kwargs):
     '''plot values based on sweep type'''
     
-    ss.sort_values(by='sweepType')
+    ss.sort_values(by='sigma')
     cmap = cm.get_cmap(cmapname)
     fig,ax,kwargs0 = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
     if len(ss.sigma.unique())==1:
         # all the same surface tension: make visc blue and speed red
-        for i,s in enumerate(['visc', 'speed']):
-            ss0 = ss[ss.sweepType.str.startswith(s)]
+        for i,ss0 in enumerate([speedSweeps(ss), viscSweeps(ss)]):
             color0 = cmap(0.99*i)
             u = ss0.sweepType.unique()
             for j,st in enumerate(u):
@@ -578,12 +613,12 @@ def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **
                 if 'xideal' in kwargs0:
                     kwargs0.pop('xideal')
     else:
-        scatterSS(ss[(ss.sweepType.str.startswith('speed'))], xvar, yvar, 'sweepType', color='#555555', **kwargs0)
+        scatterSS(speedSweeps(ss), xvar, yvar, 'sweepType', color='#555555', **kwargs0)
         if 'yideal' in kwargs0:
             kwargs0.pop('yideal')
         if 'xideal' in kwargs0:
             kwargs0.pop('xideal')
-        scatterSS(ss[(ss.vRatio==1)], xvar, yvar, 'ink_type', **kwargs0)
+        scatterSS(viscSweeps(ss), xvar, yvar, 'sweepType', **kwargs0)
     return fig, ax
 
 
@@ -703,7 +738,7 @@ def regRow(ssi:pd.DataFrame, xcol:str, ycol:str) -> dict:
     reg = {**reg, **spear}
     return reg
 
-def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', **kwargs) -> List[pd.DataFrame]:
+def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', package:str='pgfplot', **kwargs) -> List[pd.DataFrame]:
     ss0 = ss.copy()
     ss0.dropna(subset=[yvar], inplace=True)
     ss0 = ss0[ss0.ink_days==1]
@@ -714,10 +749,10 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
     sslap = sslap[sslap.ink_base=='water']
     
     # add interfacial Ca estimates for water
-    sslap.loc[sslap.sigma==0,'sigma'] = 2
-    sslap['int_Ca'] = sslap['ink_v']*sslap['sup_visc0']/sslap['sigma']
-    sslap['sup_Ca'] = sslap['sup_v']*sslap['sup_visc0']/sslap['sigma']
-    sslap['ink_Ca'] = sslap['ink_v']*sslap['ink_visc0']/sslap['sigma']
+#     sslap.loc[sslap.sigma==0,'sigma'] = 2
+#     sslap['int_Ca'] = sslap['ink_v']*sslap['sup_visc0']/sslap['sigma']
+#     sslap['sup_Ca'] = sslap['sup_v']*sslap['sup_visc0']/sslap['sigma']
+#     sslap['ink_Ca'] = sslap['ink_v']*sslap['ink_visc0']/sslap['sigma']
     dflist = []
     for k, ssi in enumerate([ssca1, sslap]):
         dfall = []
@@ -739,7 +774,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
             if k==0:
                 varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
             else:
-                varlist = ['Re', 'Bm', 'visc0', 'Ca']
+                varlist = ['Re', 'Bm', 'visc0']
 
             # add logs and ratios
             for i,s1 in enumerate(['sup', 'ink']):
@@ -781,7 +816,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                     xcol = f'{s1}{s2}_log'
                     reg = regRow(ssi, xcol, ycol)
                     if s2i[-4:]=='_{PR':
-                        reg['title']='$'+s2i+','+s1[:-1]+'}$'
+                        reg['title']='$'+s2i+' '+s1[:-1]+'}$'
                     else:
                         reg['title'] = '$'+s2i+'_{'+s1[:-1]+'}$'
                     df.append(reg)
@@ -792,7 +827,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                     reg = regRow(ssi, xcol, ycol)
                     op = '' if s1=='Prod' else '/'
                     if s2i[-4:]=='_{PR':
-                        s2ii = s2i+','
+                        s2ii = s2i+' '
                     else:
                         s2ii = s2i+'_{'
                     reg['title'] = '$'+s2ii+'ink}'+op+s2ii+'sup}$'
@@ -827,7 +862,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 
                 label = f'tab:{yvar}{tag}RegNonZero'
             else:
-                st =' in water/Laponite inks, where surface tension was estimated to be \SI{2}{mJ/m^2}.'
+                st =' in water/Laponite inks.'
                 label = f'tab:{yvar}{tag}RegZero'
             shortcaption+=st
             if logy:
@@ -837,30 +872,72 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 regexample = '$y = b*log_{10}(Re_{ink}) + c$'
                 v1 = 'x'
             longcaption = r'Table of linear regressions of log-scaled '+v1+' variables and Spearman rank correlations for \\textbf{'+nickname+r'}'+st+' For example, ${Re}_{ink}$ indicates a regression fit to '+regexample+'. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \\ref{tab:variableDefs}.'
+            
+            if package=='tabular':
+                dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label, position='H')
+                dftext = dftext.replace('\\toprule\n', '')
+                dftext = dftext.replace('\\midrule\n', '')
+                dftext = dftext.replace('\\bottomrule\n', '')
+                ctr = -10
+                dftextOut = ''
+                for line in iter(dftext.splitlines()):
+                    dftextOut = dftextOut+line+'\n'
+                    ctr+=1
+                    if 'variables' in line:
+                        ctr = 0
+                    if 'bm{Ca}' in line or '$Ca$' in line:
+                        ctr = 0
+                    if ctr==4 and not line.startswith('\\end'):
+                        dftextOut = dftextOut+'\t\t\\hline\n'
+                        ctr=0
+                if printOut:
+                    print(dftextOut)
+                if export:
+                    fn = os.path.join(exportFolder, label[4:]+'.tex')
+                    writeTextToFile(fn, dftextOut)
+            elif package=='pgfplot':
+                ### pgfplot:import data from csv
 
-            dftext = df.to_latex(index=False, escape=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' , caption=(longcaption, shortcaption), label=label, position='H')
-            dftext = dftext.replace('\\toprule\n', '')
-            dftext = dftext.replace('\\midrule\n', '')
-            dftext = dftext.replace('\\bottomrule\n', '')
-            dftext = dftext.replace(r'\begin{table}', r'\begin{table}[H]')
-            ctr = -10
-            dftextOut = ''
-            for line in iter(dftext.splitlines()):
-                dftextOut = dftextOut+line+'\n'
-                ctr+=1
-                if 'variables' in line:
-                    ctr = 0
-                if 'bm{Ca}' in line or '$Ca$' in line:
-                    ctr = 0
-                if ctr==4 and not line.startswith('\\end'):
-                    dftextOut = dftextOut+'\t\t\\hline\n'
-                    ctr=0
-            if printOut:
-                print(dftextOut)
-            if export:
-                fn = os.path.join(exportFolder, label[4:]+'.tex')
-                file2 = open(fn ,"w")
-                file2.write(dftextOut)
-                file2.close()
-                logging.info(f'Exported {fn}\n---------------------------\n\n')
+                label=label.replace('_', '')
+            
+                
+                # import command
+                fn = os.path.join(exportFolder, label[4:]+'Import.tex')
+                dftext = r'\begin{filecontents*}{'
+                dftext = dftext+label[4:]+'.csv'+'}\n'
+                dftext = dftext+df.to_csv(index=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '')
+                dftext = dftext+r'\end{filecontents*}'+'\n'
+                dftext = dftext+ r'\pgfplotstableread[col sep=comma]{'+label[4:]+'.csv'+'}\\'+label.replace(':','')
+                if printOut:
+                    print(dftext)
+                    print('\n-------------\n')
+                if export:
+                    writeTextToFile(fn, dftext)
+                
+                # displayed table
+                dftextOut = '\\begin{table}\n\\centering\n\\caption['
+                dftextOut = dftextOut+shortcaption+r']{'+longcaption+'}\n'
+                dftextOut = dftextOut+'\\pgfplotstabletypeset[\n\tcol sep=comma,\n\tstring type,\n'
+                for s in ['variables', '$r^2$','b','c','spearman coeff','spearman p']:
+                    dftextOut = dftextOut+'\tcolumns/'+s+'/.style={column type=l},\n'
+                dftextOut = dftextOut+'\tevery head row/.style={after row=\hline},\n\tevery nth row={4'
+                if 'Ca' in df.iloc[0]['variables']:
+                    # skip another row before hline
+                    dftextOut = dftextOut+'[+1]'
+                dftextOut = dftextOut+'}{before row=\\hline}\n]'+'\\'+label.replace(':','')+'\n'
+                dftextOut = dftextOut+'\\label{'+label+'}\n'
+                dftextOut = dftextOut+'\\end{table}'
+                if printOut:
+                    print(dftextOut)
+                    print('\n-------------\n')
+                if export:
+                    fn = os.path.join(exportFolder, label[4:]+'.tex')
+                    writeTextToFile(fn, dftextOut) # write import command to text file
     return dflist
+
+def writeTextToFile(fn:str, text:str) -> None:
+    '''write the text to file'''
+    file2 = open(fn ,'w')
+    file2.write(text)
+    file2.close()
+    logging.info(f'Exported {fn}\n---------------------------\n\n')

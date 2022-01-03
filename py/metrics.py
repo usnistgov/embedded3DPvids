@@ -806,6 +806,22 @@ def printStillsKeys(ss:pd.DataFrame) -> None:
     print(f'Independents: {list(controls)}')
     print()
     print(f'Dependents: {list(deps)}')
+    
+def fluidAbbrev(row:pd.Series) -> str:
+    '''get a short abbreviation to represent fluid name'''
+    it = row['ink_type']
+    if it=='water':
+        return 'W'
+    elif it=='mineral oil':
+        return 'M'
+    elif it=='mineral oil_Span 20':
+        return 'MS'
+    elif it=='PDMS_3_mineral_25':
+        return 'PM'
+    elif it=='PDMS_3_silicone_25':
+        return 'PS'
+    elif it=='PEGDA_40':
+        return 'PEG'
 
 def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.DataFrame:
     '''import the stills summary and convert sweep types, capillary numbers'''
@@ -821,35 +837,72 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
     controls = k[:idx]
     deps = k[idx:]
     ss = flipInv(ss)
-    ss.insert(idx+2, 'sweepType', ['visc_'+str(int(i['sigma'])) for j,i in ss.iterrows()])
-    ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_0_high_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_0_low_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_3.00_S_3.00_VI'),'sweepType'] = 'speed_0_int_visc_ratio'
-    ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_0_high_v_ratio'
-    ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_20_low_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_20_high_visc_ratio'
-    ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
+    ss.insert(idx+2, 'sweepType', ['visc_'+fluidAbbrev(row) for j,row in ss.iterrows()])
+    ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_W_high_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_W_low_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_3.00_S_3.00_VI'),'sweepType'] = 'speed_W_int_visc_ratio'
+    ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_W_high_v_ratio'
+    ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_M_low_visc_ratio'
+    ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_M_high_visc_ratio'
+#     ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
+    
+    # remove vertical data for speed sweeps with inaccurate vertical speeds
+    
+    for key in k[k.str.startswith('vert_')]:
+        ss.loc[(ss.sweepType.str.startswith('speed'))&(ss.date<211000), key] = np.nan
     
     if diag:
         printStillsKeys(ss)
     return ss,u
 
-def plainTypes(sslap:pd.DataFrame) -> pd.DataFrame:
+def plainTypes(sslap:pd.DataFrame, incSweep:bool=2, abbrev:bool=False) -> pd.DataFrame:
     '''convert types to cleaner form for plot legends'''
-    sslap.loc[sslap.sweepType=='speed_20', 'sweepType'] = 'speed sweep, mineral oil'
-    sslap.loc[sslap.sweepType=='visc_0', 'sweepType'] = 'visc sweep, water/Lap'
-    sslap.loc[sslap.sweepType=='visc_PEG', 'sweepType'] = 'visc sweep, PEGDA'
-    sslap.loc[sslap.sweepType=='speed_0', 'sweepType'] = 'speed sweep, water/Lap'
-    sslap.loc[sslap.ink_type=='PDMS_3_mineral_25', 'ink_type'] = 'PDMS/mineral oil'
-    sslap.loc[sslap.ink_type=='PDMS_3_silicone_25', 'ink_type'] = 'PDMS/silicone oil'
-    sslap.loc[sslap.ink_type=='mineral oil_Span 20', 'ink_type'] = 'mineral oil/Span'
-    sslap.loc[sslap.ink_type=='PEGDA_40', 'ink_type'] = 'PEGDA'
-    sslap.loc[sslap.ink_type=='water', 'ink_type'] = 'water/Lap'
-    sslap.loc[sslap.sweepType=='speed_20_low_visc_ratio', 'sweepType'] = 'mineral oil, low $\eta_i/\eta_s$'
-    sslap.loc[sslap.sweepType=='speed_20_high_visc_ratio', 'sweepType'] = 'mineral oil, high $\eta_i/\eta_s$'
-    sslap.loc[sslap.sweepType=='speed_0_high_visc_ratio', 'sweepType'] = 'water/Laponite, high $\eta_i/\eta_s$'
-    sslap.loc[sslap.sweepType=='speed_0_low_visc_ratio', 'sweepType'] = 'water/Laponite, low $\eta_i/\eta_s$'
-    sslap.loc[sslap.sweepType=='speed_0_int_visc_ratio', 'sweepType'] = 'water/Laponite, med $\eta_i/\eta_s$'
+    if incSweep==2:
+        vsweep = '$v$ sweep, '
+        etasweep = '$\eta$ sweep, '
+    elif incSweep==1:
+        vsweep = '$v$, '
+        etasweep = '$\eta$, '
+    else:
+        vsweep = ''
+        etasweep = ''
+    if not abbrev:
+        waterlap = 'water/Lap'
+        mo = 'mineral oil'
+        peg = 'PEGDA'
+    else:
+        waterlap = 'water'
+        mo = 'MO'
+        peg = 'PEG'
+        
+    
+    sslap.loc[sslap.sweepType=='speed_M', 'sweepType'] = vsweep + mo
+    sslap.loc[sslap.sweepType=='visc_W', 'sweepType'] = etasweep + waterlap
+    sslap.loc[sslap.sweepType=='visc_W_high_v_ratio', 'sweepType'] = etasweep + waterlap + ', high $v_i/v_s$'
+    sslap.loc[sslap.sweepType=='visc_M', 'sweepType'] = etasweep + mo
+    sslap.loc[sslap.sweepType=='visc_PEG', 'sweepType'] = etasweep + peg
+    sslap.loc[sslap.sweepType=='speed_W', 'sweepType'] = vsweep + waterlap
+    sslap.loc[sslap.sweepType=='speed_M_low_visc_ratio', 'sweepType'] = vsweep + mo+ ', low $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_M_high_visc_ratio', 'sweepType'] = vsweep + mo+', high $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_W_high_visc_ratio', 'sweepType'] = vsweep + waterlap + ', high $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_W_low_visc_ratio', 'sweepType'] = vsweep + waterlap + ', low $\eta_i/\eta_s$'
+    sslap.loc[sslap.sweepType=='speed_W_int_visc_ratio', 'sweepType'] = vsweep + waterlap + ', med $\eta_i/\eta_s$'
+    for s in ['sweepType', 'ink_type']:
+        if s=='sweepType':
+            sap = etasweep + ''
+        else:
+            sap = ''
+        if not abbrev:
+            sslap.loc[sslap.ink_type=='PDMS_3_mineral_25',s] = sap+'PDMS/mineral oil'
+            sslap.loc[sslap.ink_type=='PDMS_3_silicone_25', s] = sap+'PDMS/silicone oil'
+            sslap.loc[sslap.ink_type=='mineral oil_Span 20', s] = sap+'mineral oil/Span'
+            sslap.loc[sslap.ink_type=='PEGDA_40', s] = sap+'PEGDA'
+        else:
+            sslap.loc[sslap.ink_type=='PDMS_3_mineral_25',s] = sap+'PDMS/MO'
+            sslap.loc[sslap.ink_type=='PDMS_3_silicone_25', s] = sap+'PDMS/SO'
+            sslap.loc[sslap.ink_type=='mineral oil_Span 20', s] = sap+'MO/Span'
+            sslap.loc[sslap.ink_type=='PEGDA_40', s] = sap+'PEG'
+
 
 
 def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
