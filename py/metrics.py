@@ -822,6 +822,100 @@ def fluidAbbrev(row:pd.Series) -> str:
         return 'PS'
     elif it=='PEGDA_40':
         return 'PEG'
+    
+def indVarSymbol(var:str, fluid:str, commas:bool=True) -> str:
+    '''get the symbol for an independent variable, eg. dnorm, and its fluid, e.g ink'''
+    if commas:
+        com = ','
+    else:
+        com = '.'
+    if var=='visc' or var=='visc0':
+        return '$\eta_{'+fluid+'}$'
+    elif var=='tau0':
+        return '$\tau_{y'+com+fluid+'}$'
+    elif var=='dPR':
+        return '$d_{PR'+com+fluid+'}$'
+    elif var=='dnorm':
+        return '$\overline{d_{PR'+com+fluid+'}}$'
+    elif var=='dnormInv':
+        return '$1/\overline{d_{PR'+com+fluid+'}}$'
+    elif var=='rate':
+        return '$\dot{\gamma}_{'+fluid+'}$'
+    else:
+        if var.endswith('Inv'):
+            varsymbol = '1/'+var[:-3]
+        else:
+            varsymbol = var
+        return '$'+varsymbol+'_{'+fluid+'}$'
+    
+def varSymbol(s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
+    '''get a symbolic representation of the variable'''
+    if s.startswith('xs_'):
+        varlist = {'xs_aspect':'XS height/width'
+                   , 'xs_xshift':'XS horiz shift/width'
+                   , 'xs_yshift':'XS vertical shift/height'
+                   , 'xs_area':'XS area'
+                   , 'xs_areaN':'XS area/intended'
+                   , 'xs_wN':'XS width/intended'
+                   , 'xs_hN':'XS height/intended'
+                   , 'xs_roughness':'XS roughness'}
+    elif s.startswith('vert_'):
+        varlist = {'vert_wN':'vert bounding box width/intended'
+                , 'vert_hN':'vert length/intended'
+                   , 'vert_vN':'vert bounding box volume/intended'
+               , 'vert_vintegral':'vert integrated volume'
+               , 'vert_viN':'vert integrated volume/intended'
+               , 'vert_vleak':'vert leak volume'
+               , 'vert_vleakN':'vert leak volume/line volume'
+               , 'vert_roughness':'vert roughness'
+               , 'vert_meanTN':'vert diameter/intended'
+                   , 'vert_stdevTN':'vert stdev(diameter)/diameter'
+               , 'vert_minmaxTN':'vert diameter variation/diameter'}
+    elif s.startswith('horiz_') or s=='vHorizEst':
+        varlist = {'horiz_segments':'horiz segments'
+               , 'horiz_segments_manual':'horiz segments'
+               , 'horiz_maxlenN':'horiz droplet length/intended'
+               , 'horiz_totlenN':'horiz total length/intended'
+               , 'horiz_vN':'horiz volume/intended'
+               , 'horiz_roughness':'horiz roughness'
+               , 'horiz_meanTN':'horiz height/intended'
+               , 'horiz_stdevTN':'horiz stdev(height)/intended'
+               , 'horiz_minmaxTN':'horiz height variation/diameter'
+               , 'vHorizEst':'horiz volume'}
+    elif s.startswith('proj'):
+        varlist = {'projectionN':'projection into bath/intended'
+                   , 'projShiftN':'$x$ shift of lowest point/$d_{est}$'}
+    elif s.startswith('vertDisp'):
+        varlist = {'vertDispBotN':'downstream $z_{bottom}/d_{est}$'
+                  ,'vertDispBotN':'downstream $z_{middle}/d_{est}$'
+                  ,'vertDispBotN':'downstream $z_{top}/d_{est}$'}
+    elif s.endswith('Ratio') or s.endswith('Prod'):
+        if s.endswith('Ratio'):
+            symb = '/'
+            var1 = s[:-5]
+        else:
+            symb = r'\times '
+            var1 = s[:-4]
+        return indVarSymbol(var1, 'ink', commas=commas)[:-1]+symb+indVarSymbol(var1, 'sup', commas=commas)[1:]
+    elif s=='int_Ca':
+        return r'$Ca=v_{ink}\eta_{sup}/\sigma$'
+    elif s.startswith('ink_') or s.startswith('sup_'):
+        fluid = s[:3]
+        var = s[4:]
+        return indVarSymbol(var, fluid, commas=commas)
+    else:
+        if s=='pressureCh0':
+            return 'Extrusion pressure (Pa)'
+        else:
+            return s
+    
+    if lineType:
+        return varlist[s]
+    else:
+        s1 = varlist[s]
+        typ = re.split('_', s)[0]
+        s1 = s1[len(typ)+1:]
+        return s1
 
 def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.DataFrame:
     '''import the stills summary and convert sweep types, capillary numbers'''
@@ -855,7 +949,7 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
         printStillsKeys(ss)
     return ss,u
 
-def plainTypes(sslap:pd.DataFrame, incSweep:bool=2, abbrev:bool=False) -> pd.DataFrame:
+def plainTypes(sslap:pd.DataFrame, incSweep:int=1, abbrev:bool=True) -> pd.DataFrame:
     '''convert types to cleaner form for plot legends'''
     if incSweep==2:
         vsweep = '$v$ sweep, '

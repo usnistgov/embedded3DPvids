@@ -26,6 +26,7 @@ sys.path.append(currentdir)
 import regression as rg
 import metrics as me
 from config import cfg
+from figureLabels import *
 
 
 
@@ -155,12 +156,12 @@ def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
             if ddx==0:
                 xl0 = list(s3.unique())
                 return onePointSpacing(xl0)
-            xl = [10**i for i in np.arange(xmin-ddx*0.5,xmax+ddx*0.51,ddx)]
+            xl = [10**i for i in np.arange(xmin-ddx*0.5,xmax+ddx,ddx)]
         else:
             xmin = s3.min()
             xmax = s3.max()
             ddx = (xmax-xmin)*dx
-            xl = list(np.arange(xmin-ddx*0.5,xmax+ddx*0.51,ddx))
+            xl = list(np.arange(xmin-ddx*0.5,xmax+ddx,ddx))
     elif dx>=1:
         xl = [s3.min()-1, s3.max()+1]
     else:
@@ -265,18 +266,24 @@ def setUpAxes(xvar:str, yvar:str, **kwargs):
     axisLabels(xvar, yvar, **kwargs)
     return fig, ax, kwargs
 
-def axisLabels(xvar:str, yvar:str, **kwargs) -> None:
+def axisLabels(xvar:str, yvar:str, axisSymbols:bool=True, set_xlabel:bool=True, set_ylabel:bool=True, **kwargs) -> None:
     '''get the labels for the x and y axis and label the axis'''
-    xlabel = xvar
-    ylabel = yvar
+    if axisSymbols:
+        xlabel = me.varSymbol(xvar, **kwargs)
+        ylabel = me.varSymbol(yvar, **kwargs)
+    else:
+        xlabel = xvar
+        ylabel = yvar
     if 'units' in kwargs:
         units = kwargs['units']
         if xvar in units and len(units[xvar])>0:
             xlabel = xlabel + f' ({units[xvar]})'
         if yvar in units and len(units[yvar])>0:
             ylabel = ylabel + f' ({units[yvar]})'
-    kwargs['ax'].set_xlabel(xlabel)
-    kwargs['ax'].set_ylabel(ylabel)
+    if set_xlabel:
+        kwargs['ax'].set_xlabel(xlabel)
+    if set_ylabel:
+        kwargs['ax'].set_ylabel(ylabel)
     return
 
 def setLog(ax, logx:bool, logy:bool) -> None:
@@ -286,24 +293,26 @@ def setLog(ax, logx:bool, logy:bool) -> None:
     if logy:
         ax.set_yscale('log')
         
-def getMarker(i:int, color) -> dict:
+def getMarker(i:int, color, empty:bool=False, **kwargs) -> dict:
     '''get marker parameters for an index'''
     varargs = {}
-    if i==1:
+    if not empty:
+        mlist = ['o','o','v','s','^','X','D','v']
+    else:
+        mlist = ['o','v','s','^','X','D','v']
+    varargs['marker'] = mlist[i%len(mlist)]
+    if i==1 or empty:
 #         varargs['marker'] = ''
         varargs['facecolors']='none'
         varargs['edgecolors']=color
         varargs['color']=color 
     else:
-        mlist = ['o','o','v','s','^','X','D','v']
-        varargs['marker'] = mlist[i%len(mlist)]
         varargs['color']=color  
         varargs['edgecolors']='none'
         varargs['facecolors']=color
-
     return varargs
         
-def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict:
+def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, empty:bool=False, **kwargs) -> dict:
     '''get the color for this series and put it in the plot args dictionary. i should be between 0 and 1, indicating color'''
     if gradColor==0 or gradColor==2:
 
@@ -328,16 +337,16 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, **kwargs) -> dict
                 color = 'black'
         if 'marker' in kwargs:
             if kwargs['marker']==1:
-                varargs = getMarker(1, color)
+                varargs = getMarker(1, color, empty)
             else:
                 varargs['marker'] = kwargs['marker']
         elif not 'edgecolors' in kwargs:
-            varargs = getMarker(i, color)
+            varargs = getMarker(i, color, empty)
         for sname in ['facecolors', 'color', 'edgecolors']:
             if sname in kwargs:
                 varargs[sname] = kwargs[sname]
             else:
-                if ((sname=='edgecolors' and not i==1) or (i==1 and sname=='facecolors'))  and not ('marker' in kwargs and kwargs['marker']==1):
+                if ((sname=='edgecolors' and not (i==1 or empty)) or ((i==1 or empty) and sname=='facecolors'))  and not ('marker' in kwargs and kwargs['marker']==1):
                     varargs[sname] = 'none'
                 else:
                     varargs[sname]=color  
@@ -496,40 +505,40 @@ def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
     ax.plot(xlist, ylist, color='black')
     ax.text(0.9, 0.9, 'r$^2$ = {:0.2}'.format(reg['r2']), transform=ax.transAxes)
     
-def subFigureLabel(ax, label:str, inside:bool=True) -> None:
-    '''add a subfigure label to the top left corner'''
-    if inside:
-        x=0.05
-        y = 0.95
-        ha = 'left'
-        va = 'top'
-    else:
-        x = -0.05
-        y = 1.05
-        ha = 'right'
-        va = 'bottom'
-    ax.text(x, y, label, fontsize=12, transform=ax.transAxes, horizontalalignment=ha, verticalalignment=va)
+# def subFigureLabel(ax, label:str, inside:bool=True) -> None:
+#     '''add a subfigure label to the top left corner'''
+#     if inside:
+#         x=0.05
+#         y = 0.95
+#         ha = 'left'
+#         va = 'top'
+#     else:
+#         x = -0.05
+#         y = 1.05
+#         ha = 'right'
+#         va = 'bottom'
+#     ax.text(x, y, label, fontsize=12, transform=ax.transAxes, horizontalalignment=ha, verticalalignment=va)
     
-def subFigureLabels(axs, horiz:bool=True, inside:bool=True) -> None:
-    '''add subfigure labels to all axes'''
-    alphabet_string = string.ascii_uppercase
-    alphabet_list = list(alphabet_string)
-    if len(axs.shape)==1:
-        # single row
-        for ax in axs:
-            subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
-    else:
-        if horiz:
-            # 2d array
-            for axrow in axs:
-                for ax in axrow:
-                    subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
-        else:
-            w = len(axs[0])
-            h = len(axs)
-            for i in range(w):
-                for j in range(h):
-                    subFigureLabel(axs[j][i], alphabet_list.pop(0), inside=inside)
+# def subFigureLabels(axs, horiz:bool=True, inside:bool=True) -> None:
+#     '''add subfigure labels to all axes'''
+#     alphabet_string = string.ascii_uppercase
+#     alphabet_list = list(alphabet_string)
+#     if len(axs.shape)==1:
+#         # single row
+#         for ax in axs:
+#             subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
+#     else:
+#         if horiz:
+#             # 2d array
+#             for axrow in axs:
+#                 for ax in axrow:
+#                     subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
+#         else:
+#             w = len(axs[0])
+#             h = len(axs)
+#             for i in range(w):
+#                 for j in range(h):
+#                     subFigureLabel(axs[j][i], alphabet_list.pop(0), inside=inside)
     
     
 def calcTicks(lim:Tuple[float]):
@@ -772,7 +781,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
 
             # define x variables
             if k==0:
-                varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
+                varlist = ['Ca', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
             else:
                 varlist = ['Re', 'Bm', 'visc0']
 
@@ -787,10 +796,8 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
             # go through each variable and get sup, ink, product, ratio
             for j, s2 in enumerate(varlist):
                 df = []
-                if s2=='dPR':
-                    s2i = 'd_{PR'
-                elif s2=='dnorm':
-                    s2i = 'd_{Est}/d_{PR'
+                if s2=='dnorm':
+                    s2i = '\overline{d_{PR'
                 elif s2=='visc0':
                     s2i = '\eta'
                 else:
@@ -815,22 +822,26 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 for s1 in ['ink_', 'sup_']:
                     xcol = f'{s1}{s2}_log'
                     reg = regRow(ssi, xcol, ycol)
-                    if s2i[-4:]=='_{PR':
-                        reg['title']='$'+s2i+' '+s1[:-1]+'}$'
-                    else:
-                        reg['title'] = '$'+s2i+'_{'+s1[:-1]+'}$'
+                    reg['title'] = me.varSymbol(s1+s2, commas=False)
+#                     if s2i[-4:]=='_{PR':
+#                         reg['title']='$'+s2i+' '+s1[:-1]+'}}$'
+#                     else:
+#                         reg['title'] = '$'+s2i+'_{'+s1[:-1]+'}$'
                     df.append(reg)
 
                 # products and ratios
                 for s1 in ['Prod', 'Ratio']:
                     xcol = f'{s2}{s1}_log'
                     reg = regRow(ssi, xcol, ycol)
-                    op = '' if s1=='Prod' else '/'
-                    if s2i[-4:]=='_{PR':
-                        s2ii = s2i+' '
-                    else:
-                        s2ii = s2i+'_{'
-                    reg['title'] = '$'+s2ii+'ink}'+op+s2ii+'sup}$'
+#                     op = '' if s1=='Prod' else '/'
+#                     if s2i[-4:]=='_{PR':
+#                         s2ii = s2i+' '
+#                         close = '}'
+#                     else:
+#                         s2ii = s2i+'_{'
+#                         close = ''
+#                     reg['title'] = '$'+s2ii+'ink}'+close+op+s2ii+'sup}'+close+'$'
+                    reg['title'] = me.varSymbol(s2+s1, commas=False)
                     df.append(reg)
                 df = pd.DataFrame(df)
 

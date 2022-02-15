@@ -290,6 +290,30 @@ class vidData:
                 imshow(self.line_image, scale=4, title=os.path.basename(self.folder))
             pass
         
+    def showFrames(self, tlist:List[float], crop:dict={'x0':0, 'xf':-1, 'y0':0, 'yf':-1}, figw:float=6.5) -> None:
+        '''show the list of frames.'''
+        n = len(tlist)
+        
+        frames = [vm.white_balance(self.getFrameAtTime(t)[crop['y0']:crop['yf'],crop['x0']:crop['xf']]) for t in tlist]
+        
+        h = frames[0].shape[0]
+        w = frames[0].shape[1]
+        fig,axs = plt.subplots(1,n, figsize=(figw, figw*h/w))
+        if n==1:
+            axs = [axs]
+        for i,im in enumerate(frames):
+            if len(im.shape)>2:
+                axs[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
+            else:
+                axs[i].imshow(im, cmap='Greys')
+            axs[i].set_title('{:.3} s'.format(tlist[i]-tlist[0]), fontsize=8)
+            axs[i].axis('off')
+        fig.tight_layout()
+        plt.subplots_adjust(wspace=0.05, hspace=0)
+        plt.close()
+        return fig
+        
+        
     def thresholdNozzle(self, mode) -> None:
         '''get a nozzle frame and convert it into an edge image'''
         self.openStream()
