@@ -41,7 +41,19 @@ Friedrich, L., & Seppala, J.E. (2021), Python tools for image analysis of embedd
 
 # References
 
+This code is described in the following paper:
+- Friedrich, L.M., & Seppala, J.E. (2022) Suppression of filament defects in embedded 3D printing, submitted for publication
 
+The dataset analyzed by this code is stored at:
+- Friedrich, L.M., & Seppala, J.E. (2022) Suppression of filament defects in embedded 3D printing, Version 1.0.0, National Institute of Standards and Technology
+
+---
+
+# Usage
+
+For full functionality, you will need to make the following files:
+
+- Copy configs/config_template.yml and call it configs/config.yml. Change the path names to the paths to your data.
 
 ---
 
@@ -175,5 +187,28 @@ The files included in this publication use the following hierarchy:
 ---
 
 # METHODOLOGICAL INFORMATION
+
+
+## Experiments:
+
+Use the GUI at https://github.com/usnistgov/ShopbotPyQt/ to generate files (examples in parentheses) during printing of single lines. For each print, the GUI exports:
+
+- a video of the printing process from a color Basler camera (singleLinesNoZig_Basler camera_I_2.25_S_3.50_210727_104032.avi)
+- a table of pressure over time (singleLinesNoZig_Fluigent_I_2.25_S_3.50_210727_104032.csv)
+- a table of programmed speeds (singleLinesNoZig_speeds_I_2.25_S_3.50_210727_104032.csv)
+- a group of images from the Basler camera, taken after the print is done (singleLinesPics6_Basler camera_I_2.25_S_3.50_210727_104247.png)
+- (optional) other images
+
+
+## Analysis:
+
+1. Use fileHandling.ipynb to sort and label the files into folders by sample name, run name
+2. Use stitching.ipynb to stitch images together and archive the raw data
+3. Use singleLineMetrics.ipynb to extract values from stitched images
+4. Use vidSummaries.ipynb to summarize stills values from all runs
+5. Use vidanalysis.ipynb to extract and summarize values from videos
+6. Use vidplots.ipynb to plot stills together
+7. Use vidSummaries_horiz.ipynb, vidSummaries_horizvid.ipynb, vidSummaries_ST.ipynb, vidSummaries_vert.ipynb, and vidSummaries_xs.ipynb to plot summary data
+8. Use vidSummaries_stats.ipynb to create tables of statistical tests
 
 
