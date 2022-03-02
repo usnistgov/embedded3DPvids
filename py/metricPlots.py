@@ -45,7 +45,7 @@ matplotlib.rc('font', size='10.0')
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
+__license__ = "NIST"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
@@ -55,9 +55,9 @@ __status__ = "Development"
 #-------------------------------------------------------------
 
 def tossBigSE(df:pd.DataFrame, column:str, quantile:float=0.9):
-    '''toss big standard errors from the list'''
+    '''toss rows with big standard errors from the list'''
     if not column[-3:]=='_SE':
-        column = column+'_SE'
+        column = f'{column}_SE'
     return df[df[column]<df[column].quantile(quantile)]
 
 def cubehelix1(val:float):
@@ -85,6 +85,7 @@ def adjust_saturation(color, amount=0.5):
     return colorsys.hls_to_rgb(c[0], c[1], max(0, min(1, amount * c[1])))
 
 def roundToOrder(val:float):
+    '''round the value to 2 sig figs'''
     if abs(val)<10**-14:
         return 0
     else:
@@ -95,13 +96,14 @@ def simplifyType(s:Union[str, pd.DataFrame]):
     if type(s) is str:
         # just take first 2 elements
         spl = re.split('_', s)
-        return spl[0]+'_'+spl[1]
+        return f'{spl[0]}_{spl[1]}'
     else:
         # convert all strings in sweepType column
         s.loc[:,'sweepType'] = [simplifyType(si) for si in s['sweepType']]
 
 
 def pooledSE(df:pd.DataFrame, var:str) -> None:
+    '''calculate the pooled standard error for a group of values, each with their own standard error'''
     if 'xs' in var:
         n = 4
     elif 'vert' in var:
@@ -109,7 +111,7 @@ def pooledSE(df:pd.DataFrame, var:str) -> None:
     elif 'horiz' in var:
         n = 3
     mean = df[var].mean()
-    sevar = var+'_SE'
+    sevar = f'{var}_SE'
     if len(df)>1:
         if sevar in df:
             a = np.sum([n*(np.sqrt(n)*row[sevar])**2 for i,row in df.iterrows()])/(n*len(df))
@@ -136,7 +138,10 @@ def onePointSpacing(xl0:list) -> list:
     return xl
 
 def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
-    '''produce an evenly spaced list'''
+    '''produce an evenly spaced list
+    xvar is the x variable
+    logx True to evenly space on a log scale
+    dx is the spacing between points, as a fraction of the total range'''
     s3 = ss2[xvar].dropna()
     if logx:
         s3 = s3[s3>0]
@@ -172,6 +177,9 @@ def evenlySpace(ss2:pd.DataFrame, xvar:str, logx:bool, dx:float) -> list:
 
 def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool, dx:float, dy:float, rigid:bool=False) -> pd.DataFrame:
     '''convert the data to an evenly spaced grid. 
+    xvar, yvar, zvar are variable names (columns in ss2)
+    logx and logy True to space variables on log scale
+    dx and dy are spacing as a fraction of the total range
     rigid=True means that we use the center of the square as the x,y value and use no error. This is for color maps.'''
     xl = evenlySpace(ss2, xvar, logx, dx)
     if len(xl)==0:
@@ -214,7 +222,10 @@ def toGrid(ss2:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool,
     return df2
 
 def toGroups(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool, dx:float, dy:float) -> pd.DataFrame:
-    '''group the data into groups of equal size and get errors'''
+    '''group the data into groups of equal size and get errors
+    xvar, yvar, zvar are variable names (columns in ss2)
+    logx and logy True to space variables on log scale
+    dx and dy are spacing as a fraction of the total range'''
     if not ((dx==1) or (dy==1)):
         # x or y need to be averaged for groups to work. if both are split, use a grid
         return toGrid(ss, xvar, yvar, zvar, logx, logy, dx, dy)
@@ -249,7 +260,7 @@ def toGroups(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool
 
 
 def setUpAxes(xvar:str, yvar:str, **kwargs):
-    '''get figure and axes'''
+    '''get figure and axes. xvar and yvar are column names for x and y variables'''
     if 'fig' in kwargs:
         fig = kwargs['fig']
     else:
@@ -267,7 +278,11 @@ def setUpAxes(xvar:str, yvar:str, **kwargs):
     return fig, ax, kwargs
 
 def axisLabels(xvar:str, yvar:str, axisSymbols:bool=True, set_xlabel:bool=True, set_ylabel:bool=True, **kwargs) -> None:
-    '''get the labels for the x and y axis and label the axis'''
+    '''get the labels for the x and y axis and label the axis
+    xvar and yvar are variable names
+    axisSymbols=True to use symbols for axis labels
+    set_xlabel and set_ylabel true to label the axes
+    '''
     if axisSymbols:
         xlabel = me.varSymbol(xvar, **kwargs)
         ylabel = me.varSymbol(yvar, **kwargs)
@@ -312,8 +327,14 @@ def getMarker(i:int, color, empty:bool=False, **kwargs) -> dict:
         varargs['facecolors']=color
     return varargs
         
-def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, empty:bool=False, **kwargs) -> dict:
-    '''get the color for this series and put it in the plot args dictionary. i should be between 0 and 1, indicating color'''
+def seriesColor(gradColor:int, cmapname:str, i:int, lst:List, empty:bool=False, **kwargs) -> dict:
+    '''get the color for this series and put it in the plot args dictionary. 
+    gradColor=1 to color by a gradient color, otherwise group by a variable and choose colors
+    cmapname is the colormap name, for matplotlib colormaps
+    i is the current index in lst
+    lst is a list
+    empty=True to leave the center of the marker empty
+    '''
     if gradColor==0 or gradColor==2:
 
         varargs = {}
@@ -358,7 +379,13 @@ def seriesColor(gradColor:bool, cmapname:str, i:int, lst:List, empty:bool=False,
     return varargs
         
 def plotSeries(df2:pd.DataFrame, gradColor:int, ax, cmapname:str, dx, dy, varargs:dict, lines:bool=False) :
-    '''df2 is already sorted into x,y,c where c is color'''
+    '''df2 is already sorted into x,y,c where c is color
+    gradColor=1 to use gradient coloring as a function of c, otherwise color by group
+    ax is the axis to plot on
+    cmapname is the name of the colormap in matplotlib
+    dx and dy are the spacing between points, as a fraction of the total range
+    lines=True to plot connecting lines between points
+    '''
     if len(df2)==0:
         sc = ax.scatter(np.NaN, np.NaN, **varargs)
         return
@@ -395,11 +422,17 @@ def idealLines(**kwargs) -> None:
         kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
         
 def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, lines:bool=False, **kwargs):
-    '''scatter plot. 
-    colorBy is the variable to color by. gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
+    '''scatter plot of measured values. 
     xvar is the x variable name, yvar is the y variable name. 
-    logx=True to plot x axis on log scale. logy=True to plot y on log scale.
-    dx>0 to group points by x and take error. otherwise, plot everything. dx=1 to average all points together'''
+    colorBy is the variable to color by. 
+    logx, logy to plot on a log scale
+    gradColor 0 means color by discrete values of colorBy, gradColor 1 means means to use a gradient color scheme by values of colorBy, gradColor 2 means all one color, one type of marker. gradColor 0 with 'color' in kwargs means make it all one color, but change markers.
+    dx>0 to group points by x and take error. otherwise, plot everything. dx=1 to average all points together
+    cmapname is the name of the colormap in matplotlib
+    plotReg to plot linear regression on top of the plot
+    grid=True to group the points into equal spacings. grid=False to group the points into equal numbers of points
+    lines=True to plot connecting lines between points
+    '''
 
     plt.rc('font', size=fontsize) 
     
@@ -440,8 +473,10 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
 
         if len(ss2)>0:
             if grid:
+                # evenly space groups
                 df2 = toGrid(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
             else:
+                # even population in groups
                 df2 = toGroups(ss2, xvar, yvar, zvar, logx, logy, dx, dy)
             sc = plotSeries(df2, gradColor, ax, cmapname, dx, dy, varargs, lines=lines)
       
@@ -477,6 +512,7 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     return fig,ax
 
 def setSquare(ax):
+    '''set the aspect ratio of the axis to square'''
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
     
 def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
@@ -504,41 +540,6 @@ def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
     ylist = [ylist[i] for i, y in enumerate(ylist) if ((y>ylim[0])&(y<ylim[1]))]
     ax.plot(xlist, ylist, color='black')
     ax.text(0.9, 0.9, 'r$^2$ = {:0.2}'.format(reg['r2']), transform=ax.transAxes)
-    
-# def subFigureLabel(ax, label:str, inside:bool=True) -> None:
-#     '''add a subfigure label to the top left corner'''
-#     if inside:
-#         x=0.05
-#         y = 0.95
-#         ha = 'left'
-#         va = 'top'
-#     else:
-#         x = -0.05
-#         y = 1.05
-#         ha = 'right'
-#         va = 'bottom'
-#     ax.text(x, y, label, fontsize=12, transform=ax.transAxes, horizontalalignment=ha, verticalalignment=va)
-    
-# def subFigureLabels(axs, horiz:bool=True, inside:bool=True) -> None:
-#     '''add subfigure labels to all axes'''
-#     alphabet_string = string.ascii_uppercase
-#     alphabet_list = list(alphabet_string)
-#     if len(axs.shape)==1:
-#         # single row
-#         for ax in axs:
-#             subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
-#     else:
-#         if horiz:
-#             # 2d array
-#             for axrow in axs:
-#                 for ax in axrow:
-#                     subFigureLabel(ax, alphabet_list.pop(0), inside=inside)
-#         else:
-#             w = len(axs[0])
-#             h = len(axs)
-#             for i in range(w):
-#                 for j in range(h):
-#                     subFigureLabel(axs[j][i], alphabet_list.pop(0), inside=inside)
     
     
 def calcTicks(lim:Tuple[float]):
@@ -632,7 +633,7 @@ def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **
 
 
 def contourSS(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool=False, logy:bool=False):
-    '''contour plot with interpolation'''
+    '''contour plot with interpolation. zvar is color variable'''
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ss1 = ss.copy()
@@ -690,7 +691,13 @@ def getMeshTicks(piv:pd.pivot_table, x:bool, log:bool) -> Tuple[list,list]:
 
 
 def colorMeshSS(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool=False, logy:bool=False, dx:float=0.1, dy:float=0.1, cmapname:str='coolwarm', **kwargs):
-    '''contour plot with no interpolation'''
+    '''contour plot with no interpolation
+    xvar is the x variable name, yvar is the y variable name. 
+    zvar is the variable to color by. 
+    logx, logy to plot on a log scale
+    dx>0 to group points by x and take error. otherwise, plot everything. dx=1 to average all points together
+    cmapname is the name of the colormap in matplotlib
+    '''
     
     if not (xvar in ss and yvar in ss):
         raise NameError('Variable name is not in table')
@@ -748,6 +755,16 @@ def regRow(ssi:pd.DataFrame, xcol:str, ycol:str) -> dict:
     return reg
 
 def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', package:str='pgfplot', **kwargs) -> List[pd.DataFrame]:
+    '''get a table of linear regression and Spearman rank correlation values, for common scaling variables
+    yvar is the dependent variable to measure
+    logy to scale the yvar on a log scale
+    printOut to print results
+    export to export results to file
+    exportFolder is the folder to export to
+    tag is any other string you want to put in the filename
+    package='tabular' to use latex tabular formatting, 'pgfplot' to use csv formatting imported into latex using pgfplot
+    
+    '''
     ss0 = ss.copy()
     ss0.dropna(subset=[yvar], inplace=True)
     ss0 = ss0[ss0.ink_days==1]
@@ -756,12 +773,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
     ssca1 = ssca1[ssca1.sigma>0]
     sslap = ss0.copy()
     sslap = sslap[sslap.ink_base=='water']
-    
-    # add interfacial Ca estimates for water
-#     sslap.loc[sslap.sigma==0,'sigma'] = 2
-#     sslap['int_Ca'] = sslap['ink_v']*sslap['sup_visc0']/sslap['sigma']
-#     sslap['sup_Ca'] = sslap['sup_v']*sslap['sup_visc0']/sslap['sigma']
-#     sslap['ink_Ca'] = sslap['ink_v']*sslap['ink_visc0']/sslap['sigma']
+  
     dflist = []
     for k, ssi in enumerate([ssca1, sslap]):
         dfall = []

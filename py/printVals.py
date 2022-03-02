@@ -96,14 +96,15 @@ class fluidVals:
     def metarow(self, tag:s='') -> Tuple[dict,dict]:
         '''row containing metadata'''
         mlist = ['shortname', 'days', 'rheModifier', 'surfactant' ,'dye', 'var', 'val', 'base', 'type']
-        meta = [[tag+i,getattr(self,i)] for i in mlist]
-        munits = [[tag+i, ''] for i in mlist]
-        rhelist = ['tau0', 'eta0']
-        rhe = [[tag+i,getattr(self,i)] for i in rhelist]
-        rheunits = [[tag+i, self.rheUnits[i]] for i in rhelist]
+        ti = f'{tag}{i}'
+        meta = [[ti,getattr(self,i)] for i in mlist]  # metadata
+        munits = [[ti, ''] for i in mlist]            # metadata units
+        rhelist = ['tau0', 'eta0']             
+        rhe = [[ti,getattr(self,i)] for i in rhelist]        # rheology data
+        rheunits = [[ti, self.rheUnits[i]] for i in rhelist] # rheology units
         clist = self.constUnits.keys()
-        const = [[tag+i,getattr(self,i)] for i in clist]
-        constunits = [[tag+i, self.constUnits[i]] for i in clist]
+        const = [[ti,getattr(self,i)] for i in clist]           # constants data
+        constunits = [[ti, self.constUnits[i]] for i in clist]  # constants units
         out = dict(meta+rhe+const)
         units = dict(munits+rheunits+constunits)
         return out,units
@@ -123,7 +124,7 @@ class fluidVals:
             print(entry)
             logging.error(f'Multiple rheology fits found for fluid {self.shortname}')
         entry = entry.iloc[0]
-        self.tau0 = entry['y2_tau0'] # Pa
+        self.tau0 = entry['y2_tau0'] # Pa, use the 2% offset criterion
         self.k = entry['y2_k'] 
         self.n = entry['y2_n']
         self.eta0 = entry['y2_eta0'] # these values are for Pa.s, vs. frequency in 1/s
@@ -166,7 +167,7 @@ class fluidVals:
         self.visc0 = self.visc(self.rate)                       # Pa*s
         self.CaInv = sigma/(self.visc0*self.v)                  # capillary number ^-1
         self.Re = 10**-3*(self.density*self.v*diam)/(self.visc0) # reynold's number
-        self.WeInv = 10**3*sigma/(self.density*self.v**2*diam) # weber number ^-1
+        self.WeInv = 10**3*sigma/(self.density*self.v**2*diam)  # weber number ^-1
         self.OhInv = np.sqrt(self.WeInv)*self.Re                # Ohnesorge number^-1
         self.dPR = sigma/self.tau0                              # characteristic diameter for Plateau rayleigh instability in mm
         self.Bm = self.tau0*diam/(self.visc0*self.v)            # Bingham number
@@ -223,7 +224,7 @@ class printVals:
         self.vRatio = self.ink.v/self.sup.v 
         self.dEst = self.di*np.sqrt(self.vRatio)
             # expected filament diameter in mm
-        self.ink.dnormInv = self.ink.dPR/self.dEst
+        self.ink.dnormInv = self.ink.dPR/self.dEst  # keep this inverted to avoid divide by 0 problems
         self.sup.dnormInv = self.sup.dPR/self.dEst
         self.ReRatio = self.ink.Re/self.sup.Re
         l = 12.5 # mm, depth of nozzle in bath
@@ -248,7 +249,7 @@ class printVals:
         pvals = dict(meta+const)
         punits = dict(munits+cunits)
         for i,p in self.targetPressures.items():
-            pvals[f'pressureCh{i}']=p*100
+            pvals[f'pressureCh{i}']=p*100   # convert from mbar to Pa
             punits[f'pressureCh{i}']='Pa'
         inkvals, inkunits = self.ink.metarow('ink_')
         supvals, supunits = self.sup.metarow('sup_')
@@ -266,7 +267,7 @@ class printVals:
         return base
     
     def tension(self) -> float:
-        '''estimate the surface tension'''
+        '''pull the surface tension from a table'''
         if not os.path.exists(cfg.path.sigmaTable):
             logging.error(f'No sigma table found: {cfg.path.sigmaTable}')
             return
@@ -493,7 +494,7 @@ class printVals:
         self.initializeProgDims()
         for s,row in self.progDims.iterrows():
             if 'xs' in row['name']:
-                self.progDims.loc[s,'l']=15         # intended filament length
+                self.progDims.loc[s,'l']=15         # intended filament length in mm
             elif 'vert' in row['name']:
                 self.progDims.loc[s,'l']=15
             elif 'horiz' in row['name']:

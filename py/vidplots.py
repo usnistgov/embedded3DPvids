@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''Functions for plotting video and image data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
 
 # external packages
 import os, sys
@@ -37,7 +37,7 @@ matplotlib.rc('font', size='10.0')
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
+__license__ = "NIST"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
@@ -64,7 +64,8 @@ class folderPlots:
         self.plotsLists(**kwargs) 
         
     def plotsLists(self, vname:str='val', **kwargs):
-        '''plotsLists initializes gridOfPlots and comboPlots objects, creating the initial figure. vname=val for composition data. vname=v for speed data'''
+        '''plotsLists initializes variable names for gridOfPlots and comboPlots objects. 
+        vname=val for fluid composition data. vname=v for speed data'''
         self.pvlists = [printVals(f) for f in self.flist]
 #         if not self.checkVals(**kwargs):
 #             raise ValueError(f'Inconsistent variables: {[f.bn for f in self.pvlists]}')
@@ -97,7 +98,7 @@ class folderPlots:
         return self
     
     def getBases(self) -> None:
-        '''get the list of materials bases to determine how many plots to make'''
+        '''get the list of materials bases (e.g. mineral oil) to determine how many plots to make'''
         self.bases = []
         for pv in self.pvlists:
             base = pv.base(self.xfluid, self.yfluid, vname=self.vname)
@@ -106,8 +107,8 @@ class folderPlots:
         return True
     
     def unqList(self, var:str) -> List:
-        '''get a list of unique values for each plot. var should be x or y'''
-        func = getattr(self, var+'func')
+        '''get a list of unique x or y variables for each plot. var should be x or y'''
+        func = getattr(self, f'{var}func')
         pvlist = self.pvlists
         split = re.split('\.', func)
         fluid = split[0]
@@ -148,11 +149,11 @@ class folderPlots:
         if xbase:
             xbase0 = getattr(self.pvlists[0], self.xfluid).base
         if xvar:
-            xvar0=getattr(self.pvlists[0], self.xfluid).var
+            xvar0 = getattr(self.pvlists[0], self.xfluid).var
         if ybase:
-            ybase0=getattr(self.pvlists[0], self.xfluid).base
+            ybase0 = getattr(self.pvlists[0], self.xfluid).base
         if yvar:
-            yvar0=getattr(self.pvlists[0], self.xfluid).var
+            yvar0 = getattr(self.pvlists[0], self.xfluid).var
         for pv in self.pvlists[1:]:
             if xbase:
                 xbase = getattr(pv, self.xfluid).base
@@ -313,7 +314,7 @@ def findPos(l:List, v:Any) -> Any:
     return p
     
 def vvplot(pv:printVals, cp:comboPlot) -> Tuple[float, float, float]:
-    '''find the position of the file in the plot'''
+    '''find the position of the file in the plot. x0, y0 is the position in the plot, in plot coordinates'''
     axnum = pv.ax
     x = pv.xval
     y = pv.yval
@@ -344,7 +345,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     s = s.replace('*', 'x')
     s = s.replace('/', 'div')
     s = s.replace(' ', '-')
-    return os.path.join(exportfolder, bn, label+'_'+bn+'_'+s)
+    return os.path.join(exportfolder, bn, f'{label}_{bn}_{s}')
 
 def exportIm(fn:str, fig) -> None:
     '''export an image. fn is a full path name, without the extension. fig is a matplotlib figure'''
@@ -355,7 +356,7 @@ def exportIm(fn:str, fig) -> None:
         os.mkdir(dire)
     for s in ['.svg', '.png']:
         fig.savefig(fn+s, bbox_inches='tight', dpi=300)
-    print('Exported ', fn)
+    logging.info(f'Exported {fn}')
     
 def parseTag(tag:str) -> dict:
     '''parse the tag into relevant names'''
@@ -442,14 +443,17 @@ def cropImage(im:np.array, crops:dict) -> np.array:
     return im
 
 def importAndCrop(folder:str, tag:str, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False, **kwargs) -> np.array:
-    '''import and crop an image from a folder, given a tag. crops can be in kwargs'''
+    '''import and crop an image from a folder, given a tag. crops can be in kwargs
+    whiteBalance=True to do auto white balancing
+    normalize=True to do auto brightness adjustment
+    removeBorders to remove the dark borders from the edges of the image, e.g. above the bath or the walls of the bath'''
     im = picFromFolder(folder, tag)
     if type(im) is list:
 #         logging.debug(f'Image missing: {folder}')
         if 'crops' in kwargs:
             crops = kwargs['crops']
             if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
-                return 255*np.ones((int(crops['yf']-crops['y0']), int(crops['xf']-crops['x0']), 3), dtype=np.uint8)
+                return 255*np.ones((int(crops['yf']-crops['y0']), int(crops['xf']-crops['x0']), 3), dtype=np.uint8)  # no image. return an empty image
             else:
                 return []
         else:
@@ -484,9 +488,10 @@ def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
                 if len(im)==0:
                     im = im1
                 else:
+                    # pad the images to make them the same shape
                     if im1.shape[0]>im.shape[0]:
                         pad = im1.shape[0]-im.shape[0]
-                        im = cv.copyMakeBorder(im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
+                        im = cv.copyMakeBorder(im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
                     elif im.shape[0]>im1.shape[0]:
                         pad = im.shape[0]-im1.shape[0]
                         im1 = cv.copyMakeBorder(im1, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
@@ -503,8 +508,8 @@ def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
         raise e
     return im, t, tag
     
-def getWidthScaling(im:np.array, dx0:float, tag, **kwargs) -> Tuple[float,float,float]:
-    '''determine how to scale the image'''
+def getWidthScaling(im:np.array, dx0:float, tag:str, **kwargs) -> Tuple[float,float,float]:
+    '''determine how to scale the image. dx0 is the space between images on the plot, in plot coordinates. tag is the line type, e.g. xs or horiz'''
     height,width = im.shape[0:2]
     if 'crops' in kwargs:
         crops = kwargs['crops']
@@ -547,7 +552,15 @@ def getWidthScaling(im:np.array, dx0:float, tag, **kwargs) -> Tuple[float,float,
     return dx, dy, pxperunit, dx0
 
 def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y0:float, s:float, ax, **kwargs):
-    '''draw an overlay over the image'''
+    '''draw an annotation, e.g. a circular or rectangular scale bar, over the image
+    pxperunit is the image pixels per image block
+    t is a dictionary holding info about the line, including, e.g. {'tag':'xs1'}
+    dx0 is the spacing between images in plot coords
+    x0 is the x position of the annotation
+    y0 is the y position of the annotation
+    s is the scaling to use to add white space between images
+    ax is the axis to plot this annotation on
+    '''
     overlay = kwargs['overlay'] # get overlay dictionary from kwargs
     file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
     scale = float(sb.fileScale(file))
@@ -645,8 +658,6 @@ def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
     folderList is a list of paths
     cp holds the plot
     dx is the spacing between images in plot space, e.g. 0.7
-    cropx is the size to crop from the left and right edges of the picture in px
-    cropy is the size to crop from top and bottom in px
     tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
     for pv in cp.pvlists:
         picPlot(pv, cp, dx, tag, **kwargs)

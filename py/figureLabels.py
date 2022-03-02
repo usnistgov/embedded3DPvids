@@ -23,26 +23,13 @@ logger.setLevel(logging.DEBUG)
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
+__license__ = "NIST"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
 __status__ = "Development"
 
 #----------------------------------------------
-
-# def subFigureLabel(ax, label:str) -> None:
-#     '''add a subfigure label to the top left corner'''
-#     ax.text(0.05, 0.95, label, fontsize=12, transform=ax.transAxes, horizontalAlignment='left', verticalAlignment='top')
-    
-# def subFigureLabels(axs) -> None:
-#     '''add subfigure labels to all axes'''
-#     alphabet_string = string.ascii_uppercase
-#     alphabet_list = list(alphabet_string)
-#     for axrow in axs:
-#         for ax in axrow:
-#             subFigureLabel(ax, alphabet_list.pop(0))
-
 
     
 def subFigureLabel(ax, label:str, inside:bool=True) -> None:

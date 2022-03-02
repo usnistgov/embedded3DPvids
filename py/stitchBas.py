@@ -21,7 +21,7 @@ import stitching
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
+__license__ = "NIST"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
@@ -202,6 +202,7 @@ class fileList:
                 setattr(self, s2+'Cols', numcols) # adjust the number of cols
                 
     def detectNumCols(self) -> None:
+        '''determine how many columns and rows there are in each group, depending on which shopbot file created the pics'''
         self.lastSkip = False
 #         logging.info(len(self.basStill))
         if len(self.basStill)>0:
@@ -330,7 +331,8 @@ class fileList:
         self.detectHorizFiles()
         
     def addToHorizList(self, i:Union[int, str], scale:str) -> None:
-        stlist = getattr(self, 'horiz'+str(i)+'Stitch')
+        '''add the horizontal still file name to the list of stills, and get the scale'''
+        stlist = getattr(self, f'horiz{i}Stitch')
         if len(stlist)==0:
 #             raise NameError(f'Missing horiz stitch: {i}')
             return
@@ -358,6 +360,7 @@ class fileList:
         return scale
         
     def detectHorizFiles(self) -> None:
+        '''sort the horiz stills into lists'''
         if len(self.horizStill)>0:
             if not 'horiz' in os.path.basename(self.horizStill[0]):
                 # this is a single horiz column folder. don't look for stills
@@ -391,7 +394,7 @@ class fileList:
     
     #-------
     
-    def countFiles(self) -> Dict:
+    def countFiles(self) -> dict:
         '''count the types of files in the folder'''
         c = [['folder',self.folder]]
         for r in ['Still', 'Stitch']:
@@ -410,8 +413,8 @@ class fileList:
             return True
             
     def getFiles(self, st:str) -> Tuple[List, str, str]:
-        '''get file list and directory name'''
-        files = getattr(self, st+'Still')
+        '''get file list and directory name. st is an image tag, e.g. xs1 '''
+        files = getattr(self, f'{st}Still')
         if len(files)==0:
             return [],'',''
         dirname = files[0]
@@ -478,7 +481,7 @@ class fileList:
             return 1
         
         s = stitching.Stitch(files)
-        tag = sample+'_'+st
+        tag = f'{sample}_{st}'
         
         if duplicate==0:
             # check if the file exists
@@ -593,7 +596,10 @@ def stitchRecursive(folder:str, **kwargs) -> None:
                 
                 
 def countFiles(folder:str, stills:bool=True, stitches:bool=True, subcall:bool=False) -> Union[dict, List[dict], pd.DataFrame]:
-    '''count the types of files in each folder. stills=True to print any folders which are missing stills. stitches=True to print any folders which are missing stitched images. If this is the top call, returns a dataframe. If this is a child call to a sample folder or above, returns a list of dicts. If this is a call to a subfolder, returns a dict.'''
+    '''count the types of files in each folder. 
+    stills=True to print any folders which are missing stills. 
+    stitches=True to print any folders which are missing stitched images. 
+    If this is the top call, returns a dataframe. If this is a child call to a sample folder or above, returns a list of dicts. If this is a call to a subfolder, returns a dict.'''
 
     if not os.path.isdir(folder):
         return

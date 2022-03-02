@@ -23,7 +23,7 @@ logger.setLevel(logging.DEBUG)
 __author__ = "Leanne Friedrich"
 __copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
+__license__ = "NIST"
 __version__ = "1.0.0"
 __maintainer__ = "Leanne Friedrich"
 __email__ = "Leanne.Friedrich@nist.gov"
@@ -108,13 +108,13 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
     ink = split2[0]
     split3 = re.split('_', split2[1])
     if len(split3[0])==0:
-        sup = '_'+split3[1]
+        sup = f'_{split3[1]}'
     else:
         sup = split3[0]
     if formatOutput:
-        sample = 'I_'+formatSample(ink)+'_S_'+formatSample(sup)
+        sample = f'I_{formatSample(ink)}_S_{formatSample(sup)}'
     else:
-        sample = 'I'+ink+'_S'+sup
+        sample = f'I{ink}_S{sup}'
     return sample
 
 #---------------------------------------------  
@@ -279,7 +279,7 @@ def putInSubFolder(file:str, debug:bool=False) -> None:
         return # already in subfolder
     
     sample = sampleName(file, formatOutput=True)
-    subfolder = sample +'_'+ fileDate(file)
+    subfolder = f'{sample}_{fileDate(file)}'
     if os.path.basename(parent)==subfolder:
         # file is already in subfolder
         return

@@ -1,0 +1,18 @@
+
+path:
+    logs: "logs"
+    log_config: "configs/logging.yml"
+    server: "myfolder"
+    fig: "myfolder"
+    rheTable: "myfolder/vidRhe.xlsx"
+    sigmaTable: "myfolder/litsurfacetension.xlsx"
+    densityTable: "myfolder/vidDensities.xlsx"
+    pCalibFolder: "myfolder"
+    openFoamFolder: "myfolder"
+const:
+    di: 0.603
+    do: 0.907
+    vink: 5
+    vsup: 5
+    pxpmm: 139 # px/mm
+    

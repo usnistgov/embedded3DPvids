@@ -107,6 +107,7 @@ class matchers:
         self.lastH = np.float32([[1.,0,self.defaultDx],[0,1,self.defaultDy]])
 
     def showKeypoints(self, i1:np.ndarray, i2:np.ndarray, imageSet1:dict, imageSet2:dict) -> None:
+        '''draw keypoints on the images'''
         if len(i1)>0:
             i1a = cv.drawKeypoints(i1, imageSet1['kp'], None, (255,0,0), 4)
         else:
@@ -385,19 +386,19 @@ class Stitch:
         gradient0 = np.append(toppad, gradient0, axis=0)
         botpad = np.float32([[[1]*r.Dnew]*Wgrad for i in range(padsize)])
         gradient0 = np.append(gradient0, botpad, axis=0)
-        Wg0 = gradient0.shape[1] # width of big gradient mask
-        Hg0 = gradient0.shape[0] # height
-        cyg0 = int(Hg0/2) # center in y
-        cxg0 = int(Wg0/2) # center in x
+        Wg0 = gradient0.shape[1]           # width of big gradient mask
+        Hg0 = gradient0.shape[0]           # height
+        cyg0 = int(Hg0/2)                  # center in y
+        cxg0 = int(Wg0/2)                  # center in x
         M = cv.getRotationMatrix2D((cyg0, cxg0), theta*180/np.pi, 1.0)
         rotated = cv.warpAffine(gradient0, M, (Hg0, Wg0)) 
             # rotate the mask so the gradient goes along the vector between centers
-        rdym = int(np.floor(r.Ho/2)) # change in y, minus direction
-        rdyp = int(np.ceil(r.Ho/2)) # change in y, plus direction
-        rdxm = int(np.floor(r.Wo/2)) # change in x, minus direction
+        rdym = int(np.floor(r.Ho/2))       # change in y, minus direction
+        rdyp = int(np.ceil(r.Ho/2))        # change in y, plus direction
+        rdxm = int(np.floor(r.Wo/2))       # change in x, minus direction
         rdxp = int(np.ceil(r.Wo/2))
         rotated = rotated[cyg0-rdym:cyg0+rdyp, cxg0-rdxm:cxg0+rdxp, :]
-            # crop to size of overlap region
+                    # crop to size of overlap region
         
         im2mask = new.copy()
         im2mask[r.im2y0:r.im2yf, r.im2x0:r.im2xf, :] = 1
@@ -524,57 +525,3 @@ class Stitch:
         self.images = self.imagesPerm.copy()
         self.filenames = self.filenamesPerm.copy()
 
-        
-        
-#--------------------------------------------------
-#             ARCHIVE 
-    
-    #     def move(self, im:np.ndarray, H:np.ndarray, r:Struct) -> np.ndarray:
-#         if len(H)>2:
-#             H2 = H.copy()
-#             H2 = H2[0:2, :]
-#         else:
-#             H2 = np.array(H, np.float_)
-#         dst = cv.warpAffine(im, H2, (r.Wnew, r.Hnew))
-#         return dst
-
-
-        
-#     def emptyCropStruct(self) -> Struct:
-#         '''get an empty crop struct'''
-#         d = {'im1x0':0, 'im2x0':0, 'im1y0':0, 'im2y0':0}
-#         return Struct(**d)
-        
-#     def cropToLast(self, im1:np.ndarray, im2:np.ndarray) -> Tuple[np.ndarray, np.ndarray, Struct]:
-#         '''assume that the new homography matrix will be similar to the last. crop to the overlap region that would match that homography matrix. im1 is stitched, im2 is raw'''
-#         dx = int(self.lastH[0,2]) # translation in x
-#         dy = int(self.lastH[1,2]) # translation in y
-#         s = self.emptyCropStruct()
-#         if dx==0 and dy==0:
-#             return im1, im2, s
-#         h = im2.shape[0]
-#         w = im2.shape[1]  
-#         pad = 0.05
-#         if dy>0:
-#             s.im1x0 = max(0, int(dy-pad*h)) # pad estimate by 0.1*H
-#             s.im1xf = h
-#             s.im2x0 = 0
-#             s.im2xf = min(h, int(h-dy+pad*h))
-#         else:
-#             s.im1x0 = 0
-#             s.im1xf = min(h, int(h-abs(dy)+pad*h))
-#             s.im2x0 = max(0, int(abs(dy)-pad*h))
-#             s.im2xf = h
-#         if dx>0:
-#             s.im1y0 = max(0, int(dx-pad*w)) # pad estimate by 0.1*H
-#             s.im1yf = w
-#             s.im2y0 = 0
-#             s.im2yf = min(w, int(w-dx+pad*w))
-#         else:
-#             s.im1y0 = 0
-#             s.im1yf = min(w, int(w-abs(dx)+pad*w))
-#             s.im2y0 = max(0, int(abs(dx)-pad*w))
-#             s.im2yf = w
-#         im1crop = im1[s.im1x0:s.im1xf, s.im1y0:s.im1yf]
-#         im2crop = im2[s.im2x0:s.im2xf, s.im2y0:s.im2yf]
-#         return im1crop, im2crop, s 

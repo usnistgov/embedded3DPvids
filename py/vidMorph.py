@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations'''
+'''Morphological operations applied to images'''
 
 # external packages
 import cv2 as cv
@@ -56,7 +56,7 @@ def morph(img:np.array, width:int, func:str, iterations:int=1, shape:bool=cv.MOR
         raise NameError('func must be erode, dilate, open, or close')
 
 def erode(img:np.array, size:int, **kwargs) -> np.array:
-    '''dilate an image, given a kernel size. https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html'''
+    '''erode an image, given a kernel size. https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html'''
     return morph(img, size, 'erode', **kwargs)
     
     
@@ -77,13 +77,14 @@ def closeMorph(img:np.array, size:int, **kwargs) -> np.array:
 ########### SEGMENTATION
 
 def componentCentroid(img:np.array, label:int) -> List[int]:
-    '''identify the centroid of a labeled component. Returns '''
+    '''identify the centroid of a labeled component. '''
     mask = np.where(img == label)
     x = int(np.mean(mask[0]))
     y = int(np.mean(mask[1]))
     return [label,x,y]
 
 def componentCentroids(img:np.array) -> np.array:
+    '''identify a list of all of the component centroids for a labeled image'''
     labels = list(np.unique(img))
     centroids = [componentCentroid(img, l) for l in labels]
     return centroids       
@@ -189,8 +190,17 @@ def verticalFilter(gray:np.array) -> np.array:
 
 
 
-def threshes(img:np.array, gray:np.array, removeVert, attempt, botthresh:int=150, topthresh:int=200, whiteval:int=80, diag:int=0, **kwargs) -> np.array:
-    '''threshold the grayscale image'''
+def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthresh:int=150, topthresh:int=200, whiteval:int=80, diag:int=0, **kwargs) -> np.array:
+    '''threshold the grayscale image
+    img is the original image
+    gray is the grayscale conversion of the image
+    removeVert=True to remove vertical lines from the thresholding. useful for horizontal images where stitching leaves edges
+    attempt number chooses different strategies for thresholding ink
+    botthresh = lower threshold for thresholding
+    topthresh is the initial threshold value
+    whiteval is the pixel intensity below which everything can be considered white
+    increase diag to see more diagnostic messages
+    '''
     if attempt==0:
 #         ret, thresh = cv.threshold(gray,180,255,cv.THRESH_BINARY_INV)
         # just threshold on intensity
@@ -245,7 +255,10 @@ def threshes(img:np.array, gray:np.array, removeVert, attempt, botthresh:int=150
     return thresh
 
 def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, **kwargs) -> np.array:
-    '''from a color image, segment out the ink, and label each distinct fluid segment'''
+    '''from a color image, segment out the ink, and label each distinct fluid segment. 
+    acrit is the minimum component size for an ink segment
+    removeVert=True to remove vertical lines from the thresholded image
+    removeBorder=True to remove border components from the thresholded image'''
     if len(img.shape)==3:
         gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
     else:
@@ -295,8 +308,8 @@ def normalize(im:np.array) -> np.array:
     return im
 
 
-def white_balance(img:np.array):
-    # automatically correct white balance
+def white_balance(img:np.array) -> np.array:
+    '''automatically correct white balance'''
     result = cv.cvtColor(img, cv.COLOR_BGR2LAB)
     avg_a = np.average(result[:, :, 1])
     avg_b = np.average(result[:, :, 2])

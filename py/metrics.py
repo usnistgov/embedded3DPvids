@@ -63,7 +63,8 @@ def lineName(file:str, tag:str) -> float:
 
 
 def getRoughness(componentMask:np.array, diag:int=0) -> float:
-    '''measure roughness as perimeter of object / perimeter of convex hull'''
+    '''measure roughness as perimeter of object / perimeter of convex hull. 
+    componentMask is a binarized image of just one segment'''
     contours = cv.findContours(componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
     if int(cv.__version__[0])>=4:
         contours = contours[0]
@@ -79,6 +80,7 @@ def getRoughness(componentMask:np.array, diag:int=0) -> float:
     hullperimeter = cv.arcLength(hull,True)
     roughness = perimeter/hullperimeter-1  # how much extra perimeter there is compared to the convex hull
     if diag and perimeter>1000:
+        # show annotated image
         cm = componentMask.copy()
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
         cv.drawContours(cm, [hull], -1, (110, 245, 209), 6)
@@ -90,7 +92,7 @@ def getRoughness(componentMask:np.array, diag:int=0) -> float:
     return roughness
 
 def widthInRow(row:list) -> int:
-    '''difference between first and last 255 value of row'''
+    '''distance between first and last 255 value of row'''
     if not 255 in row:
         return 0
     last = len(row) - row[::-1].index(255) 
@@ -98,7 +100,11 @@ def widthInRow(row:list) -> int:
     return last-first
 
 def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int=0, reverse:bool=False, diag:int=0) -> Tuple[dict,dict]:
-    '''measure parts of a segmented fluid. horiz = True to get variation along length of horiz line. False to get variation along length of vertical line.'''
+    '''measure parts of a segmented fluid. 
+    horiz = True to get variation along length of horiz line. False to get variation along length of vertical line.
+    scale is the scaling of the stitched image compared to the raw images, e.g. 0.33 
+    if maxlen>0, maxlen is the maximum length of the expected line. anything outside is leaks
+    reverse=True to measure from top or right, false to measure from bottom or left'''
     roughness = getRoughness(componentMask, diag=max(0,diag-1))
     
     if horiz:
@@ -144,7 +150,12 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
 #-------------------------------
 
 def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
-    '''im is imported image. s is scale as fraction of initial image size. '''
+    '''im is imported image. 
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
+    title is the title to put on the plot
+    name is the name of the line, e.g. xs1
+    acrit is the minimum segment size to be considered a cross-section
+    '''
     im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if markers[0]==1:
         return {}, {}
@@ -184,6 +195,7 @@ def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag
     yshift = (yc-boxcy)/h
 
     if diag:
+        # show the image with annotated dimensions
         im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
         for j, imgi in enumerate([im, im2]):
             cv.rectangle(imgi, (x0,y0), (x0+w,y0+h), (0,0,255), 2)   # bounding box
@@ -191,7 +203,6 @@ def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag
             cv.circle(imgi, (x0+int(w/2),y0+int(h/2)), 2, (0,255,255), 2) # center of bounding box
         imshow(im, im2)
         plt.title(title)
-        cv.imwrite(r'C:\Users\lmf1\OneDrive - NIST\NIST\data\shopbot\results\figures\yshift_example.png', im[600:900, 300:450])
     units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'xc':'px', 'yc':'px', 'roughness':''} # where pixels are in original scale
     retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':area*s**2, 'x0':x0*s, 'y0':y0*s, 'w':w*s, 'h':h*s, 'xc':xc*s, 'yc':yc*s, 'roughness':roughness}
     return retval, units
@@ -213,7 +224,11 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
 
 
 def vertSegment(im:np.array, s:float, maxlen:float, diag:int, acrit:int=2500, **kwargs) -> Tuple[pd.DataFrame, dict, dict, float, pd.Series, np.array]:
-    '''segment out the filament and measure it'''
+    '''segment out the filament and measure it
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
+    if maxlen>0, maxlen is the maximum length of the expected line. anything outside is leaks
+    acrit is the minimum segment size to be considered a part of a line
+    '''
     im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if len(markers)==0 or markers[0]==1:
         return {}, {}, {}, attempt, [], im2 # nothing to measure here
@@ -227,7 +242,6 @@ def vertSegment(im:np.array, s:float, maxlen:float, diag:int, acrit:int=2500, **
     filI = df2.a.idxmax() # index of filament label, largest remaining object
     component = df2.loc[filI]
     inline = df2[(df2.x0>component['x0']-50)&(df2.x0<component['x0']+50)] # other objects inline with the biggest object
-#     componentMask = (markers[1] == filI).astype("uint8") * 255
 
     # get combined mask of all objects in line
     masks = [(markers[1] == i).astype("uint8") * 255 for i,row in inline.iterrows()]
@@ -246,13 +260,13 @@ def vertSegment(im:np.array, s:float, maxlen:float, diag:int, acrit:int=2500, **
     return df2, componentMeasures, cmunits, attempt, component, im2
     
 def vertMeasure(file:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Tuple[dict,dict]:
-    '''measure vertical lines'''
+    '''measure vertical lines. progDims holds timing info about the lines'''
     name = lineName(file, 'vert')
     s = 1/fileScale(file)
     im = cv.imread(file)
     maxlen = progDims[progDims.name==('vert'+str(int(name)))].iloc[0]['l']
     maxlen = int(maxlen/s)
-    # label connected copmonents
+    # label connected components
     df2, componentMeasures, cmunits, attempt, co, im2 = vertSegment(im, s, maxlen, diag, **kwargs)
     if len(df2)==0:
         return {}, {}
@@ -292,15 +306,18 @@ def markHorizOnIm(im2:np.array, row:pd.Series) -> np.array:
     return im2
     
 
-# def horizLineMeasure(df0:pd.DataFrame, y:float, margin:float, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
 def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, diag:bool, s:float, j:int, progDims:pd.DataFrame) -> Tuple[dict, dict]:
-    '''measure one horizontal line'''
-#     df = df0[(df0.yc>y-margin)&(df0.yc<y+margin)]
-#     print(df)
+    '''measure one horizontal line. 
+    labeled is an image from connected component labeling
+    im2 is the original image
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
+    j is the line number
+    progDims holds timing info about the lines
+    '''
     numlines = len(df)
     measures = []
     cmunits = {}
-    maxlen = progDims[progDims.name=='horiz'+str(j)].iloc[0]['l']  # length of programmed line
+    maxlen = progDims[progDims.name==f'horiz{j}'].iloc[0]['l']  # length of programmed line
     for i,row in df.iterrows():
         componentMask = (labeled == i).astype("uint8") * 255   # image with line in it
         if row['w']>row['h']*0.7: # horiz lines must be circular or wide and not empty
@@ -335,12 +352,13 @@ def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, diag:bool,
     return ret, cmunits
 
 def closestIndex(val:float, l1:list) -> int:
-    '''index of closest value'''
+    '''index of closest value in list l1 to value val'''
     l2 = [abs(x-val) for x in l1]
     return l2.index(min(l2))
 
 def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
-    '''split the table of segments into the three horizontal lines'''
+    '''split the table of segments into the three horizontal lines. 
+    margin is the max allowable vertical distance in px from the line location to be considered part of the line'''
     
     linelocs = [275, 514, 756] # expected positions of lines
     ylocs = [-1000,-1000,-1000] # actual positions of lines
@@ -393,7 +411,12 @@ def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
 
 
 def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=1000, satelliteCrit:float=0.2, **kwargs) -> Tuple[pd.DataFrame, dict]:
-    '''segment the image and take measurements'''
+    '''segment the image and take measurements
+    progDims holds timing info about the lines
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
+    acrit is the minimum segment size in px to be considered part of a line
+    satelliteCrit is the min size of segment, as a fraction of the largest segment, to be considered part of a line
+    '''
     im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit, **kwargs)
     if len(markers)==0 or markers[0]==1:
         return [], {}, attempt, im2
@@ -417,13 +440,13 @@ def horizSegment(im0:np.array, progDims, diag:int, s:float, acrit:float=1000, sa
     return ret, cmunits, attempt, im2
     
 
-def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int=3, **kwargs) -> Tuple[pd.DataFrame, dict]:
-    '''measure horizontal lines. diag=1 to print diagnostics for this function, diag=2 to print this function and the functions it calls'''
+def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
+    '''measure horizontal lines. 
+    progDims holds timing info about the lines
+    diag=1 to print diagnostics for this function, diag=2 to print this function and the functions it calls'''
     s = 1/fileScale(file)
     im = cv.imread(file)
     im0 = im
-#     im0[0, 0] = np.zeros(im0[0, 0].shape)
-#     im0 = vc.imcrop(im0, {'dx':0, 'dy':80})
     im0 = vm.removeBorders(im0)
     ret, cmunits, attempt, im2 = horizSegment(im0, progDims, diag, s, **kwargs)
     
@@ -440,7 +463,10 @@ def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, critHorizLines:int
 #--------------------------------
 
 def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
-    '''measure one stitched image'''
+    '''measure one stitched image
+    st is a line type, e.g. xs, vert, or horiz
+    progDims holds timing info about the print
+    '''
     if st=='xs':
         return xsMeasure(file, diag=diag)
     elif st=='vert':
@@ -449,11 +475,12 @@ def stitchMeasure(file:str, st:str, progDims:pd.DataFrame, diag:int=0, **kwargs)
         return horizMeasure(file, progDims, diag=diag, **kwargs)
     
 def fnMeasures(folder:str, st:str) -> str:
-    '''get a filename for summary table'''
-    return os.path.join(folder, os.path.basename(folder)+'_'+st+'Summary.csv')
+    '''get a filename for summary table. st is xs, vert, or horiz'''
+    return os.path.join(folder, f'{os.path.basename(folder)}_{st}Summary.csv')
 
     
 def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
+    '''import the programmed dimensions table to a dataframe, and get units'''
     pv = printVals(folder)
     progDims, units = pv.importProgDims()
     for s in ['l', 'w']:
@@ -463,6 +490,7 @@ def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
 
 
 def stitchFile(folder:str, st:str, i:int) -> str:
+    '''get the name of the stitch file, where st is vert, horiz, or xs, and i is a line number'''
     try:
         fl = fileList(folder)
     except:
@@ -470,7 +498,7 @@ def stitchFile(folder:str, st:str, i:int) -> str:
     if st=='horiz':
         sval = 'horizfullStitch'
     else:
-        sval = st+str(i+1)+'Stitch'
+        sval = f'{st}{i+1}Stitch'
     file = getattr(fl, sval)
     if len(file)>0:
         return file[0]
@@ -478,7 +506,7 @@ def stitchFile(folder:str, st:str, i:int) -> str:
         return ''
 
 def measure1Line(folder:str, st:str, i:int, diag:int=0, **kwargs) -> Union[Tuple[dict,dict], Tuple[pd.DataFrame,dict]]:
-    '''measure just one line'''
+    '''measure just one line. st is vert, horiz, or xs. i is the line number'''
     progDims, units = importProgDims(folder)
     file = stitchFile(folder, st, i)
     if os.path.exists(file):
@@ -487,7 +515,7 @@ def measure1Line(folder:str, st:str, i:int, diag:int=0, **kwargs) -> Union[Tuple
         return {},{}
     
 def copyImage(folder:str, st:str, i:int) -> None:
-    '''make a copy of the image'''
+    '''make a copy of the image. st is vert, horiz, or xs. i is the line number'''
     file = stitchFile(folder, st, i)
     if not os.path.exists(file):
         return
@@ -500,7 +528,7 @@ def copyImage(folder:str, st:str, i:int) -> None:
     logging.info(f'Created new file {newfile}')
     
 def openImageInPaint(folder:str, st:str, i:int) -> None:
-    '''open the image in paint'''
+    '''open the image in paint. this is useful for erasing smudges or debris that are erroneously detected by the algorithm as filaments'''
     file = stitchFile(folder, st, i)
     if not os.path.exists(file):
         return
@@ -512,7 +540,9 @@ def openExplorer(folder:str) -> None:
 
 
 def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:List[str]=['xs', 'vert', 'horiz'], **kwargs) -> None:
-    '''measure the stills in folder'''
+    '''measure the stills in folder. 
+    overwrite=True to overwrite files. 
+    overwriteList is the list of files that should be overwritten'''
     if not isSubFolder(folder):
         return
     try:
@@ -520,11 +550,13 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
     except Exception as e:
         return
     if fl.date<210500:
+        # no stitches to measure
         return
     if 'dates' in kwargs and not fl.date in kwargs['dates']:
         return
     progDims, units = importProgDims(folder)
     
+    # measure xs and vert
     logging.info(f'Measuring {os.path.basename(folder)}')
     for st in ['xs', 'vert']:
         fn = fnMeasures(folder, st)
@@ -532,8 +564,8 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
             os.remove(fn)
         if not os.path.exists(fn):
             xs = []
-            for i in range(getattr(fl, st+'Cols')):
-                file = getattr(fl, st+str(i+1)+'Stitch')
+            for i in range(getattr(fl, f'{st}Cols')):
+                file = getattr(fl, f'{st}{i+1}Stitch')
                 if len(file)>0:
                     ret = stitchMeasure(file[0], st, progDims, diag=diag, **kwargs)
                     if len(ret[0])>0:
@@ -543,6 +575,8 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
                 xs = pd.DataFrame(xs)
 #                 exportMeasures(xs, st, folder, units)
                 plainExp(fnMeasures(folder, st), xs, units)
+    
+    # measure horiz
     fn = fnMeasures(folder, 'horiz')
     if overwrite and 'horiz' in overwriteList and os.path.exists(fn):
         os.remove(fn)
@@ -587,17 +621,17 @@ class metricList:
     def findSummaries(self) -> None:
         '''import summary data'''
         for s in self.validS():
-            fn = os.path.join(self.folder, self.bn+'_'+s+'Summary.csv')
+            fn = os.path.join(self.folder, f'{self.bn}_{s}Summary.csv')
             if os.path.exists(fn):
                 t,u = plainIm(fn,0)
-                setattr(self, s+'Sum', t)
-                setattr(self, s+'SumUnits', u)
+                setattr(self, f'{s}Sum', t)
+                setattr(self, f'{s}SumUnits', u)
             else:
-                setattr(self, s+'Sum', [])
-                setattr(self, s+'SumUnits', {})
+                setattr(self, f'{s}Sum', [])
+                setattr(self, f'{s}SumUnits', {})
                 
     def findRhe(self, vink:float=5, vsup:float=5, di:float=0.603, do:float=0.907) -> None:
-        '''find rheology for ink and support at flow speed vink and translation speed vsup for nozzle of inner diameter di and outer diameter do'''
+        '''find viscosity for ink and support at flow speed vink and translation speed vsup for nozzle of inner diameter di and outer diameter do'''
         pv = printVals(folder)
         inkrate = vink/di # 1/s
         suprate = vsup/do # 1/s
@@ -610,17 +644,17 @@ class metricList:
     #-----------------------------
         
     def checkS(self, s:str) -> None:
-        '''check if s is valid'''
+        '''check if s is valid. s is a line type, i.e. vert, horiz, or xs'''
         if not s in self.validS():
             raise NameError(f'Line name must be in {self.validS()}')
         
     def numLines(self, s:str) -> int:
         '''number of lines where s is vert, horiz, or xs'''
         self.checkS(s)
-        return len(getattr(self, s+'Sum'))
+        return len(getattr(self, f'{s}Sum'))
 
     def missingLines(self, s:str) -> list:
-        '''indices of missing lines'''
+        '''indices of missing lines where s is vert, horiz, or xs'''
         self.checkS(s)
         if s=='xs':
             allL = [1,2,3,4,5]
@@ -628,18 +662,22 @@ class metricList:
             allL = [0,1,2]
         elif s=='vert':
             allL = [1,2,3,4]
-        tab = getattr(self, s+'Sum')
+        tab = getattr(self, f'{s}Sum')
         if len(tab)==0:
             return allL
         else:
             return set(allL) - set(tab.line)
     
     def inconsistent(self, s:str, vlist:List[str], tolerance:float=0.25) -> list:
-        '''get a list of variables in which the cross-sections are inconsistent, i.e. range is greater than median*tolerance'''
+        '''get a list of variables in which the cross-sections are inconsistent, i.e. range is greater than median*tolerance
+         where s is vert, horiz, or xs
+         vlist is a list of variable names
+         tolerance is a fraction of median value
+         '''
         self.checkS(s)
         out = []
         for v in vlist:
-            t = getattr(self, s+'Sum')
+            t = getattr(self, f'{s}Sum')
             if len(t)>0:
                 ma = t[v].max()
                 mi = t[v].min()
@@ -674,7 +712,9 @@ def checkMeasurements(folder:str) -> None:
     return pd.DataFrame(problems)
 
 def checkAndDiagnose(folder:str, redo:bool=False) -> None:
-    '''check the folder and show images to diagnose problems'''
+    '''check the folder and show images to diagnose problems
+    redo=True if you want to re-measure any bad values
+    '''
     problems = checkMeasurements(folder)
     if len(problems)==0:
         logging.info(f'No problems detected in {folder}')
@@ -707,7 +747,7 @@ def checkAndDiagnose(folder:str, redo:bool=False) -> None:
     
     
 def checkAndDiagnoseRecursive(topfolder:str, redo:bool=False) -> None:
-    '''go through all folders recursively and check and diagnose measurements'''
+    '''go through all folders recursively and check and diagnose measurements. redo=True to redo any measurements that are bad'''
     if isSubFolder(topfolder):
         try:
             checkAndDiagnose(topfolder, redo=redo)
@@ -720,7 +760,8 @@ def checkAndDiagnoseRecursive(topfolder:str, redo:bool=False) -> None:
             if os.path.isdir(f1f):
                 checkAndDiagnoseRecursive(f1f, redo=redo) 
                 
-def returnNewSummary(pv):
+def returnNewSummary(pv) -> Tuple[pd.DataFrame, dict]:
+    '''get summary data from a printVals object'''
     t,u = pv.summary()
     return pd.DataFrame([t]),u
                 
@@ -764,7 +805,6 @@ def stillsSummary(topfolder:str, exportFolder:str, newfolders:list=[], filename:
         ss,u = plainIm(outfn, ic=0)
         for f in newfolders:
             tt,units = stillsSummaryRecursive(f)
-            print(tt)
             newrows = []
             for i,row in tt.iterrows():
                 if row['folder'] in list(ss.folder):
@@ -786,6 +826,7 @@ def stillsSummary(topfolder:str, exportFolder:str, newfolders:list=[], filename:
     return ss,units
 
 def idx0(k:list) -> int:
+    '''get the index of the first dependent variable'''
     if 'xs_aspect' in k:
         idx = int(np.argmax(k=='xs_aspect'))
     elif 'projectionN' in k:
@@ -797,6 +838,7 @@ def idx0(k:list) -> int:
     return idx
 
 def printStillsKeys(ss:pd.DataFrame) -> None:
+    '''sort the keys into dependent and independent variables and print them out'''
     k = ss.keys()
     k = k[~(k.str.endswith('_SE'))]
     k = k[~(k.str.endswith('_N'))]
@@ -824,7 +866,8 @@ def fluidAbbrev(row:pd.Series) -> str:
         return 'PEG'
     
 def indVarSymbol(var:str, fluid:str, commas:bool=True) -> str:
-    '''get the symbol for an independent variable, eg. dnorm, and its fluid, e.g ink'''
+    '''get the symbol for an independent variable, eg. dnorm, and its fluid, e.g ink
+    commas = True to use commas, otherwise use periods'''
     if commas:
         com = ','
     else:
@@ -849,7 +892,9 @@ def indVarSymbol(var:str, fluid:str, commas:bool=True) -> str:
         return '$'+varsymbol+'_{'+fluid+'}$'
     
 def varSymbol(s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
-    '''get a symbolic representation of the variable'''
+    '''get a symbolic representation of the variable
+    lineType=True to include the name of the line type in the symbol
+    commas = True to use commas, otherwise use periods'''
     if s.startswith('xs_'):
         varlist = {'xs_aspect':'XS height/width'
                    , 'xs_xshift':'XS horiz shift/width'
@@ -921,9 +966,9 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
     '''import the stills summary and convert sweep types, capillary numbers'''
     ss,u = plainIm(os.path.join(cfg.path.fig, file), ic=0)
     
-    ss = ss[ss.date>210500]
-    ss = ss[ss.ink_days==1]
-    ss.date = ss.date.replace(210728, 210727)
+    ss = ss[ss.date>210500]       # no good data before that date
+    ss = ss[ss.ink_days==1]       # remove 3 day data
+    ss.date = ss.date.replace(210728, 210727)   # put these dates together for sweep labeling
     k = ss.keys()
     k = k[~(k.str.contains('_SE'))]
     k = k[~(k.str.endswith('_N'))]
@@ -950,7 +995,10 @@ def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.Dat
     return ss,u
 
 def plainTypes(sslap:pd.DataFrame, incSweep:int=1, abbrev:bool=True) -> pd.DataFrame:
-    '''convert types to cleaner form for plot legends'''
+    '''convert types to cleaner form for plot legends
+    incSweep=2 for a long sweep name, 1 for a short type of sweep, 0 for no sweep type label
+    abbrev=True to use short names, False to use long names
+    '''
     if incSweep==2:
         vsweep = '$v$ sweep, '
         etasweep = '$\eta$ sweep, '
@@ -1005,7 +1053,7 @@ def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd
     idx = idx0(k)
     for j, s2 in enumerate(varlist):
         for i,s1 in enumerate(['sup', 'ink']):
-            xvar = s1+'_'+s2
+            xvar = f'{s1}_{s2}'
             if f'{s1}_{s2}Inv' in ss and not xvar in ss:
                 ss.insert(idx, xvar, 1/ss[f'{s1}_{s2}Inv'])
                 idx+=1
@@ -1029,11 +1077,12 @@ def addRatios(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'
             idx+=1
     return ss
 
-def addLogs(ss:pd.DataFrame, varlist) -> pd.DataFrame:
+def addLogs(ss:pd.DataFrame, varlist:List[str]) -> pd.DataFrame:
+    '''add log values for the list of variables to the dataframe'''
     k = ss.keys()
     idx = int(np.argmax(k=='xs_aspect'))
     for j, s2 in enumerate(varlist):
-        xvar = s2+'_log'
+        xvar = f'{s2}_log'
         if not xvar in s2:
             ss.insert(idx, xvar, np.log10(ss[s2]))
             idx+=1
@@ -1108,6 +1157,7 @@ def progTableRecursive(topfolder:str, useDefault:bool=False, overwrite:bool=Fals
         return tt, u
     
 def checkProgTableRecursive(topfolder:str, **kwargs) -> None:
+    '''go through the folder recursively and check if the pressure calibration curves are correct, and overwrite if they're wrong'''
     if isSubFolder(topfolder):
         try:
             pv = printVals(topfolder)
@@ -1128,7 +1178,7 @@ def checkProgTableRecursive(topfolder:str, **kwargs) -> None:
         return
 
 def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.DataFrame:
-    '''go through all the folders, get a table of the speeds and pressures, and export to fn'''
+    '''go through all the folders, get a table of the speeds and pressures, and export to filename'''
     tt,units = progTableRecursive(topfolder, **kwargs)
     tt = pd.DataFrame(tt)
     if os.path.exists(exportFolder):

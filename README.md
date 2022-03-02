@@ -23,7 +23,7 @@ In embedded 3D printing, a nozzle is embedded into a support bath and extrudes f
 
 # General Information
 
-Version 1.0.0 was generated: April 2021-
+Version 1.0.0 was generated: April 2021-March 2022
 
 ---
 
@@ -62,17 +62,115 @@ The files included in this publication use the following hierarchy:
 - **configs/**
     - *config.yml*
         - set path variables
+        
+    - *logging.yml*
+        - set logging variables
+        
+- **ipynb/**
+    - *filehandling.ipynb*
+        - Sort files into the correct folders
+        
+    - *singleLineMetrics.ipynb*
+        - Extract data from stitched images
+        
+    - *stitching.ipynb*
+        - Stitch raw images together
+        
+    - *vidanalysis.ipynb*
+        - Extract and summarize video data for each folder
+        
+    - *vidplots.ipynb*
+        - Plot stills together
+        
+    - *vidSummaries_horiz.ipynb*
+        - Plot horizontal line still data
+        
+    - *vidSummaries_horizvid.ipynb*
+        - Plot horizontal line video data
+        
+    - *vidSummaries_ST.ipynb*
+        - Plot roughness of horizontal lines
+        
+    - *vidSummaries_stats.ipynb*
+        - Statistical analysis of all metrics
+        
+    - *vidSummaries_vert.ipynb*
+        - Plot vertical line metrics
+        
+    - *vidSummaries_xs.ipynb*
+        - Plot cross-section metrics
+        
+    - *vidSummaries.ipynb*
+        - Summarize extracted metrics into a table
+     
 
 
 - **logs/**
     - for holding logs
+    
+- **py/**
+    - Functions
+
+    - *config.py*
+        - Loads configuration settings
+    
+    - *figureLabels.py*
+        - Functions for putting figure labels on figures
+        
+    - *fileHandling.py*
+        - Functions for handling files
+        
+    - *imshow.py*
+        - Functions for displaying images in jupyter notebooks
+        
+    - *logs.py*
+        - Tools for creating and handling logs
+        
+    - *metricPlots.py*
+        - Functions for plotting still and video data
+        
+    - *metrics.py*
+        - Functions for collecting data from stills of single lines
+
+    - *plainIm.py*
+        - Functions for importing a csv to a pandas dataframe and units dictionary
+        
+    - *printVals.py*
+        - Functions for storing metadata and compiling data about print folders
+        
+    - *regression.py*
+        - Tools for fitting regressions
+        
+    - *stitchBas.py*
+        - Tools for stitching and sorting images from a Basler camera
+        
+    - *stitching.py*
+        - Tools for stitching together any images
+        
+    - *vidCrop.py*
+        - Tools for cropping images to an ROI
+        
+    - *vidMorph.py*
+        - Morphological operations on images
+        
+    - *vidplots.py*
+        - Tools for plotting data about videos
+        
+    - *vidTools.py*
+        - Tools for collecting data from videos
+        
+- **tests/**
+    - Unit tests
+    
+    - *test_nozDetect.py*
+        - Go through files and test if nozzle is correctly detected
 
 --- 
 
 # Version History
 
 
-4/12/2021: v1.0.0
+3/2/22: v1.0.0
 
 ---
 

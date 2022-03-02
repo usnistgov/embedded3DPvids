@@ -122,7 +122,7 @@ def getPads(h2:int, h1:int) -> Tuple[int,int]:
         
     return dhl,dhr
     
-def circleMask(im:np.array, bs:int, background:float, cval:int, bounds:Dict, dr:int=0) -> np.array:
+def circleMask(im:np.array, bs:int, background:float, cval:int, bounds:dict, dr:int=0) -> np.array:
     '''get a mask that matches the size of im, has a blur size of bs, a background value of background, a circle value of cval (0-255), and bounds of bounds'''
     mask = np.full((im.shape[0]+2*bs, im.shape[1]+2*bs), background, dtype=np.uint8)  # mask is only 
     cv.circle(mask, (bounds['ycc']+bs, bounds['xcc']+bs), bounds['r']+dr, (cval,cval,cval), -1)

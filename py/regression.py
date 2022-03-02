@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations'''
+'''tools for fitting regressions'''
 
 # external packages
 import pandas as pd
@@ -49,6 +49,7 @@ def polyfit(x:List[float], y:List[float], degree:int) -> dict:
     return results
 
 def quadReg(x:list, y:list) -> dict:
+    '''quadratic regression, where x and y are lists'''
     res = polyfit(x,y,2)
     return {'a':res['coeffs'][0], 'b':res['coeffs'][1], 'c':res['coeffs'][2], 'r2':res['r2']}
 
