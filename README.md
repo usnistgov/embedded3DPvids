@@ -42,7 +42,7 @@ Friedrich, L., & Seppala, J.E. (2021), Python tools for image analysis of embedd
 # References
 
 This code is described in the following paper:
-- Friedrich, L.M., & Seppala, J.E. (2022) Suppression of filament defects in embedded 3D printing, submitted for publication
+- Friedrich, L.M., Gunther, R.T., & Seppala, J.E. (2022) Suppression of filament defects in embedded 3D printing, submitted for publication
 
 The dataset analyzed by this code is stored at:
 - Friedrich, L.M., & Seppala, J.E. (2022) Suppression of filament defects in embedded 3D printing, Version 1.0.0, National Institute of Standards and Technology
