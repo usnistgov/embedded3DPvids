@@ -35,7 +35,7 @@ fair use and licensing; see
 https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software
 
 You may cite the use of this code as follows:
-Friedrich, L., & Seppala, J.E. (2021), Python tools for image analysis of embedded 3D printing, Version 1.0.0, National Institute of Standards and Technology, doi:[] (Accessed XXXX-XX-XX)
+Friedrich, L., & Seppala, J.E. (2022), Python tools for image analysis of embedded 3D printing, Version 1.0.0, National Institute of Standards and Technology, doi:10.18434/mds2-2564 (Accessed XXXX-XX-XX)
 
 ---
 
