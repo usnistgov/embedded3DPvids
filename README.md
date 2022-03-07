@@ -1,5 +1,5 @@
 ### NIST Repository:
-Python tools for analysis of videos and iamges of filament shapes in embedded 3D printing
+Python tools for analysis of videos and images of filament shapes in embedded 3D printing
 Version 1.0.0
 
 ### Authors:
