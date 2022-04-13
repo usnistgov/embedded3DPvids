@@ -18,7 +18,7 @@ Version 1.0.0
 
 ## Description
 
-In embedded 3D printing, a nozzle is embedded into a support bath and extrudes filaments or droplets into the bath. This repository includes python code for analyzing and managing images and videos of the printing process. Images should be .png format, and videos should be .avi format. Images and videos should depict a single filament, either a horizontal head-on filament, a horizontal filament from the side, or a vertical filament from the side, that is dark on a light background. Videos contain a dark nozzle and depict the printing process. 
+In embedded 3D printing, a nozzle is embedded into a support bath and extrudes filaments or droplets into the bath. This repository includes python code for analyzing and managing images and videos of the printing process. Images should be .png format, and videos should be .avi format. Images and videos should depict a single filament, either a horizontal head-on filament, a horizontal filament from the side, or a vertical filament from the side, that is dark on a light background. Videos contain a dark nozzle and depict the printing process. All images and videos must have the same scale, reported in pixels per mm. 
 
 ## Version History
 
@@ -50,7 +50,7 @@ The dataset analyzed by this code is stored at:
 
 For full functionality, you will need to make the following files:
 
-- Copy configs/config_template.yml and call it configs/config.yml. Change the path names to the paths to your data.
+- Copy `configs/config_template.yml` and call it `configs/config.yml`. Change the path names to the paths to your data. 
 
 
 ## Data Overview
