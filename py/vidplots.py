@@ -355,7 +355,7 @@ def exportIm(fn:str, fig) -> None:
     for dire in dires[:-1]:
         os.mkdir(dire)
     for s in ['.svg', '.png']:
-        fig.savefig(fn+s, bbox_inches='tight', dpi=300)
+        fig.savefig(fn+s, bbox_inches='tight', dpi=300, transparent=True)
     logging.info(f'Exported {fn}')
     
 def parseTag(tag:str) -> dict:
