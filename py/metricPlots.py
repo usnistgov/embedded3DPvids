@@ -873,7 +873,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
             # combine into table
             df = dfall
             df = df[['title', 'r2', 'coeff', 'c', 'spearman_corr', 'spearman_p']]
-            df = df.rename(columns={'r2': '$r^2$', 'title':'variables', 'coeff':'b', 'spearman_corr':'spearman coeff', 'spearman_p':'spearman p'})
+            df = df.rename(columns={'r2': '$r^2$', 'title':'variables', 'coeff':'b', 'spearman_corr':'Spearman coeff', 'spearman_p':'Spearman p'})
             dflist.append(df)
             if 'nickname' in kwargs:
                 nickname = kwargs['nickname']
@@ -941,7 +941,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 dftextOut = '\\begin{table}\n\\centering\n\\caption['
                 dftextOut = dftextOut+shortcaption+r']{'+longcaption+'}\n'
                 dftextOut = dftextOut+'\\pgfplotstabletypeset[\n\tcol sep=comma,\n\tstring type,\n'
-                for s in ['variables', '$r^2$','b','c','spearman coeff','spearman p']:
+                for s in ['variables', '$r^2$','b','c','Spearman coeff','Spearman p']:
                     dftextOut = dftextOut+'\tcolumns/'+s+'/.style={column type=l},\n'
                 dftextOut = dftextOut+'\tevery head row/.style={after row=\hline},\n\tevery nth row={4'
                 if 'Ca' in df.iloc[0]['variables']:
