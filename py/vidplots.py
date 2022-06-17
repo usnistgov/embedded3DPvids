@@ -18,7 +18,6 @@ import matplotlib.ticker as mticker
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 import fileHandling as fh
-import stitchBas as sb
 from printVals import *
 import vidMorph as vm
 
@@ -33,15 +32,6 @@ matplotlib.rcParams['svg.fonttype'] = 'none'
 matplotlib.rc('font', family='Arial')
 matplotlib.rc('font', size='10.0')
 
-# info
-__author__ = "Leanne Friedrich"
-__copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
-__credits__ = ["Leanne Friedrich"]
-__license__ = "NIST"
-__version__ = "1.0.0"
-__maintainer__ = "Leanne Friedrich"
-__email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Development"
 
 #----------------------------------------------
 
@@ -563,7 +553,7 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
     '''
     overlay = kwargs['overlay'] # get overlay dictionary from kwargs
     file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
-    scale = float(sb.fileScale(file))
+    scale = float(fh.fileScale(file))
     pxPerBlock = pxperunit/s # rescale px to include white space
     realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
     mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size

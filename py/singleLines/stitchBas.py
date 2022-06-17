@@ -17,16 +17,6 @@ import stitching
 
 # logging
 
-# info
-__author__ = "Leanne Friedrich"
-__copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
-__credits__ = ["Leanne Friedrich"]
-__license__ = "NIST"
-__version__ = "1.0.0"
-__maintainer__ = "Leanne Friedrich"
-__email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Development"
-
 #----------------------------------------------
 
 def colNum(file:str)->int:
@@ -84,11 +74,11 @@ class fileList:
         '''list of strings. set s2 to Still or Stitch to get list names'''
         l = []
         for s in ['horiz', 'vert', 'xs']:
-            for i in range(1,getattr(self, s+'Cols')+1):
-                l.append(s+str(i)+s2)
+            for i in range(1,getattr(self, f'{s}Cols')+1):
+                l.append(f'{s}{i}{s2}')
             if s=='horiz' and self.horizCols>1:
-                l.append(s+s2)
-                l.append(s+'full'+s2)
+                l.append(f'{s}{s2}')
+                l.append(f'{s}full{s2}')
         return l
             
     def resetList(self):

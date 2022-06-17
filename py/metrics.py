@@ -17,7 +17,7 @@ import subprocess
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from stitchBas import fileList
+from singleLines.stitchBas import fileList
 from fileHandling import isSubFolder
 import vidCrop as vc
 import vidMorph as vm
@@ -33,15 +33,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     
 pd.set_option("display.precision", 2)
 
-# info
-__author__ = "Leanne Friedrich"
-__copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
-__credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
-__version__ = "1.0.0"
-__maintainer__ = "Leanne Friedrich"
-__email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Development"
+
 
 #----------------------------------------------
 

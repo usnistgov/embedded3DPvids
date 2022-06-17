@@ -14,6 +14,9 @@ from matplotlib import pyplot as plt
 import traceback
 
 # local packages
+currentdir = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(currentdir)
+import fileHandling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -22,15 +25,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
 # info
-__author__ = "Leanne Friedrich"
-__copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
 __credits__ = ["Kushal Vyas", "Leanne Friedrich"]
-__version__ = "1.0.0"
-__maintainer__ = "Leanne Friedrich"
-__email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Development"
-
-
 
 #----------------------------------
 
@@ -51,17 +46,17 @@ class Struct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
         
-def subfolder(fn:str, short:bool=False) -> str:
-    '''get the subfolder basename from a file name'''
-    if 'raw' in fn:
-        # archived. need to get sample folder
-        folder = os.path.dirname(os.path.dirname(os.path.dirname(fn)))
-    else:
-        folder = os.path.dirname(fn)
-    if short:
-        return os.path.basename(folder)
-    else:
-        return folder
+# def subfolder(fn:str, short:bool=False) -> str:
+#     '''get the subfolder basename from a file name'''
+#     if 'raw' in fn:
+#         # archived. need to get sample folder
+#         folder = os.path.dirname(os.path.dirname(os.path.dirname(fn)))
+#     else:
+#         folder = os.path.dirname(fn)
+#     if short:
+#         return os.path.basename(folder)
+#     else:
+#         return folder
         
 
 def imshow(*args) -> None:
@@ -88,12 +83,13 @@ class matchers:
     '''this class contains functions'''
     
     
-    def __init__(self):
-        self.surf = cv.xfeatures2d.SURF_create()
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=0, trees=5)
-        search_params = dict(checks=50)
-        self.flann = cv.FlannBasedMatcher(index_params, search_params)
+    def __init__(self, surf:bool=False):
+        if surf:
+            self.surf = cv.xfeatures2d.SURF_create()
+            FLANN_INDEX_KDTREE = 0
+            index_params = dict(algorithm=0, trees=5)
+            search_params = dict(checks=50)
+            self.flann = cv.FlannBasedMatcher(index_params, search_params)
         self.setDefaults(0,0)
         self.resetLastH()
         
@@ -158,7 +154,8 @@ class matchers:
 
     def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, debug:bool=False, defaultToLastH:bool=True, **kwargs) -> np.ndarray:
         '''find homography matrix that relates the two images. set rigid true to only allow rigid transform, i.e. translation, rotation, scaling. set rigid false to allow warping'''
-        if 'useDefault' in kwargs and kwargs['useDefault']:
+#         if 'useDefault' in kwargs and kwargs['useDefault']:
+        if defaultToLastH:
             # skip all of the matching and detection, and just use default translation
             return self.errorMatch(True, False, i1, i2, [], [])
         
@@ -313,11 +310,14 @@ class Stitch:
             raise ValueError('No images given')
         self.scale = 1 # keeps track of rescaling of images
         self.sourceScale = 0 # keeps track of initial scaling of images
+        self.images = []
         for file in filenames:
             try:
                 self.readImage(file, **kwargs)
             except Exception as e:
                 raise e
+        if len(self.images)==0:
+            return
         self.killFrame = ''
         self.filenames = filenames
         self.imagesPerm = self.images.copy()
@@ -437,7 +437,7 @@ class Stitch:
     def newFN(self, duplicate:bool=True, tag:str='', **kwargs) -> str:
         '''get a file name. duplicate=True to get a new file name if there is already a file, duplicate=False to return existing file name'''
         fn = (self.filenames)[0]
-        folder = subfolder(fn)
+        folder = fh.subFolder(fn)
         i = 0
         ext = os.path.splitext(fn)[-1]
         scale = '{0:.4g}'.format(self.scale)
@@ -447,7 +447,7 @@ class Stitch:
             if 'scale' in kwargs and not kwargs['scale']:
                 fn = os.path.join(folder, tag+"_{0:0=2d}".format(i)+ext)
             else:
-                fn = os.path.join(folder, tag+'_'+scale+"_{0:0=2d}".format(i)+ext)
+                fn = os.path.join(folder, f'{tag}_{scale}_{i:0=2d}{ext}')
             i+=1
         return fn
     
@@ -457,9 +457,13 @@ class Stitch:
         if debug:
             imshow(self.stitched)
         if export:
-            fn = self.newFN(duplicate=duplicate, tag=tag)
+            if 'fn' in kwargs:
+                fn = kwargs['fn']
+            else:
+                fn = self.newFN(duplicate=duplicate, tag=tag)
             cv.imwrite(fn, self.stitched)
-            logging.info(f'Wrote image {os.path.basename(fn)}')
+            if not 'temp' in fn:
+                logging.info(f'Wrote image {fh.twoBN(fn)}')
         if clearEntries:
             self.images = self.images[self.killFrame:]
             self.filenames = self.filenames[self.killFrame:]
@@ -478,7 +482,7 @@ class Stitch:
             tag = kwargs['tag']
         else:
             tag = ''
-        logging.debug(f'Stitching {len(self.images)} images in {subfolder(self.filenames[0], short=True)}: {tag}')
+#         logging.debug(f'Stitching {len(self.images)} images in {os.path.basename(os.path.dirname(self.filenames[0]))}: {tag}')
         
         self.stitched = self.images[0]
         if len(self.images)>1:

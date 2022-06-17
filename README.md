@@ -2,15 +2,16 @@
 
 Python tools for analysis of videos and images of filament shapes in embedded 3D printing
 
-Version 1.0.0
 
 ## Authors
-- Leanne Friedrich
+- Leanne M. Friedrich
     - National Institute of Standards and Technology, MML
     - Leanne.Friedrich@nist.gov
+    - https://github.com/leanfried
+    - ORCID: 0000-0002-0382-3980
 - Jonathan E. Seppala
     - National Institute of Standards and Technology, MML
-    - Jonathan.Seppala@nist.gov
+    - ORCID: 0000-0002-5937-8716
 
 ## Contact
 - Leanne Friedrich
@@ -20,9 +21,13 @@ Version 1.0.0
 
 In embedded 3D printing, a nozzle is embedded into a support bath and extrudes filaments or droplets into the bath. This repository includes python code for analyzing and managing images and videos of the printing process. Images should be .png format, and videos should be .avi format. Images and videos should depict a single filament, either a horizontal head-on filament, a horizontal filament from the side, or a vertical filament from the side, that is dark on a light background. Videos contain a dark nozzle and depict the printing process. All images and videos must have the same scale, reported in pixels per mm. 
 
-## Version History
 
-2022/03/22: v1.0.0
+## Change log
+
+|version|Timeframe|Scope|
+|-------|---------|-----|
+|1.0.0  |April 2021 - March 2022|Single filaments: cross-sections, side view, vertical lines|
+
 
 ## Data Use Notes
 

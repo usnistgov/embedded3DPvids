@@ -1,3 +1,4 @@
+---
 version: 1
 # Set to False to get log messages from external packages you're using
 disable_existing_loggers: False
