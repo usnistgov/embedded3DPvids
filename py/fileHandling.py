@@ -82,33 +82,27 @@ def mlapSample(file:str, formatOutput:bool=True) -> str:
     else:
         sup = split3[0]
     if formatOutput:
-        sample = f'I_M{formatSample(ink)}_S_{formatSample(sup)}'
+        sample = 'I_M'+formatSample(ink)+'_S_'+formatSample(sup)
     else:
-        sample = f'M{ink}Lap{sup}'
+        sample = 'M'+ink+'Lap'+sup
     return sample
-
-def sampleRecursive(file:str) -> str:
-    '''get the string that contains the sample name'''
-    bn = os.path.basename(file)
-    if 'I' in bn and '_S' in bn:
-        return bn
-    else:
-        parent = os.path.dirname(file)
-        bn = os.path.basename(parent)
-        if 'I' in bn and '_S' in bn:
-            return bn
-        else:
-            parent = os.path.dirname(parent)
-            bn = os.path.basename(parent)
-            if 'I' in bn and '_S' in bn:
-                return bn
-            else:
-                raise f'Could not determine sample name for {file}'
 
 def sampleName(file:str, formatOutput:bool=True) -> str:
     '''Get the name of the sample from a file name or its parent folder'''
 
-    parent = sampleRecursive(file)
+    if 'I' in file and '_S' in os.path.basename(file):
+        parent = os.path.basename(file)
+    else:
+        if formatOutput:
+            parent = os.path.basename(os.path.dirname(file))
+            if not ('I' in parent and '_S' in parent):
+                raise ValueError(f'Could not determine sample name for {file}')
+        else:
+            # we're not formatting the output, so we need the exact sample name for this file
+            if 'M' in os.path.basename(file) and 'Lap' in os.path.basename(file):
+                return mlapSample(file, formatOutput)
+            else:
+                raise ValueError(f'Could not determine sample name for {file}')
     split1 = re.split('I', parent)[1]
     split2 = re.split('_S', split1)
     ink = split2[0]
@@ -125,155 +119,186 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
 
 #---------------------------------------------  
 
+
+def videoFile(folder:str) -> str:
+    '''name of the video file'''
+    if not os.path.isdir(folder):
+        return ''
+    f2 = os.listdir(folder) # list of files
+    if len(f2)==0:
+        return ''
+    file = ''
+    while not file.endswith('.avi') and len(f2)>0:
+        file = f2.pop(0) # find the video
+    if not file.endswith('.avi'):
+        return ''
+    else:
+        return file 
+
+def renameSubFolder(folder:str, includeDate:bool=True, debug:bool=False) -> str:
+    '''Given a subfolder inside of a sample designation, rename it to include the date, or set includeDate=False to not include the date. Returns new name'''
+    if not os.path.isdir(folder):
+        return folder
+    f2 = os.listdir(folder) # list of files
+    if len(f2)==0:
+        return folder # no files in folder
+    f2 = videoFile(folder) # path of the video file
+    
+    parent = os.path.dirname(folder)
+    basename = os.path.basename(folder)
+
+    # rename sample for consistent formatting
+    sample = sampleName(folder, formatOutput=False)
+    formattedSample = sampleName(folder, formatOutput=True)
+    basename = basename.replace(sample, formattedSample)
+        
+    if includeDate:    
+        date = fileDate(f2)
+        if not date in basename:
+            basename = basename+'_'+date
+    newname = os.path.join(parent, basename)
+    
+    # if the new name is different, rename the folder
+    if not newname==folder:
+        if debug:
+            logging.debug(folder, '\n', newname)
+        else:
+            if os.path.exists(newname):
+                # if the new folder already exists, combine
+                for f in os.listdir(folder):
+                    ff = os.path.join(folder, f)
+                    shutil.move(ff, newname)
+                try:
+                    os.rmdir(folder)
+                except:
+                    logging.debug(f'Cannot remove {folder}')
+            else:
+                # if the new folder doesn't exist, rename
+                os.rename(folder, newname)
+    return newname
+
+def renameFile(file:str, debug:bool=False) -> str:
+    '''Find new name for file to follow convention. Returns the new full path'''
+    if os.path.isdir(file):
+        return file
+    
+    basename = os.path.basename(file)
+    dirname = os.path.dirname(file)
+    
+    # format the sample name, if there is one
+    try:
+        sample = sampleName(file, formatOutput=False)
+        formattedSample = sampleName(file, formatOutput=True)
+        basename = basename.replace(sample, formattedSample)
+    except Exception as e:
+        pass
+    
+    if '.jpg' in file:
+        # cell phone pic
+        sample = sampleName(file, formatOutput=True)
+        date = fileDate(file)
+        if not (sample in basename and date in basename):
+            time = re.split('_', os.path.splitext(basename)[0])
+            if len(time)>2:
+                raise NameError(f'File name {file} does not follow phone format')
+            else:
+                time = time[1]
+            basename = f'phoneCam_{sample}_{date}_{time}.jpg'
+    newname = os.path.join(dirname, basename)
+    if not file==newname:
+        if debug:
+            logging.info(file,'\n', newname)
+        else:
+            if os.path.exists(newname):
+                os.remove(file)
+            else:
+                os.rename(file, newname)
+                logging.debug(f'Rename {file}\n\t{newname}')
+    return newname
     
 #-----------------------------------------------------
 
-def dateInName(file:str) -> bool:
-    '''this file basename ends in a date'''
-    entries = re.split('_', os.path.basename(file))
-    date = entries[-1]
-    if not len(date)>=6:
-        return False
-    yy = float(date[0:2])
-    mm = float(date[2:4])
-    dd = float(date[4:])
-    if mm>12:
-        # bad month
-        return False
-    if dd>31:
-        # bad day
-        return False
-    
-    # passed all tests
-    return True
-
-def sampleInName(file:str) -> bool:
-    '''this file basename contains a sample name'''
-    entries = re.split('_', os.path.basename(file))
-    if entries[0]=='I' and entries[2]=='S':
+def isSubFolder(file:str, debug:bool=False) -> bool:
+    '''determine if the folder is a subfolder'''
+    if not os.path.exists(file):
+        return False # path must exist
+    if not os.path.isdir(file):
+        return False # path must be a directory
+    if 'raw' in file:
+        return False # this is a raw data subdirectory
+    f = os.path.basename(file)
+    for f1 in os.listdir(file):
+        if not f1 in ['raw']:
+            if os.path.isdir(os.path.join(file, f1)):
+                return False # this folder contains directories. is not a subfolder
+    entries = re.split('_', f)
+    if len(entries[-1])==6 and entries[-1][0]=='2':
+        # this is a date. file is named as a subfolder.
         return True
     else:
-        return False
-    
-def firstEntry(folder:str, directory:bool=True) -> str:
-    '''find the first entry in the folder. directory=True to find directories, False to find files'''
-    ld = os.listdir(folder)
-    if len(ld)==0:
-        return ''
-    d1 = ''
-    while len(ld)>0 and not (os.path.isdir(d1) and directory):
-        # go through files in the directory until you find another directory
-        d1 = os.path.join(folder, ld.pop(0))
-    if (os.path.isdir(d1) and directory) or (not os.path.isdir(d1) and not directory):
-        return d1
-    else:
-        return ''
-    
+        # file is not named as a subfolder, but should be.
+        renameSubFolder(file, includeDate=True, debug=debug)
+        return True
 
-def labelLevels(file:str) -> dict:
-    '''label the levels of the file hierarchy, with one characteristic file per level'''
-    levels = {}
-    bottom = file
+def putInSampleFolder(file:str, debug:bool=False) -> str:
+    '''puts the subfolder in a sample folder. returns new name of folder'''
+    if 'Thumbs' in file:
+        return ''
+    sample = sampleName(file, formatOutput=False)
+    parent = os.path.basename(os.path.dirname(file))
+    if sample==parent:
+        # already in sample folder
+        return file
     
-    # recurse until you hit the bottom level
-    while os.path.isdir(bottom): # bottom is a directory
-        newbot = firstEntry(bottom, directory=True) # find the first directory
-        if os.path.exists(newbot):
-            # this is a directory
-            bottom = newbot
+    # not already in sample folder. create a sample folder in the parent directory
+    sampleFolder = os.path.join(os.path.dirname(file), sample)
+    if not os.path.exists(sampleFolder):
+        if debug:
+            logging.debug(f'Create {sampleFolder}')
         else:
-            # no directories in bottom. find first file
-            bottom = firstEntry(bottom, directory=False) 
+            os.mkdir(sampleFolder)
+    newname = os.path.join(sampleFolder, os.path.basename(file))
+    if debug:
+        logging.debug(f'Old name: {file}\n  New name:{newname}')
+    else:
+        os.rename(file, newname)
+    return newname
         
-            
-    # bottom is now a bottom level file
-    bfold = os.path.dirname(bottom)
-    if 'raw' in bfold:
-        # raw image folder
-        levels['rawFile'] = bottom
-        if os.path.basename(bfold)=='raw':
-            levels['rawFolder'] = bfold
-        else:
-            levels['rawLineFolder'] = bfold
-            levels['rawFolder'] = os.path.dirname(bfold)
-        aboveRaw = os.path.dirname(levels['rawFolder'])
-        if sampleInName(aboveRaw):
-            levels['file'] = os.path.join(aboveRaw, firstEntry(aboveRaw, directory=False)) # bottom level file inside sbpfolder
-            if dateInName(aboveRaw):
-                # sample and date in name: this is a subfolder
-                levels['subFolder'] = aboveRaw
-            else:
-                # this is a sample folder. these files are misplaced
-                levels['sampleFolder'] = aboveRaw
-                levels['subFolder'] = 'generate' # need to generate a new subfolder
-        else:
-            # no sample in name: shopbot folder
-            levels['sbpFolder'] = aboveRaw
-            levels['subFolder'] = os.path.dirname(aboveRaw)
-            levels['file'] = os.path.join(aboveRaw, firstEntry(aboveRaw, directory=False)) # bottom level file inside sbpfolder
-    else:
-        # just a file. no raw folder, because we would have found it during recursion
-        levels['file'] = bottom
-        if sampleInName(bfold):
-            if dateInName(bfold):
-                # sample and date in name: this is a subfolder
-                levels['subFolder'] = bfold
-            else:
-                # this is a sample folder. these files are misplaced
-                levels['sampleFolder'] = bfold
-        else:
-            # no sample in name: shopbot folder
-            levels['sbpFolder'] = bfold
-            levels['subFolder'] = os.path.dirname(bfold)           
-            
-    if not 'sampleFolder' in levels:
-        sabove = os.path.dirname(levels['subFolder'])
-        if not sampleInName(sabove):
-            levels['sampleFolder'] = 'generate' # need to generate a new sample folder
-            levels['sampleTypeFolder'] = sabove # the type is right above the subFolder
-        else:
-            levels['sampleFolder'] = sabove
-            levels['sampleTypeFolder'] = os.path.dirname(sabove)
-    else:
-        levels['sampleTypeFolder'] = os.path.dirname(levels['sampleFolder'])
-    levels['printTypeFolder'] = os.path.dirname(levels['sampleTypeFolder'])
+def putInSubFolder(file:str, debug:bool=False) -> None:
+    '''Put a file in a sample folder into a subfolder with the date'''
+    if not os.path.exists(file):
+        raise NameError(f'File does not exist: {file}')
+        
+    # correct file name if needed
+    file = renameFile(file, debug=debug)
+
+        
+    # create subfolders
+    parent = os.path.dirname(file)
+    if isSubFolder(parent, debug=debug):
+        return # already in subfolder
     
-    for key in levels:
-        if levels[key]==file:
-            currentLevel = key
-    levels['currentLevel'] = currentLevel
-    
-    return levels
+    sample = sampleName(file, formatOutput=True)
+    subfolder = f'{sample}_{fileDate(file)}'
+    if os.path.basename(parent)==subfolder:
+        # file is already in subfolder
+        return
+    subfolder = os.path.join(parent, subfolder)
+    # create the subfolder if it doesn't already exist
+    if not os.path.exists(subfolder):
+        if debug:
+            logging.info(f'New folder: {subfolder}')
+        else:
+            os.makedirs(subfolder, exist_ok=True)
+       
+    newname = os.path.join(subfolder, os.path.basename(file))
+    if debug:
+        logging.info(f'Move {file} to {newname}')
+    else:
+        os.rename(file, newname)
+        logging.info(f'Moved {file} to {newname}')
 
 #------------------------------------------------------------
-
-def labelAndSort(folder:str, debug:bool=False) -> None:
-    '''label the levels and create folders where needed'''
-    levels = labelLevels(folder)
-    if levels['sampleFolder'] =='generate':
-        # generate a sample folder
-        sample = sampleName(levels['subFolder'], formatOutput=False)
-        sampleFolder = os.path.join(levels['sampleTypeFolder'], sample)
-        if not os.path.exists(sampleFolder):
-            if debug:
-                logging.debug(f'Create {sampleFolder}')
-            else:
-                os.mkdir(sampleFolder)
-        levels['sampleFolder'] = sampleFolder
-        file = levels['subFolder']
-        newname = os.path.join(levels['sampleFolder'], os.path.basename(file))
-        if debug:
-            logging.info(f'Move {file} to {newname}')
-        else:
-            os.rename(file, newname)
-            logging.info(f'Moved {file} to {newname}')
-    if levels['subFolder']=='generate':
-        # generate a subfolder
-        fd = fileDate(levels['file'])
-        sample = os.path.basename(levels['sampleFolder']) 
-        bn = f'{sample}_{fd}'
-        subfolder = os.path.join(levels['sampleFolder'], bn)
-
 
 def sortRecursive(folder:str, debug:bool=False) -> None:
     '''given any folder or file, sort and rename all the files inside'''
@@ -281,15 +306,16 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
         return
     if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
         return
-    levels = labelLevels(folder)
-    if levels['currentLevel'] =='sampleTypeFolder':
-        for f in os.listdir(levels['sampleTypeFolder']):
-            labelAndSort(os.path.join(levels['sampleTypeFolder'], f), debug=debug) # sort the folders inside sampleTypeFolder
-    elif levels['currentLevel']=='printTypeFolder':
-        for f in os.listdir(levels['printTypeFolder']):
-            sortRecursive(os.path.join(levels['printTypeFolder'], f), debug=debug)
-    elif levels['currentLevel'] in ['sampleFolder', 'subFolder', 'sbpFolder']:
-        labelAndSort(folder, debug=debug)
+    if not os.path.isdir(folder):
+        putInSubFolder(folder, debug=debug) # put the file in the subfolder
+    else:
+        if isSubFolder(folder, debug=debug): # this also renames the subfolder
+            folder = putInSampleFolder(folder, debug=debug) # if it's subfolder, put in sample folder
+            for file in os.listdir(folder):
+                renameFile(os.path.join(folder, file), debug=debug) # rename files in subfolder
+        else: # this is a sample folder or higher
+            for f in os.listdir(folder):
+                sortRecursive(os.path.join(folder, f), debug=debug) # sort all of the subfolders
 
             
 #------------------------------------------------------
