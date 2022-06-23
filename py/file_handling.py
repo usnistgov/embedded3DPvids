@@ -13,7 +13,8 @@ import pandas as pd
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from config import cfg
+from tools.config import cfg
+
 
 # logging
 logger = logging.getLogger(__name__)
@@ -30,47 +31,96 @@ def twoBN(file:str) -> str:
         return ''
     return os.path.join(os.path.basename(os.path.dirname(file)), os.path.basename(file))
 
-def fileTime(file:str) -> str:
-    '''get the time from the file, where the time is in the filename'''
+def numeric(s:str) -> bool:
+    '''determine if the string is a number'''
+    try:
+        float(s)
+    except ValueError:
+        return False
+    else:
+        return True
+    
+def dateOrTime(s:str) -> bool:
+    '''determine if the string starts with a date'''
+    if len(s)<6:
+        return False
+    if not numeric(s[:6]):
+        return False
+    if int(s[0])>2:
+        # let me just introduce a Y3K bug into my silly little program
+        return False
+    return True
+
+def toInt(s:str) -> Union[str,int]:
+    '''convert to int if possible'''
+    try:
+        return int(s)
+    except ValueError:
+        return s
+
+
+def fileDateAndTime(file:str, out:str='str') -> Tuple[Union[str,int]]:
+    '''get the date and time of the file'''
+    errorRet = '','',''
     if len(file)==0:
-        return ''
-    split = re.split('_', os.path.basename(file))
-    time = split[-1]
-    if len(time)!=6:
-        time = split[-2]
-    return time
+        return errorRet
+    split = re.split('_|\.', os.path.basename(file))
+    i = len(split)-1
+    while not dateOrTime(split[i]):
+        i=i-1
+        if i<0:
+            levels = labelLevels(file)
+            if not levels.currentLevel in ['printTypeFolder', 'sampleTypeFolder', 'sampleFolder']:
+                return fileDateAndTime(os.path.dirname(file))
+            else:
+                return errorRet
+    if len(split[i-1])==6:
+        # valid time and date
+        time = split[i][0:6]
+        date = split[i-1][0:6]
+        if len(split)>i+1:
+            v = split[i+1]
+            try:
+                int(v)
+            except ValueError:
+                v = ''
+        else:
+            v = ''
+    else:
+        # only date
+        date = split[i][0:6]
+        time = ''
+        v = ''
+    
+    if out=='int':
+        date = toInt(date)
+        time = toInt(time)
+        v = toInt(v)
+    return date,time, v
+
+def fileTime(file:str, out:str='str') -> str:
+    '''get the time from the file, where the time is in the filename'''    
+    return fileDateAndTime(file, out=out)[1]
 
 
 def fileTimeV(file:str) -> str:
     '''get the time and number from the file'''
-    if len(file)==0:
-        return ''
-    try:
-        bn = os.path.basename(file)
-        if len(bn)==0:
-            return ''
-        spl = re.split('_', bn)
-        n = re.split('\.', spl[-1])[0]
-        ftv = f'{spl[-2]}_{n}'
-    except:
-        print(file)
-    return ftv
-
-def fileDate(file:str) -> str:
-    '''Get the creation date from the file'''
-    split = re.split('_', os.path.basename(file))
-    if len(split)>1:
-        date = split[-2] # get the date from the file name (useful for files created by ShopbotPyQt GUI)
+    errorRet = ''
+    _,t,v = fileDateAndTime(file)
+    if not len(t)==6:
+        return errorRet
+    if len(v)==0:
+        return t
     else:
-        date = ''
-    if not len(date)==6:
-        # if the date is not valid, choose the beginning of the file name (useful for cell phone pics)
-        date = split[0]
-        if len(date)==8:
-            date = date[2:]
-        if not len(date)==6:
-            # if the date is not a valid date, get the date from the file modified time
-            date = time.strftime("%y%m%d", time.gmtime(os.path.getctime(file)))
+        return f'{t}_{v}'
+
+def fileDate(file:str, out:str='str') -> str:
+    '''Get the creation date from the file'''
+    date = fileDateAndTime(file, out=out)[0]
+    if (type(date) is str and not len(date)==6):
+        # if the date is not a valid date, get the date from the file modified time
+        date = time.strftime("%y%m%d", time.gmtime(os.path.getctime(file)))
+
     return date
 
 
@@ -83,7 +133,17 @@ def fileScale(file:str) -> str:
         scale = re.split('_', spl)[1]
         return str(float(scale))
     try:
-        scale = float(re.split('_', os.path.basename(file))[-2])
+        scale = re.split('_', os.path.basename(file))[-2]
+        if len(scale)==6:
+            # this is a date
+            return 1
+        else:
+            try:
+                s2 = float(scale)
+            except:
+                return 1
+            else:
+                return s2
     except:
         scale = 1
     return str(scale)
@@ -120,19 +180,19 @@ def mlapSample(file:str, formatOutput:bool=True) -> str:
     return sample
 
 def sampleRecursive(file:str) -> str:
-    '''get the string that contains the sample name'''
+    '''go up folders until you get a string that contains the sample name'''
     bn = os.path.basename(file)
-    if 'I' in bn and '_S' in bn:
+    if 'I_' in bn and '_S' in bn:
         return bn
     else:
         parent = os.path.dirname(file)
         bn = os.path.basename(parent)
-        if 'I' in bn and '_S' in bn:
+        if 'I_' in bn and '_S' in bn:
             return bn
         else:
             parent = os.path.dirname(parent)
             bn = os.path.basename(parent)
-            if 'I' in bn and '_S' in bn:
+            if 'I_' in bn and '_S' in bn:
                 return bn
             else:
                 raise f'Could not determine sample name for {file}'
@@ -141,8 +201,12 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
     '''Get the name of the sample from a file name or its parent folder'''
 
     parent = sampleRecursive(file)
-    split1 = re.split('I', parent)[1]
-    split2 = re.split('_S', split1)
+    if '_I_' in parent:
+        istr = '_I_'
+    else:
+        istr = 'I_'
+    split1 = re.split(istr, parent)[1]
+    split2 = re.split('_S_', split1)
     ink = split2[0]
     split3 = re.split('_', split2[1])
     if len(split3[0])==0:
@@ -154,8 +218,6 @@ def sampleName(file:str, formatOutput:bool=True) -> str:
     else:
         sample = f'I{ink}_S{sup}'
     return sample
-
-#---------------------------------------------  
 
     
 #-----------------------------------------------------
@@ -193,7 +255,7 @@ def firstEntry(folder:str, directory:bool=True) -> str:
     if len(ld)==0:
         return ''
     d1 = ''
-    while len(ld)>0 and ((os.path.isdir(d1) and not directory) or (not os.path.isdir(d1) and directory)) or 'Thumbs' in d1 or not os.path.exists(d1):
+    while len(ld)>0 and (((os.path.isdir(d1) and not directory) or (not os.path.isdir(d1) and directory)) or 'Thumbs' in d1 or not os.path.exists(d1)):
         # go through files in the directory until you find another directory
         d1 = os.path.join(folder, ld.pop(0))
     if (os.path.isdir(d1) and directory) or (not os.path.isdir(d1) and not directory):
@@ -314,11 +376,16 @@ class labelLevels:
                 pout = os.path.basename(getattr(self,s))
                 print(spacer*(ii+jj), s,': ', pout)
                 jj+=1
+                
+    
+        
+        
+#------------------------------------
 
 def isSubFolder(folder:str) -> bool:
     '''determine if the folder is a subfolder'''
     levels = labelLevels(folder)
-    if levels['currentLevel']=='subFolder':
+    if levels.currentLevel=='subFolder':
         return True
     else:
         return False
@@ -326,15 +393,20 @@ def isSubFolder(folder:str) -> bool:
 def subFolder(folder:str) -> str:
     '''name of the subfolder'''
     levels = labelLevels(folder)
-    return levels['subFolder']
+    return levels.subFolder
     
 def isSBPFolder(folder:str) -> bool:
     '''determine if the folder is a sbpfolder'''
     levels = labelLevels(folder)
-    if levels['currentLevel']=='sbpFolder':
+    if levels.currentLevel=='sbpFolder':
         return True
     else:
         return False
+    
+def isPrintFolder(folder:str) -> bool:
+    '''determine if the folder is the print folder'''
+    levels = labelLevels(folder)
+    return folder==levels.printFolder()
     
 #------------
 
@@ -373,6 +445,7 @@ def singleLineSBPfiles() -> dict:
 def singleLineSBPPicfiles() -> dict:
     '''get a dictionary of singleLine pic sbp file names and their shortcuts'''
     files = dict([[f'singleLinesPics{i}',f'SLP{i}'] for i in range(10)])
+    files['singleLinesPics'] = 'SLP'
     return files
     
 def singleLineSt() -> list:
@@ -383,6 +456,13 @@ def singleLineStN() -> list:
     '''get a list of single line stitch names'''
     return ['horizfull', 'vert1', 'vert2', 'vert3', 'vert4', 'xs1', 'xs2', 'xs3', 'xs4', 'xs5', 'horiz0', 'horiz1', 'horiz2']
 
+def singleLineStPics(vertLines:int, xsLines:int) -> List[str]:
+    '''get a list of strings that describe the stitched pics'''
+    l = ['horizfull']
+    l = l+[f'vert{c+1}' for c in range(vertLines)]
+    l = l+[f'xs{c+1}' for c in range(xsLines)]
+    return l
+
     
 #------------
 
@@ -392,7 +472,7 @@ def isStitch(file:str) ->bool:
         return False
     if '_vid_' in file or '_vstill_' in file:
         return False
-    for st in singleLineStN():
+    for st in (singleLineStN()+tripleLineSt()):
         if f'_{st}_' in file:
             return True
     
@@ -424,27 +504,108 @@ class printFileDict:
     '''get a dictionary of the paths for each file inside of the print folder'''
     
     def __init__(self, printFolder:str):
-        levels = labelLevels(printFolder)
-        if not levels['currentLevel'] in ['subFolder', 'sbpFolder']:
+        self.levels = labelLevels(printFolder)
+        if not self.levels.currentLevel in ['subFolder', 'sbpFolder']:
             raise ValueError(f'Input to labelPrintFiles must be subfolder or sbp folder')
 
-        printFolder = levels['currentLevel']
-        self.printFolder=levels[printFolder]
+        printFolder = self.levels.currentLevel
+        self.printFolder=self.levels.printFolder()
+        self.sort()
+            
+    def newFileName(self, s:str, ext:str) -> str:
+        '''generate a new file name'''
+        if ext[0]=='.':
+            ext = ext[1:]  # remove . from beginning
+        if len(self.vid)>0:
+            file = self.vid[0].replace('avi', ext)
+            file = file.replace('Basler camera', s)
+        elif len(self.still)>0:
+            file = self.still[0].replace('png', ext)
+            file = file.replace('Basler camera', s)
+        else:
+            file = os.path.join(self.printFolder, f'{s}.{ext}')
+            if os.path.exists(file):
+                ii = 0
+                while os.path.exists(file):
+                    file = os.path.join(self.printFolder, f'{s}_{ii}.{ext}')
+                    ii+=1
+        return file
+    
+    def sbpName(self) -> str:
+        '''gets the name of the shopbot file'''
+        if self.levels.currentLevel=='sbpFolder':
+            return self.levels.sbpFolder
+        if len(self.vid)>0:
+            file = self.vid[0]
+            if '_Basler' in file:
+                spl = re.split('_Basler', os.path.basename(file))
+                return spl[0]
+            else:
+                raise ValueError(f'Unexpected video file {file}')
+
+            
+    def getDate(self):
+        '''get the date of the folder'''
+        if len(self.vid)>0:
+            self.date = fileDate(self.vid[0], out='int')
+        elif len(self.still)>0:
+            self.date = fileDate(self.still[0], out='int')
+        else:
+            self.date = fileDate(self.levels.subFolder, out='int')
+        return self.date
+    
+    def first(self, s:str) -> str:
+        '''return first entry in the list'''
+        if not hasattr(self, s):
+            return ''
+        l = getattr(self, s)
+        if type(l) is list:
+            if len(l)==0:
+                return ''
+            return l[0]
+        else:
+            return l
+    
+    def vidFile(self):
+        '''get the primary video file'''
+        return self.first('vid')
+    
+    def timeFile(self):
+        '''get the primary time file'''
+        return self.first('timeSeries')
+    
+    def metaFile(self):
+        '''get the primary time file'''
+        return self.first('meta')
+    
+    def resetList(self):
+        '''reset the lists of files'''
         self.vid_unknown=[]
         self.csv_unknown=[]
         self.csv_delete=[]
         self.still=[]
         self.stitch=[]
         self.vstill=[]
+        self.vid = []
         self.still_unknown=[]
         self.unknown=[]
         self.phoneCam = []
+        self.timeSeries = []
+        self.meta = []
+        self.printType = ''
+        
+    def sortFiles(self, folder:str):
+        '''sort and label files in the given folder'''
+        
         tls = tripleLineSBPfiles()
         sls = singleLineSBPfiles()
 
-        for f1 in os.listdir(self.printFolder):
-            ffull = os.path.join(self.printFolder, f1)
-            if not os.path.isdir(ffull) and not 'Thumbs' in f1:
+        for f1 in os.listdir(folder):
+            ffull = os.path.join(folder, f1)
+            if os.path.isdir(ffull):
+                # recurse
+                self.sortFiles(ffull)
+            elif not 'Thumbs' in f1:
                 exspl = os.path.splitext(f1)
                 ext = exspl[-1]
                 fname = exspl[0]
@@ -453,20 +614,20 @@ class printFileDict:
                     if 'Basler camera' in fname:
                         if spl[0] in tls:
                             self.printType='tripleLine'
-                            self.vid = ffull
+                            self.vid.append(ffull)
                         elif spl[0] in sls:
                             self.printType='singleLine'
-                            self.vid = ffull
+                            self.vid.append(ffull)
                         else:
                             self.vid_unknown.append(ffull)
                     else:
                         self.vid_unknown.append(ffull)
                 elif ext=='.csv':
                     if spl[0] in tls or spl[0] in sls:
-                        if 'Fluigent' in fname:
-                            self.fluigent = ffull
-                        elif 'speeds' in fname:
-                            self.speeds=ffull
+                        if 'Fluigent' in fname or 'time' in fname:
+                            self.timeSeries.append(ffull)
+                        elif 'speeds' in fname or 'meta' in fname:
+                            self.meta.append(ffull)
                         else:
                             print(spl[0])
                             self.csv_unknown.append(ffull)
@@ -475,11 +636,19 @@ class printFileDict:
                         self.csv_delete.append(ffull)
                     else:
                         # summary or analysis file
-                        setattr(self, spl[-1], ffull)
+                        if hasattr(self, spl[-1]):
+                            l = [getattr(self, spl[-1])]
+                            l.append(ffull)
+                        else:
+                            setattr(self, spl[-1], ffull)
                 elif ext=='.png':
                     if isStill(f1):
                         if 'Basler camera' in fname:
                             # raw still
+                            if spl[0] in singleLineSBPPicfiles():
+                                self.printType='singleLine'
+                            elif spl[0] in tripleLineSBPPicfiles():
+                                self.printType='tripleLine'
                             self.still.append(ffull)
                         else:
                             self.still_unknown.append(ffull)
@@ -496,21 +665,122 @@ class printFileDict:
                     self.unknown.append(ffull) 
                     
                     
+    def sort(self) -> None:
+        '''sort and label files in the print folder'''
+        self.resetList()
+        self.sortFiles(self.printFolder)
+        
     def printAll(self) -> None:
         '''print all values'''
         for key,value in self.__dict__.items():
-            if type(value) is list:
+            if key in ['levels', 'printFolder']:
+                pass
+            elif type(value) is list:
                 if len(value)>0:
                     if os.path.exists(value[0]):
                         print(f'\n{key}:\t{[os.path.basename(file) for file in value]}\n')
                     else:
                         print(f'{key}:\t{value}')
             else:
-                if os.path.exists(value) and not key=='printFolder':
+                if os.path.exists(value):
                     print(f'{key}:\t{os.path.basename(value)}')
                 else:
                     print(f'{key}:\t{value}')
+                    
+    def check(self) -> list:
+        '''check that the sample names match and that there is only one video per print folder'''
+        self.mismatch=[]
+        self.tooMany=[]
+        bn = twoBN(self.printFolder)
+        sname = sampleName(self.printFolder)
+        for l in [self.vid, self.still, self.stitch, self.timeSeries, self.meta]:
+            for file in l:
+                if os.path.exists(file):
+                    try:
+                        s2 = sampleName(file)
+                    except IndexError:
+                        print(file)
+                        raise IndexError
+                    if not sname==s2:
+                        logging.warning(f'Mismatched sample in {bn}: {os.path.basename(file)}')
+                        self.mismatch.append(file)
+        if len(self.vid)>1:
+            logging.warning(f'Too many videos in {bn}: {len(self.vid)}')
+            self.tooMany = self.vid
+#         self.diagnoseMismatch()     # diagnose problems
+#         self.fixMismatch()          # fix problems
+        return 
+    
+    def datesAndTimes(self, s:str) -> List[str]:
+        '''get a list of dates and times for the given list'''
+        dates = []
+        times = []
+        if hasattr(self, s):
+            sl = getattr(self, s)
+            for si in sl:
+                d,t = fileDateAndTime(si)
+                dates.append(d)
+                times.append(t)
+        dates = [int(d) for d in list(set(dates))]
+        times = [int(d) for d in list(set(times))]
+        return dates,times
+    
+    def diagnoseMismatch(self):
+        '''diagnose why there is a sample mismatch in the folder, and fix it'''
+        self.newFolderFiles = []        # files to move to a new folder
+        self.renameFiles = []          # files to rename
+        if len(self.mismatch)==0:
+            return
+        stitchDates, stitchTimes = self.datesAndTimes('stitch')  # times and dates of stitches
+        if len(stitchDates)==0:
+            logging.info(f'Could not diagnose mismatch in {twoBN(self.printFolder)}: no stitches')
+            return
+        if len(stitchDates)>1:
+            logging.info(f'Could not diagnose mismatch in {twoBN(self.printFolder)}: too many stitches')
+        stitchDate = stitchDates[0]
+        for m in self.mismatch:
+            d,t = fileDateAndTime(m, out='int')
+            if (not d==stitchDate) or t>max(stitchTimes):
+                # different date from stitch, or vid taken after the stitch
+                self.newFolderFiles.append(m)
+            else:
+                self.renameFiles.append(m)
+        return
+    
+    def fixMismatch(self):
+        '''fix mismatched files'''
+        sname = sampleName(self.printFolder)
+        for file in self.renameFiles:
+            # rename file
+            s = sampleName(file)
+            newname = file.replace(s, sname)
+            os.rename(file, newname)
+            
+            # remove from bad lists
+            self.renameFiles.remove(file)
+            self.mismatch.remove(file)
+            
+            # print status
+            logging.info(f'Renamed {os.path.basename(file)} to {os.path.basename(newname)}')
+            
+        self.sort()
 
+    
+def checkFolders(topFolder:str) -> Tuple[list, list]:
+    '''check the print folders in the top folder for extra files, mis-sorted files'''
+    mismatch = []
+    tooMany = []
+    for f in printFolders(topFolder):
+        pfd = printFileDict(f)
+        pfd.check()               # check files
+        if len(pfd.mismatch)>0:
+            mismatch.append(f)
+        if len(pfd.tooMany)>0:
+            tooMany.append(f)
+    return mismatch, tooMany
+
+    
+        
     
 
 #------------------------------------------------------------
@@ -573,9 +843,9 @@ def anyIn(slist:List[str], s:str) -> bool:
             return True
     return False
             
-def subFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
-    '''Get a list of bottom level subfolders in the top folder'''
-    if isSubFolder(topFolder):
+def printFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
+    '''Get a list of bottom level print folders in the top folder'''
+    if isPrintFolder(topFolder):
         if anyIn(tags, topFolder):
             folders = [topFolder]
         else:
@@ -584,13 +854,15 @@ def subFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
         folders = []
         dirs = listDirs(topFolder)
         for d in dirs:
-            folders = folders+subFolders(d, tags=tags)
+            folders = folders+printFolders(d, tags=tags)
     return folders
             
-            
+    
+#-------------------------------
+# singleLines
 def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
-    '''Identify which subfolders in the top folder are missing data'''
-    folders = subFolders(topFolder)
+    '''Identify which print folders in the top folder are missing data'''
+    folders = printFolders(topFolder)
     outlist = []
     for folder in folders:
         d = {'Folder':os.path.basename(folder), 'BasVideo':0, 'BasStills':0, 'PhoneCam':0, 'Fluigent':0}

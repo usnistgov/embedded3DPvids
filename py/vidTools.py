@@ -40,41 +40,6 @@ def streamInfo(stream) -> Tuple:
     frame = stream.get(cv.CAP_PROP_POS_FRAMES)
     return time, frame
 
-def combineLines(df:pd.DataFrame) -> dict:
-    '''combine groups of similar Hough transform lines into one line'''
-    top = (df[df.y0==df.y0.min()]).iloc[0]
-    bot = (df[df.yf==df.yf.max()]).iloc[0]
-    return {'x0':top['x0'],'y0':top['y0'],'xf':bot['xf'],'yf':bot['yf']}
-
-def removeOutliers(df:pd.DataFrame, col:str, sigma:float=3) -> pd.DataFrame:
-    '''remove outliers in column by # of standard deviation sigma'''
-    return df[np.abs(df[col]-df[col].mean()) <= (sigma*df[col].std())]
-
-
-def lineIntersect(line1:pd.Series, line2:pd.Series) -> Tuple[float,float]:
-    '''find intersection between two lines'''
-    if line1['xf']-line1['x0']==0:
-        # line 1 is vertical
-        x = line1['xf']
-        m1 = (line2['yf']-line2['y0'])/(line2['xf']-line2['x0'])
-        line1['y0']=line2['y0']
-        line1['x0']=line2['x0']
-    elif line2['xf']-line2['x0']==0:
-        # line 2 is vertical
-        x = line2['xf']
-        m1 = (line1['yf']-line1['y0'])/(line1['xf']-line1['x0'])
-    else:
-        m1 = (line1['yf']-line1['y0'])/(line1['xf']-line1['x0'])
-        m2 = (line2['yf']-line2['y0'])/(line2['xf']-line2['x0'])
-        x = (line2['y0']-line1['y0']-m2*line2['x0']-m1*line1['x0'])/(m1-m2)
-    y = line1['y0']+m1*(x-line1['x0'])
-    return int(x),int(y)
-
-
-
-        
-        
-
 
 class vidData:
     '''holds metadata and tables about video'''
@@ -105,7 +70,7 @@ class vidData:
         self.pv.importProgDims() # generate programmed timings
         self.prog = self.pv.progDims   # programmed timings
         if len(self.prog)==0:
-            self.stream.release()
+            self.closeStream()
             # no timing file
             return 2
         self.maxT = self.prog.tf.max() # final time in programmed run
@@ -135,11 +100,7 @@ class vidData:
         else:
             return frame[5:-5,5:-5] # crop
         self.closeStream()
-    
-   
-
-    
-        
+ 
     def closeStream(self) -> None:
         '''close the stream'''
         if self.streamOpen:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for stitching bascam stills'''
+'''Functions for sorting bascam stills to be stitched'''
 
 # external packages
 import os, sys
@@ -15,275 +15,52 @@ import cv2 as cv
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-import fileHandling as fh
-import stitching
+import file_handling as fh
+from pic_stitch_stillGroup import stillGroup
 
 # logging
 
-
-
 #----------------------------------------------
-
-def colNum(file:str)->int:
-    '''get the column number for this stitched image'''
-    bn = os.path.basename(file)
-    spl = re.split('_', bn)
-    tag = spl[-3] # if there is a scaling factor in the file name
-    if not tag[0].isalpha():
-        tag = spl[-2] # no scaling factor
-    i0 = 0
-    for i in range(len(tag)):
-        if tag[i].isalpha():
-            i0+=1
-    val = tag[i0:]
-    try:
-        out = int(val)
-    except:
-        raise ValueError('Could not determine column number')
-    else:
-        return out
-    
 
 
 def flatten(l:list) -> list:
     '''flatten a list of lists'''
     return [food for sublist in l for food in sublist]
 
-
-
-
-
-class stillGroup:
-    '''class that holds lists of stills to be stitched into a single image'''
-    
-    def __init__(self, stillFolder:str, stillList:List[str], rows:int, cols:int, rc:str, targetFolder:str, st:str, dxrows:int=0, dxcols:int=0, dyrows:int=0, dycols:int=0, scale:float=1, num:int=0, cropleft:int=0, cropright:int=0, cropbot:int=0, croptop:int=0):
-        '''stillFolder is the folder that the stills are in
-        stillList is a list of file basenames (not full path)
-        cols is the number of columns
-        rows is the number of rows
-        rc is 'r' if we read left to right, bottom to top
-        rc is 'c' if we read bottom to top, left to right
-        targetFolder is the folder we're saving to
-        tag is the type of object, e.g. HOB, HIP, VP
-        dxrows is the horizontal spacing between images in px when assembling rows
-        dyrows is the vertical spacing between images in px when assembling rows
-        dxcols is the horizontal spacing between images in px when assembling columns
-        dycols is the vertical spacing between images in px when assembling columns
-        scale is the factor to scale stitched images by
-        num is the line number
-        '''
-        
-        if not len(stillList) == cols*rows:
-            raise ValueError('File list does not match number of rows and cols')
             
-        self.dxrows = dxrows
-        self.dyrows = dyrows
-        self.dxcols = dxcols
-        self.dycols = dycols
-        self.cols = cols
-        self.rows = rows
-        self.rc = rc.lower()
-        self.stillFolder = stillFolder
-        self.targetFolder = targetFolder
-        tag = os.path.basename(self.targetFolder)
-        self.spacing = re.split('_', tag)[-1]
-        self.scale = scale
-        self.st = st
-        self.num = num
-        self.levels = fh.labelLevels(self.targetFolder)       # file hierarchy
-        self.cropleft = cropleft
-        self.cropright = cropright
-        self.cropbot = cropbot
-        self.croptop = croptop
-        
-        arr = np.array([['' for i in range(cols)] for j in range(rows)], dtype=object)
-        
-        for j in range(rows):
-            for i in range(cols):
-                if self.rc=='r':
-                    k = cols*j+i
-                else:
-                    k = rows*i+j
-                ffull = os.path.join(stillFolder, stillList[k])
-                arr[j,i]=ffull
-        self.stillArr = arr # array of stills
-        
-    def name(self) -> str:
-        '''get the name of this stitch'''
-        tag = os.path.basename(self.targetFolder)        # type and spacing of print
-        return f'{tag}_{self.st}_{self.num}'
-        
-    def stitchFN(self) -> str:
-        '''get the filename for the stitch'''
-        # generate file name
-        
-        sample = 'I_'+re.split('I_',os.path.basename(self.stillArr[0,0]))[-1]      # sample and date
-        fnstitch = os.path.join(self.targetFolder, f'{self.name()}_stitch_{self.scale}_{sample}')
-        return fnstitch
-        
-        
-    def printVals(self) -> str:
-        '''return a string with information about the group'''
-        fnstitch = self.stitchFN()
-        if not os.path.exists(fnstitch):
-            fnstitch = f'(({os.path.basename(fnstitch)}))'
-        else:
-            fnstitch = os.path.basename(fnstitch)
+#------------------------
 
-        vfunc = np.vectorize(fh.fileTimeV)
-        return f'{self.st}_{self.spacing}_{self.num}: Stitch: {fnstitch}\n\tStills:{os.path.basename(self.stillArr[0,0])}\n{vfunc(self.stillArr)}'
+        
+        
+class stitchSorter:
+    '''class that holds, sorts, and stitches lists of stills'''
     
-    def stitchDone(self) -> bool:
-        '''determine if this is done being stitched'''
-        fnstitch = self.stitchFN()
-        if os.path.exists(fnstitch):
-            return True
-        else:
-            return False
-        
-    def stitchGrid(self, tempfolder:str, overwrite:bool) -> None:
-        '''stitch the grid of images'''
-        # stitch each column
-        scale = self.scale
-        ext = os.path.splitext(self.stillArr[0,0])[-1]
-        
-        for i in range(self.cols):
-            files = list(self.stillArr[:,i])
-            files = [x for x in files if os.path.exists(x) and len(os.path.basename(x))>0]
-            tempfile = os.path.join(tempfolder, f'temp_{i}{ext}')
-            if not os.path.exists(tempfile) or overwrite:
-                if len(files)>1:
-                    s = stitching.Stitch(files) # initialize the stitch object
-                    s.matcher.setDefaults(self.dxcols*scale, self.dycols*scale)
-                    s.matcher.resetLastH()
-                    if not scale==1:
-                        s.scaleImages(scale) # rescale images
-                    try:
-                    # stitch images and export
-                        s.stitchTranslate(export=True, fn=tempfile)
-                    except:
-                        logging.warning('Stitching error')
-                        traceback.print_exc()
-                        return
-                else:
-                    shutil.copyfile(files[0], tempfile)
-                
-        # stitch columns together
-        files = [os.path.join(tempfolder, f'temp_{i}{ext}') for i in range(self.cols)]
-        s = stitching.Stitch(files) # initialize the stitch object
-        s.matcher.setDefaults(self.dxrows*scale, self.dyrows*scale)
-        s.matcher.resetLastH()
-        try:
-        # stitch images and export
-            fnstitch = self.stitchFN()
-            s.stitchTranslate(export=True, fn=fnstitch)
-        except:
-            logging.warning('Stitching error')
-            traceback.print_exc()
-            return
-        
-
-    def stitch(self, overwrite:bool=False) -> None:
-        '''stitch the image and save it under the given file name'''
-        
-        fnstitch = self.stitchFN()
-        if os.path.exists(fnstitch) and not overwrite:
-            return
-        
-        if self.cols==1 and self.rows==1:
-            # copy the image
-            shutil.copyfile(self.stillArr[0,0], fnstitch)
-            return
-#             logging.debug(f'Copying file {os.path.basename(self.stillArr[0,0])} to {os.path.basename(fnstitch)}')
-        
-        # create folder to hold temp files
-        tempfolder = os.path.join(os.path.dirname(fnstitch), 'temp')
-        if not os.path.exists(tempfolder):
-            os.mkdir(tempfolder)
-            
-        # stitch the images
-        self.stitchGrid(tempfolder, overwrite)
-        
-        # remove temporary files
-        for f in os.listdir(tempfolder):
-            os.remove(os.path.join(tempfolder, f))
-        os.rmdir(tempfolder)
-        
-    def cropStitch(self) -> None:
-        '''crop the saved stitch file'''
-        fnstitch = self.stitchFN()
-        im = cv.imread(fnstitch)
-        try:
-            h = im.shape[0]
-            w = im.shape[1]
-        except:
-            logging.error(f'Image read error on {file}')
-            traceback.print_exc()
-        if self.croptop+self.cropbot>h or self.cropleft+self.cropright>w:
-            # crop is bigger than image. abort
-            return
-        im = im[self.croptop:h-self.cropbot, self.cropleft:w-self.cropright]
-        cv.imwrite(fnstitch, im)
-        
-    def stitchAndCrop(self, overwrite:bool=False, **kwargs) -> None:
-        '''stitch the image and crop it'''
-        if overwrite or not self.stitchDone():
-            crop=True
-        else:
-            crop=False
-        self.stitch(overwrite=overwrite)
-        if crop:
-            self.cropStitch()
-        
-
-
-class fileList:
-    '''class that holds lists of files of different type'''
-    
-    def __init__(self, folder):
+    def __init__(self, subFolder):
         '''folder should be a subfolder holding many sbp folders'''
         
-        if not fh.isSubFolder(folder):
-            raise ValueError('input to fileList must be subfolder')
+        if not fh.isSubFolder(subFolder):
+            raise ValueError('input to stitchSorter must be subfolder')
         
-        self.subFolder = folder
-        self.date = fh.fileDate(folder)
-        self.labelFolders()
-        self.labelPics()
+        self.subFolder = subFolder
+        self.date = fh.fileDate(subFolder)
         
-    def resetFolders(self) -> None:
-        '''reset all of the folder lists and dictionaries'''
-        # H = horiz, V = vertical
-        # I = in layer, O = out of layer
-        # P = parallel, B = bridge, C = cross
-        self.stlist = fh.tripleLineSt()
-        
-        # C = cross, D = double, H = horiz, V = vert, U = under, TL = triple line, X = cross-section
-        self.sbFiles = list(fh.tripleLineSBPfiles().values())
-        
-        for st in self.stlist:
-            setattr(self, f'{st}folders', {}) # dictionary will be spacing -> folder
-            setattr(self, f'{st}groups', [])  # list of stillGroup objects
-            
-        for sb in self.sbFiles:
-            setattr(self, f'{sb}picFolder', '') # path of folder
-            
-            
+    
     def printGroup(self, st:str) -> None:
         '''print a single group, given a stitch label'''
         if not st in self.stlist:
             raise ValueError(f'Input to printGroup must be in {self.stlist}')
         
-        print(f'\n{st}\n-----')
+        logging.info(f'\n{st}\n-----')
         grps = getattr(self, f'{st}groups') # dictionary will be spacing -> folder
         for grp in grps:
-            print(grp.printVals())
+            logging.info(grp.printVals())
         
         
     def printGroups(self) -> None:
         '''print all of the groups available'''
         for st in self.stlist:
             self.printGroup(st)
+            
             
     def grpDone(self, st:str, index:int):
         '''see if a single group or all groups in the object type are done'''
@@ -302,11 +79,11 @@ class fileList:
             if index>len(grps):
                 raise ValueError(f'requested stitch {st}{index} does not exist')
             return grps[index].stitchDone()
-            
+        
     def stitchGroup(self, st:str, index:int=-1, overwrite:bool=False, **kwargs) -> None:
         '''stitch a single list of groups, given a stitch label'''
         if not st in self.stlist:
-            raise ValueError(f'Input to printGroup must be in {self.stlist}')
+            raise ValueError(f'Input to stitchGroup must be in {self.stlist}')
         if not overwrite and self.grpDone(st, index):
             # these groups are done
             return
@@ -316,7 +93,7 @@ class fileList:
             # no groups to stitch
             return
         
-        print(f'\n{st}\n-----')
+        logging.info(f'\n{st}\n-----')
         if index<0:
             # stitch all groups
             for grp in grps:
@@ -329,11 +106,36 @@ class fileList:
                 raise ValueError(f'requested stitch {st}{index} does not exist')
             grps[index].stitchAndCrop(overwrite=overwrite, **kwargs)
             
+    def testGroup(self, st:str, index:int=-1) -> int:
+        '''test if the stitching is correct'''
+        out = 0
+        if not st in self.stlist:
+            raise ValueError(f'Input to testGroup must be in {self.stlist}')
+        grps = getattr(self, f'{st}groups') # dictionary will be spacing -> folder
+        if len(grps)==0:
+            # no groups to stitch
+            return
+        
+        logging.info(f'\n{st}\n-----')
+        if index<0:
+            # stitch all groups
+            for grp in grps:
+                out1 = grp.testStitch()
+                if out1>0:
+                    out = out1
+        else:
+            if index>len(grps):
+                raise ValueError(f'requested stitch {st}{index} does not exist')
+            out1 = grps[index].testStitch()
+            if out1>0:
+                out = out1
+        return out
+            
     def stitchAll(self, overwrite:bool=False, **kwargs) -> None:
         '''stitch all of the folders'''
         if not overwrite and self.stitchDone():
             return
-        logging.info('\n--------------\n--------------{self.subFolder}\n-------')
+        logging.info(f'\n--------------\n--------------\n{self.subFolder}\n-------')
         for st in self.stlist:
             self.stitchGroup(st, overwrite=overwrite, **kwargs)
             
@@ -347,9 +149,246 @@ class fileList:
                     return False
         return True
     
+    def selectFiles(self, pf:str, files:List[str], rows:int, cols:int, offset:int, i:int, j:int, obsPerSet:int, lastSkip:bool=False) -> List[str]:
+        '''get a list of full path names'''
+        picsPerSet = rows*cols
+        i0 = int(picsPerSet*(i*obsPerSet+j)+offset)
+        i1 = int(picsPerSet*(i*obsPerSet+j)+picsPerSet+offset)
+        if lastSkip:
+            i1 = i1-1
+        f1 = files[i0:i1]
+        return [os.path.join(pf, f) for f in f1]
+        
+    
+    def setGroup(self, st:str, pf:str, files:List[str], rows:int, cols:int, rc:str, offset:int=0, **kwargs) -> None:
+        '''set the groups value to a list of stillGroups
+        st is the type of object, e.g. HOB
+        pf is the still folder
+        files is the list of stills
+        rows,cols are the dimensions of the grid
+        rc = 'r' if pics are left-right, bottom-top, 'c' if pics are bottom-top, left-right
+        offset is number of pics to skip at the beginning of the stills list
+        lastSkip = True if there is one pic missing at the end
+        '''
+        
+        grps = f'{st}groups'
+        folders = getattr(self, f'{st}StitchFolders')
+        picsPerSet = rows*cols
+        lst = [stillGroup(self.selectFiles(pf, files, rows, cols, offset, i, 0, 1), 
+                                rows, cols, rc, 
+                                folders[key], st, num=i, **kwargs) for i,key in enumerate(folders)]
+        
+        setattr(self, grps, lst)
+        
+    def setGroup2D(self, st:str, pf:str, files:List[str], rows:int, cols:int, rc:str, obsPerSet:int, offset:int=0, lastSkip:bool=False, **kwargs) -> None:
+        '''set the groups value to a list of stillGroups
+        st is the type of object, e.g. HOB. 
+        obs per set is the number of objects per set, e.g. 4 for HIPxs0, HIPxs1, HIPxs1, HIPxs3'''
+        grps = f'{st}groups'
+        folders = getattr(self, f'{st}StitchFolders')
+        picsPerSet = rows*cols
+        
+        lst = flatten([[stillGroup(
+            self.selectFiles(pf, files, rows, cols, offset
+                             , i, j, obsPerSet, lastSkip=lastSkip), 
+                                rows, cols, rc, 
+                                folders[key], st, num=j, checkRC=(not lastSkip), **kwargs) 
+                            for j in range(obsPerSet)]
+                           for i,key in enumerate(folders)])
+        setattr(self, grps, lst)
+        
+        
+#----------------------------------------
+
+class stitchSorterSingle(stitchSorter):
+    '''class that holds, sorts, and stitches lists of stills for singleLines prints'''
+    
+    def __init__(self, subFolder):
+        '''folder should be a subfolder holding many sbp folders'''
+        super(stitchSorterSingle,self).__init__(subFolder)
+        self.pfd = fh.printFileDict(self.subFolder)
+        # number of columns for each type. 
+        
+        self.labelPics()
+        
 
         
         
+    def resetFolders(self):
+        '''reset all of the folder lists and dictionaries'''
+        
+        self.horizCols = 12
+        self.vertCols = 4
+        self.xsCols = 5
+        self.horizPerCol=0
+        self.vertPerCol=0
+        self.xsPerCol=0
+        
+        # horiz, vert1, vert2, ... xs1, xs2...
+        self.stlist = fh.singleLineSt()
+        
+        for st in self.stlist:
+            setattr(self, f'{st}groups', [])  # list of stillGroup objects
+        
+        self.horizStitchFolders = {-1:self.subFolder}
+        self.vertStitchFolders = dict([[i+1,self.subFolder] for i in range(self.vertCols)])
+        self.xsStitchFolders = dict([[i+1,self.subFolder] for i in range(self.xsCols)])
+        
+        self.basStill = list(filter(lambda f: 'Basler' in f, self.pfd.still))  # get list of still images
+        self.basStill.sort(key=lambda f:os.path.basename(f))   # sort by date
+
+    
+    def labelPics(self) -> None:
+        '''find the stills in the subfolder and sort them'''
+        self.resetFolders()
+        self.detectNumCols()
+        self.createGroups()
+        
+    def createGroups(self) -> None:
+        '''create stillGroups'''
+        kwargs = {}
+        if self.horizCols==12:
+            kwargs['dxrows'] = 274
+        elif self.horizCols==6:
+            kwargs['dxrows'] = 2*274
+        elif self.horizCols==8:
+            kwargs['dxrows'] = 424
+        kwargs['dycols'] = -280
+        kwargs['scale'] = round(3/self.horizPerCol,3)
+        self.setGroup2D('horiz', self.subFolder, self.basStill, self.horizPerCol, self.horizCols, 'c', 1, offset=0, lastSkip=self.lastSkip, **kwargs)
+        offset = self.horizPerCol*self.horizCols
+        if self.lastSkip:
+            offset = offset-1
+            
+        # vert
+        kwargs = {}
+        kwargs['dxcols'] = -1
+        kwargs['dycols'] = -277
+        kwargs['scale'] = round(3/self.vertPerCol,3)
+        self.setGroup('vert', self.subFolder, self.basStill, self.vertPerCol, 1, 'c', offset=offset, **kwargs)
+        offset = offset + self.vertCols*self.vertPerCol    
+        
+        # xs
+        kwargs = {}
+        kwargs['dxcols'] = 4.24781116
+        kwargs['dycols'] = -265.683797
+        self.setGroup('xs', self.subFolder, self.basStill, self.xsPerCol, 1, 'c', offset=offset, **kwargs)
+            
+    
+    def detectNumCols(self) -> None:
+        '''determine how many columns and rows there are in each group, depending on which shopbot file created the pics'''
+        self.lastSkip = False
+#         logging.info(len(self.basStill))
+        if len(self.basStill)>0:
+            if len(self.basStill)==49 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=1
+                self.horizPerCol=9
+                self.vertPerCol=5
+                self.xsPerCol=4
+            elif len(self.basStill)==48 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=1
+                self.horizPerCol=10
+                self.vertPerCol=7
+                self.xsPerCol=2
+            elif len(self.basStill)==58 and 'singleLinesPics' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=1
+                self.horizPerCol=10
+                self.vertPerCol=7
+                self.xsPerCol=4
+            elif len(self.basStill)==174 and 'singleLinesPics3' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=12
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                self.lastSkip = True
+            elif len(self.basStill)==108 and 'singleLinesPics4' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=6
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                self.lastSkip = True
+            elif len(self.basStill)==130 and 'singleLinesPics5' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.horizPerCol=11
+                self.vertPerCol=7
+                self.xsPerCol=3
+                self.lastSkip = True
+            elif len(self.basStill)==131 and 'singleLinesPics6' in self.basStill[0]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=3
+            elif len(self.basStill)==121 and 'singleLinesPics7' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=1
+            elif len(self.basStill)==131 and 'singleLinesPics8' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=3
+            elif len(self.basStill)==136 and 'singleLinesPics9' in self.basStill[-1]:
+                # we used the shopbot script to generate these images
+                self.horizCols=8
+                self.horizPerCol=10
+                self.vertPerCol=9
+                self.xsPerCol=4
+            return 
+        else:
+            # unknown sorting: check folders
+            for s in ['horiz', 'vert', 'xs']:
+                numfiles = len(getattr(self, f'{s}1Still'))
+                if numfiles>0:
+                    setattr(self, f'{s}PerCol', numfiles)
+                else:
+                    return ValueError(f'{self.folder}: Cannot calculate files per column for {s}')
+            return 
+
+    
+
+            
+            
+#-----------
+
+class stitchSorterTriple(stitchSorter):
+    '''class that holds, sorts, and stitches lists of stills for tripleLines prints'''
+    
+    def __init__(self, subFolder):
+        '''folder should be a subfolder holding many sbp folders'''
+        super(stitchSorterTriple,self).__init__(subFolder)
+        self.labelFolders()
+        self.labelPics()
+        
+
+    def resetFolders(self) -> None:
+        '''reset all of the folder lists and dictionaries'''
+        # H = horiz, V = vertical
+        # I = in layer, O = out of layer
+        # P = parallel, B = bridge, C = cross
+        # ['HIB', 'HIPh', 'HIPxs', 'HOB', 'HOC', 'HOPh', 'HOPxs', 'VB', 'VC', 'VP']
+        self.stlist = fh.tripleLineSt()
+        
+        # C = cross, D = double, H = horiz, V = vert, U = under, TL = triple line, X = cross-section
+        # ['CDH', 'CDV', 'CU', 'TLH', 'TLX', 'TLV', 'TLU']
+        self.sbFiles = list(fh.tripleLineSBPfiles().values())
+        
+        for st in self.stlist:
+            setattr(self, f'{st}StitchFolders', {}) # dictionary will be spacing -> folder
+            setattr(self, f'{st}groups', [])  # list of stillGroup objects
+            
+        for sb in self.sbFiles:
+            setattr(self, f'{sb}picFolder', '') # path of folder
+ 
     def labelFolders(self) -> None:
         '''find the shopbot folders in the subfolder and sort them'''
         self.resetFolders()
@@ -363,54 +402,54 @@ class fileList:
                 else:
                     if spl[1]=='0.5':
                         # put into dictionary with spacing as key
-                        self.HOCfolders[spl[2]] = ffull
+                        self.HOBStitchFolders[spl[2]] = ffull
                     else:
-                        self.HOBfolders[spl[2]] = ffull
+                        self.HOCStitchFolders[spl[2]] = ffull
             elif 'crossDoubleVert' in f:
                 if len(spl)==1:
                     self.CDVpicFolder = ffull
                 else:
                     if spl[1]=='0.5':
                         # put into dictionary with spacing as key
-                        self.VCfolders[spl[2]] = ffull
+                        self.VBStitchFolders[spl[2]] = ffull
                     else:
-                        self.VBfolders[spl[2]] = ffull
+                        self.VCStitchFolders[spl[2]] = ffull
             elif 'underCross' in f:
                 if len(spl)==1:
                     self.CUpicFolder = ffull
                 else:
                     if spl[1]=='0.5':
                         # put into dictionary with spacing as key
-                        self.HICfolders[spl[2]] = ffull
+                        self.HICStitchFolders[spl[2]] = ffull
                     else:
-                        self.HIBfolders[spl[2]] = ffull
+                        self.HIBStitchFolders[spl[2]] = ffull
             elif 'tripleLinesXS' in f:
                 if len(spl)==1:
                     self.TLXpicFolder = ffull
                 else:
                     if spl[1]=='+y':
                         # put into dictionary with spacing as key
-                        self.HIPxsfolders[spl[2]] = ffull
+                        self.HIPxsStitchFolders[spl[2]] = ffull
                     else:
-                        self.HOPxsfolders[spl[2]] = ffull
+                        self.HOPxsStitchFolders[spl[2]] = ffull
             elif 'tripleLinesUnder' in f:
                 if len(spl)==1:
                     self.TLUpicFolder = ffull
                 else:
                     # put into dictionary with spacing as key
-                    self.HIPhfolders[spl[1]] = ffull
+                    self.HIPhStitchFolders[spl[1]] = ffull
             elif 'tripleLinesHoriz' in f:
                 if len(spl)==1:
                     self.TLHpicFolder = ffull
                 else:
                     # put into dictionary with spacing as key
-                    self.HOPhfolders[spl[1]] = ffull
+                    self.HOPhStitchFolders[spl[1]] = ffull
             elif 'tripleLinesVert' in f:
                 if len(spl)==1:
                     self.TLVpicFolder = ffull
                 else:
                     # put into dictionary with spacing as key
-                    self.VPfolders[spl[1]] = ffull
+                    self.VPStitchFolders[spl[1]] = ffull
                     
                     
     def labelPics(self) -> None:
@@ -418,7 +457,9 @@ class fileList:
         for sb in self.sbFiles:
             try:
                 getattr(self, f'label{sb}pics')()
-            except:
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
                 pass
         
     def picsPerSet(self, pf:str, objects:int) -> Tuple[List[str], int]:
@@ -433,32 +474,7 @@ class fileList:
         picsPerSet = int(picsPerSet)  
         return files, picsPerSet
     
-    def setGroup(self, st:str, pf:str, files:List[str], rows:int, cols:int, rc:str, offset:int=0, **kwargs) -> None:
-        '''set the groups value to a list of stillGroups
-        st is the type of object, e.g. HOB'''
-        
-        grps = f'{st}groups'
-        folders = getattr(self, f'{st}folders')
-        picsPerSet = rows*cols
-        lst = [stillGroup(pf, files[(picsPerSet*i+offset):(picsPerSet*i+cols*rows+offset)], 
-                                rows, cols, rc, 
-                                folders[key], st, **kwargs) for i,key in enumerate(folders)]
-        
-        setattr(self, grps, lst)
-        
-    def setGroup2D(self, st:str, pf:str, files:List[str], rows:int, cols:int, rc:str, obsPerSet:int, offset:int=0, **kwargs) -> None:
-        '''set the groups value to a list of stillGroups
-        st is the type of object, e.g. HOB. obs per set is the number of identical objects per set, e.g. HOB1, HOB2, HOB3, HOB4'''
-        grps = f'{st}groups'
-        folders = getattr(self, f'{st}folders')
-        picsPerSet = rows*cols
-        
-        lst = flatten([[stillGroup(pf, files[int(picsPerSet*(i*obsPerSet+j)+offset):int(picsPerSet*(i*obsPerSet+j)+cols*rows+offset)], 
-                                rows, cols, rc, 
-                                folders[key], st, num=j, **kwargs) 
-                            for j in range(obsPerSet)]
-                           for i,key in enumerate(folders)])
-        setattr(self, grps, lst)
+    
         
         
     def labelCDHpics(self) -> None:
@@ -538,10 +554,10 @@ class fileList:
             rc = 'c'
             self.VBgroups = [stillGroup(pf, files[(picsPerSet*i):(picsPerSet*i+cols*rows)], 
                                 rows, cols, rc, 
-                                self.VBfolders[key], 'VB', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VBfolders)]
+                                self.VBStitchFolders[key], 'VB', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VBStitchFolders)]
             self.VCgroups = [stillGroup(pf, files[(picsPerSet*(i+6)):(picsPerSet*(i+6)+cols*rows)], 
                                 rows, cols, rc, 
-                                self.VCfolders[key], 'VC', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VCfolders)]
+                                self.VCStitchFolders[key], 'VC', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VCStitchFolders)]
             return
         elif picsPerSet==1:
             rows=1
@@ -629,12 +645,12 @@ class fileList:
             kwargs['dycols'] = -280
             self.VPgroups = flatten(flatten([[[stillGroup(pf, files[(picsPerSet*(i*2+j)):(picsPerSet*(i*2+j)+5)], 
                                 5, 1, 'c', 
-                                self.VPfolders[key], 'VP', num=j*2, **kwargs), 
+                                self.VPStitchFolders[key], 'VP', num=j*2, **kwargs), 
                                       stillGroup(pf, files[(picsPerSet*(i*2+j)+5):(picsPerSet*(i*2+j)+9)], 
                                 4, 1, 'c', 
-                                self.VPfolders[key], 'VP', num=j*2+1, **kwargs)]
+                                self.VPStitchFolders[key], 'VP', num=j*2+1, **kwargs)]
                             for j in range(2)]
-                           for i,key in enumerate(self.VPfolders)]))
+                           for i,key in enumerate(self.VPStitchFolders)]))
             return
         else:
             raise ValueError(f'Unexpected number of stills in {pf}:{picsPerSet}')
@@ -683,16 +699,31 @@ class fileList:
 
             
 #--------------------------------------------------
+
+
+def stitchSortDecide(folder:str) -> stitchSorter:
+    '''get a stitchSorter object with the correct print type'''
+    pfd = fh.printFileDict(folder)
+    if pfd.printType=='singleLine':
+        return stitchSorterSingle(folder)
+    elif pfd.printType=='tripleLine':
+        return stitchSorterTriple(folder)
             
 def stitchSubFolder(folder:str, **kwargs) -> None:
     '''stitches images in the subfolder'''
 
     try:
-        fl = fileList(folder)
-        fl.stitchAll(**kwargs)
+        pfd = fh.printFileDict(folder)
+        if pfd.printType=='singleLine':
+            fl = stitchSorterSingle(folder)
+            fl.stitchAll(archive=True, **kwargs)
+        elif pfd.printType=='tripleLine':
+            fl = stitchSorterTriple(folder)
+            fl.stitchAll(archive=False, **kwargs)
     except Exception as e:
         logging.error(f'Error stitching {folder}: {e}')
-#         traceback.print_exc()
+        traceback.print_exc()
+        raise e
             
 def stitchRecursive(folder:str, **kwargs) -> None:
     '''for all folders in the folder, stitch images in the subfolders'''
@@ -703,58 +734,5 @@ def stitchRecursive(folder:str, **kwargs) -> None:
     else:
         for f in os.listdir(folder):
             stitchRecursive(os.path.join(folder, f), **kwargs)
-                
-                
-def countFiles(folder:str, stills:bool=True, stitches:bool=True, subcall:bool=False) -> Union[dict, List[dict], pd.DataFrame]:
-    '''count the types of files in each folder. 
-    stills=True to print any folders which are missing stills. 
-    stitches=True to print any folders which are missing stitched images. 
-    If this is the top call, returns a dataframe. If this is a child call to a sample folder or above, returns a list of dicts. If this is a call to a subfolder, returns a dict.'''
-
-    if not os.path.isdir(folder):
-        return
-    if fh.isSubFolder(folder):
-        fl = fileList(folder)
-        return fl.countFiles() # returns a dictionary
-    
-    # parent folder
-    c = [] # list of dictionaries
-    for f in os.listdir(folder):
-        c1 = countFiles(os.path.join(folder, f), stills=stills, stitches=stitches, subcall=True)
-        if type(c1) is list:
-            c = c+c1
-        elif type(c1) is dict:
-            c.append(c1) 
-    if subcall:
-        return c # return the list of dictionaries
-    
-    # top folder
-    df = pd.DataFrame(c)
-    
-
-    STLIST = ['horiz', 'vert1', 'vert2', 'vert3', 'vert4', 'xs1', 'xs2', 'xs3', 'xs4', 'xs5']
-    
-    missing = False
-    
-    if stills:
-        for st in STLIST:
-            tystr = 'Still'
-            files = [os.path.basename(f) for f in df[df[st+tystr]==0]['folder']]
-            if len(files)>0:
-                missing=True
-                logging.info(f'Missing {st} {tystr}: {files}')
-                
-    if stitches:
-        for st in STLIST:
-            tystr = 'Stitch'
-            files = [os.path.basename(f) for f in df[(df[st+'Stitch']==0) & (df[st+'Still']>0)]['folder']]
-            if len(files)>0:
-                missing=True
-                logging.info(f'Missing {st} {tystr}: {files}')
-                
-    if not missing:
-        logging.info('No missing files')
-        
-    return df
     
             

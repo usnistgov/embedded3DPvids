@@ -16,13 +16,12 @@ import csv
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from printVals import printVals
 from imshow import imshow
 import vidMorph as vm
 from config import cfg
 from plainIm import *
 import fileHandling as fh
-import metrics as me
+
 
 # logging
 logger = logging.getLogger(__name__)
@@ -33,20 +32,44 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 #----------------------------------------------
 
+def combineLines(df:pd.DataFrame) -> dict:
+    '''combine groups of similar Hough transform lines into one line'''
+    top = (df[df.y0==df.y0.min()]).iloc[0]
+    bot = (df[df.yf==df.yf.max()]).iloc[0]
+    return {'x0':top['x0'],'y0':top['y0'],'xf':bot['xf'],'yf':bot['yf']}
 
+def lineIntersect(line1:pd.Series, line2:pd.Series) -> Tuple[float,float]:
+    '''find intersection between two lines'''
+    if line1['xf']-line1['x0']==0:
+        # line 1 is vertical
+        x = line1['xf']
+        m1 = (line2['yf']-line2['y0'])/(line2['xf']-line2['x0'])
+        line1['y0']=line2['y0']
+        line1['x0']=line2['x0']
+    elif line2['xf']-line2['x0']==0:
+        # line 2 is vertical
+        x = line2['xf']
+        m1 = (line1['yf']-line1['y0'])/(line1['xf']-line1['x0'])
+    else:
+        m1 = (line1['yf']-line1['y0'])/(line1['xf']-line1['x0'])
+        m2 = (line2['yf']-line2['y0'])/(line2['xf']-line2['x0'])
+        x = (line2['y0']-line1['y0']-m2*line2['x0']-m1*line1['x0'])/(m1-m2)
+    y = line1['y0']+m1*(x-line1['x0'])
+    return int(x),int(y)
 
 class nozData:
     '''holds metadata about the nozzle'''
     
-    def __init__(self, vidfile:str, pxpmm:float=cfg.const.pxpmm):
+    def __init__(self, vidfile:str):
         self.vidFile = vidfile
         self.levels = fh.labelLevels(vidfile)
         self.printFolder = self.levels.printFolder()
-        self.printFiles = fh.printFileDict()
+        self.pfd = fh.printFileDict(self.printFolder)
         self.sampleName = os.path.basename(self.levels.subFolder)
         self.nozMask = []                   # mask that blocks nozzle
         self.prog = []                      # programmed timings
         self.streamOpen = False
+        self.gv = 
         self.pxpmm = pxpmm
         self.importNozzleDims()
 
@@ -118,11 +141,12 @@ class nozData:
         mode=0 to use median frame, mode=1 to use mean frame, mode=2 to use lightest frame'''
         if len(self.prog)==0:
             raise ValueError('No programmed timings in folder')
-        l0 = list(self.prog.loc[:10, 'tf'])     # list of end times
-        l1 = list(self.prog.loc[1:, 't0'])      # list of start times
-        ar = np.asarray([l0,l1]).transpose()    # put start times and end times together
-        tlist = np.mean(ar, axis=1)             # list of times in gaps between prints
-        tlist = np.insert(tlist, 0, 0)          # put a 0 at the beginning, so take a still at t=0 before the print starts
+        else:
+            l0 = list(self.prog.loc[:10, 'tf'])     # list of end times
+            l1 = list(self.prog.loc[1:, 't0'])      # list of start times
+            ar = np.asarray([l0,l1]).transpose()    # put start times and end times together
+            tlist = np.mean(ar, axis=1)             # list of times in gaps between prints
+            tlist = np.insert(tlist, 0, 0)          # put a 0 at the beginning, so take a still at t=0 before the print starts
         frames = [self.getFrameAtTime(t) for t in tlist]  # get frames in gaps between prints
         if mode==0:
             out = np.median(frames, axis=0).astype(dtype=np.uint8) # median frame
@@ -196,10 +220,10 @@ class nozData:
                 traceback.print_exc()
                 pass
         try:
-            imshow(self.line_image, self.lines_image, self.edgeImage, scale=4, title=os.path.basename(self.folder))
+            imshow(self.line_image, self.lines_image, self.edgeImage, scale=4, title=os.path.basename(self.printFolder))
         except Exception as e:
             if 'lines_image' in str(e):
-                imshow(self.line_image, scale=4, title=os.path.basename(self.folder))
+                imshow(self.line_image, scale=4, title=os.path.basename(self.printFolder))
             pass
         
     def showFrames(self, tlist:List[float], crop:dict={'x0':0, 'xf':-1, 'y0':0, 'yf':-1}, figw:float=6.5) -> None:
@@ -404,7 +428,7 @@ class nozData:
 
     def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
-        logging.info(f'detecting nozzle in {self.folder}')
+        logging.info(f'detecting nozzle in {self.printFolder}')
         if len(self.prog)==0:
             # no programmed timings detected
             return 1

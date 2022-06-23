@@ -24,17 +24,23 @@ class Struct:
             else:
                 setattr(self, key, val)
 
+def configDirRecursive(currentdir:str) -> str:
+    '''find the configs directory from a current directory'''
+    configdir = os.path.join(currentdir, 'configs')
+    if os.path.exists(configdir):
+        return configdir
+    else:
+        # config dir is not in this folder. search up
+        parentdir = os.path.dirname(currentdir)
+        if os.path.basename(parentdir).lower()=='github':
+            raise FileNotFoundError(f"No configs directory found")
+        else:
+            return configDirRecursive(parentdir)
 
 def getConfigDir() -> str:
     '''find the configs directory'''
     currentdir = os.path.dirname(os.path.realpath(__file__))
-    configdir = os.path.join(currentdir, 'configs')
-    if not os.path.exists(configdir):
-        parentdir = os.path.dirname(currentdir)
-        configdir = os.path.join(parentdir, 'configs')
-        if not os.path.exists(configdir):
-            raise FileNotFoundError(f"No configs directory found")
-    return configdir
+    return configDirRecursive(currentdir)
 
 def dumpConfigs(cfg, path:str) -> int:
     '''Saves config file. cfg could be a Box or a dict'''

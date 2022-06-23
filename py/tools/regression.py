@@ -98,4 +98,7 @@ def spearman(df:pd.DataFrame, xcol:str, ycol:str) -> dict:
     corr, p = stats.spearmanr(ssi[xcol], ssi[ycol])
     return {'spearman_corr':corr, 'spearman_p':p}
     
+def removeOutliers(df:pd.DataFrame, col:str, sigma:float=3) -> pd.DataFrame:
+    '''remove outliers in column by # of standard deviation sigma'''
+    return df[np.abs(df[col]-df[col].mean()) <= (sigma*df[col].std())]
     

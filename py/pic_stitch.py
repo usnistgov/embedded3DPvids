@@ -16,7 +16,8 @@ import traceback
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-import fileHandling as fh
+import file_handling as fh
+from tools.imshow import imshow
 
 # logging
 logger = logging.getLogger(__name__)
@@ -29,54 +30,39 @@ __credits__ = ["Kushal Vyas", "Leanne Friedrich"]
 
 #----------------------------------
 
-def fileScale(file:str) -> str:
-    '''get the scale from the file name'''
-    scale = re.split('_', os.path.basename(file))[-2]
-    if len(scale)==6:
-        # this is a date
-        return 1
-    try:
-        s2 = float(scale)
-    except:
-        return 1
-    else:
-        return scale
+# def fileScale(file:str) -> str:
+#     '''get the scale from the file name'''
+#     scale = re.split('_', os.path.basename(file))[-2]
+#     if len(scale)==6:
+#         # this is a date
+#         return 1
+#     try:
+#         s2 = float(scale)
+#     except:
+#         return 1
+#     else:
+#         return scale
 
-class Struct:
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
-        
-# def subfolder(fn:str, short:bool=False) -> str:
-#     '''get the subfolder basename from a file name'''
-#     if 'raw' in fn:
-#         # archived. need to get sample folder
-#         folder = os.path.dirname(os.path.dirname(os.path.dirname(fn)))
-#     else:
-#         folder = os.path.dirname(fn)
-#     if short:
-#         return os.path.basename(folder)
-#     else:
-#         return folder
         
 
-def imshow(*args) -> None:
-    '''displays cv image(s) in jupyter notebook using matplotlib'''
-    if len(args)>1:
-        f, axs = plt.subplots(1,len(args))
-        for i, im in enumerate(args):
-            if len(im.shape)>2:
-                # color
-                axs[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
-            else:
-                # B&W
-                axs[i].imshow(im, cmap='Greys')
-    else:
-        f, ax = plt.subplots(1,1)
-        im = args[0]
-        if len(im.shape)>2:
-            ax.imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
-        else:
-            ax.imshow(im, cmap='Greys')
+# def imshow(*args) -> None:
+#     '''displays cv image(s) in jupyter notebook using matplotlib'''
+#     if len(args)>1:
+#         f, axs = plt.subplots(1,len(args))
+#         for i, im in enumerate(args):
+#             if len(im.shape)>2:
+#                 # color
+#                 axs[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
+#             else:
+#                 # B&W
+#                 axs[i].imshow(im, cmap='Greys')
+#     else:
+#         f, ax = plt.subplots(1,1)
+#         im = args[0]
+#         if len(im.shape)>2:
+#             ax.imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
+#         else:
+#             ax.imshow(im, cmap='Greys')
     
     
 class matchers:
@@ -136,9 +122,9 @@ class matchers:
         else:
             return True
         
-    def errorMatch(self, defaultToLastH:bool, debug:bool, i1:np.ndarray, i2:np.ndarray, imageSet1:dict, imageSet2:dict) -> np.ndarray:
+    def errorMatch(self, defaultToLastH:bool, disp:int, i1:np.ndarray, i2:np.ndarray, imageSet1:dict, imageSet2:dict) -> np.ndarray:
         '''return error value'''
-        if debug:
+        if disp>0:
             self.showKeypoints(i1,i2,imageSet1, imageSet2)
         if defaultToLastH:
             # return previous H in the case of failure 
@@ -152,7 +138,7 @@ class matchers:
         else:
             return []
 
-    def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, debug:bool=False, defaultToLastH:bool=True, **kwargs) -> np.ndarray:
+    def match(self, i1:np.ndarray, i2:np.ndarray, direction=None, rigid:bool=True, disp:int=0, defaultToLastH:bool=True, **kwargs) -> np.ndarray:
         '''find homography matrix that relates the two images. set rigid true to only allow rigid transform, i.e. translation, rotation, scaling. set rigid false to allow warping'''
 #         if 'useDefault' in kwargs and kwargs['useDefault']:
         if defaultToLastH:
@@ -163,7 +149,7 @@ class matchers:
         imageSet2 = self.getSURFFeatures(i2)
         if len(imageSet1)<4 or len(imageSet2)<4:
             # not enough points
-            return self.errorMatch(defaultToLastH, debug, i1, i2, imageSet1, imageSet2)
+            return self.errorMatch(defaultToLastH, disp, i1, i2, imageSet1, imageSet2)
         matches = self.flann.knnMatch(imageSet2['des'],imageSet1['des'],k=2)
         good = []
         for i , (m, n) in enumerate(matches):
@@ -172,7 +158,7 @@ class matchers:
 
         if len(good) <= 4:
             # not enough points
-            return self.errorMatch(defaultToLastH, debug, i1, i2, imageSet1, imageSet2)
+            return self.errorMatch(defaultToLastH, disp, i1, i2, imageSet1, imageSet2)
             
         # enough points
         pointsCurrent = imageSet2['kp']
@@ -186,8 +172,8 @@ class matchers:
             # sanity check
             if not self.checkH(H, i2):
                 # too much rotation, scaling, or translation
-                return self.errorMatch(defaultToLastH, debug, i1, i2, {'kp':pointsPrevious}, {'kp':pointsCurrent})
-            if debug:
+                return self.errorMatch(defaultToLastH, disp, i1, i2, {'kp':pointsPrevious}, {'kp':pointsCurrent})
+            if disp>0:
                 self.showKeypoints(i1,i2,{'kp':pointsPrevious}, {'kp':pointsCurrent})
             H = np.append(H, [[0,0,1]], axis=0)
         else:
@@ -339,7 +325,7 @@ class Stitch:
             self.images.append(im)
         except:
             self.images = [im]
-        scale = float(fileScale(file))
+        scale = float(fh.fileScale(file))
         if self.sourceScale==0:
             self.sourceScale = scale
             self.scale = self.scale*self.sourceScale
@@ -360,12 +346,10 @@ class Stitch:
                 resized = cv.resize(img, dim, interpolation = cv.INTER_AREA)
                 self.images[i] = resized
             self.scale = self.scale*scale
-        
-    def masks(self, r:Region) -> Tuple[np.ndarray, np.ndarray]:
-        '''get blending masks for the two images'''
-        new = np.zeros((r.Hnew, r.Wnew, r.Dnew), np.float32)
-        
-        # gradient mask
+            
+            
+    def generateRotated(self, r:Region):
+        '''generate mask for overlap region'''
         c1 = [self.prevCenter[0], self.prevCenter[1], 0] # center of previous image
         c2 = [r.im2yc, r.im2xc, 0] # center of image 2
         v12 = np.subtract(c2,c1) # vector from 1 to 2
@@ -398,16 +382,31 @@ class Stitch:
         rdxm = int(np.floor(r.Wo/2))       # change in x, minus direction
         rdxp = int(np.ceil(r.Wo/2))
         rotated = rotated[cyg0-rdym:cyg0+rdyp, cxg0-rdxm:cxg0+rdxp, :]
+        self.rotated = rotated
                     # crop to size of overlap region
+        
+    def masks(self, r:Region) -> Tuple[np.ndarray, np.ndarray]:
+        '''get blending masks for the two images'''
+        
+        
+        new = np.zeros((r.Hnew, r.Wnew, r.Dnew), np.float32)
+        
+        # gradient mask
+        if not hasattr(self, 'rotated'):
+            self.generateRotated(r)
+        else:
+            if not self.rotated.shape[1]==(r.oxf-r.ox0) or not self.rotated.shape[0]==(r.oyf-r.oy0):
+                self.generateRotated(r)
+            
         
         im2mask = new.copy()
         im2mask[r.im2y0:r.im2yf, r.im2x0:r.im2xf, :] = 1
-        im2mask[r.oy0:r.oyf, r.ox0:r.oxf, :] = rotated # set the overlap region to the mask
+        im2mask[r.oy0:r.oyf, r.ox0:r.oxf, :] = self.rotated # set the overlap region to the mask
         
         im1mask = new.copy()
         im1mask[r.im1y0:r.im1yf, r.im1x0:r.im1xf] = 1
-        im1mask[r.oy0:r.oyf, r.ox0:r.oxf, :] = 1-rotated # set the overlap region to the mask
-        
+        im1mask[r.oy0:r.oyf, r.ox0:r.oxf, :] = 1-self.rotated # set the overlap region to the mask
+    
         return im1mask, im2mask
         
         
@@ -423,10 +422,10 @@ class Stitch:
         
         # create masks
         im1mask, im2mask = self.masks(r)
-        
+
         im2moved2 = np.uint8(np.multiply(im2moved,im2mask))
         stitchedMoved2 = np.uint8(np.multiply(stitchedMoved,im1mask))
-        
+
         blended = cv.add(im2moved2, stitchedMoved2)
                     
         # keep new center as 
@@ -451,10 +450,9 @@ class Stitch:
             i+=1
         return fn
     
-    def returnStitch(self, export:bool=False, tag:str='', debug:bool=False, clearEntries:bool=False, duplicate:bool=1, retval:int=0, **kwargs) -> int:
+    def returnStitch(self, export:bool=False, tag:str='', disp:int=0, clearEntries:bool=False, duplicate:bool=1, retval:int=0, **kwargs) -> int:
         '''return value from stitchTranslate. Return 0 if stitched, 1 if not'''
-
-        if debug:
+        if disp>0:
             imshow(self.stitched)
         if export:
             if 'fn' in kwargs:
@@ -469,7 +467,7 @@ class Stitch:
             self.filenames = self.filenames[self.killFrame:]
         return retval
     
-    def stitchTranslate(self, **kwargs) -> int:
+    def stitchTranslate(self, disp:int=0, **kwargs) -> int:
         '''stitch the images, but only use translation. clearEntries=true to remove stitched images from queue when done. Returns 0 if stitched, 1 if not'''
         if 'duplicate' in kwargs:
             if kwargs['duplicate']==0:
@@ -505,24 +503,24 @@ class Stitch:
                     else:
                         pcx, pcy = r.convertIm1Coords(self.prevCenter[1], self.prevCenter[0], dx,dy)
                         self.prevCenter = [pcy, pcx]
-                    if 'debug' in kwargs and kwargs['debug']:
+                    if disp>1:
                         r.table()
                     self.stitched = self.blend(im, r)
                 else:
                     # no homography found, stop stitching
                     self.killFrame = i+1
                     logging.debug(f'Failed to find homography for image {i+1}')
-                    return self.returnStitch(retval=1, **kwargs)
-        return self.returnStitch(**kwargs)
+                    return self.returnStitch(retval=1, disp=disp, **kwargs)
+        return self.returnStitch(disp=disp, **kwargs)
     
-    def stitchAll(self, **kwargs) -> None:
+    def stitchAll(self, disp:int=0, **kwargs) -> None:
         '''stitch all images in the list, into separate images if necessary'''
         try:
             stitches = []
             while len(self.images)>0:
-                self.stitchTranslate(clearEntries=True, **kwargs)   
+                self.stitchTranslate(clearEntries=True, disp=disp-1, **kwargs)   
                 stitches.append(self.stitched.copy())
-            if 'debug' in kwargs and kwargs['debug']:
+            if disp>0:
                 imshow(*stitches)
         except:
             pass
