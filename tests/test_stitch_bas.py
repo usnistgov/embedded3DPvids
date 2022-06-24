@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
-LOGGERDEFINED = logs.openLog('test_fileHandling.py', False, level='DEBUG', exportLog=True) # export logs to file
+LOGGERDEFINED = logs.openLog('test_stitch_bas.py', False, level='DEBUG', exportLog=True) # export logs to file
 
 
 #----------------------------------------------

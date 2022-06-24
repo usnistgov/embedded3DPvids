@@ -160,7 +160,7 @@ class stillGroup:
                 export=True
                 disp = 0
             s.stitchTranslate(export=True, fn=fn)
-        except:
+        except Exception as e:
             logging.warning('Stitching error')
             traceback.print_exc()
             return
@@ -243,7 +243,7 @@ class stillGroup:
         try:
             h = im.shape[0]
             w = im.shape[1]
-        except:
+        except Exception as e:
             logging.error(f'Image read error on {file}')
             traceback.print_exc()
         if self.croptop+self.cropbot>h or self.cropleft+self.cropright>w:

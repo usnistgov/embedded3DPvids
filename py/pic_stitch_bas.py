@@ -174,9 +174,14 @@ class stitchSorter:
         grps = f'{st}groups'
         folders = getattr(self, f'{st}StitchFolders')
         picsPerSet = rows*cols
+        if len(list(set(folders.values())))==len(folders):
+            # all different folders: don't increment num
+            numlist = [0 for f in folders]
+        else:
+            numlist = [i for i in range(len(folders))]
         lst = [stillGroup(self.selectFiles(pf, files, rows, cols, offset, i, 0, 1), 
                                 rows, cols, rc, 
-                                folders[key], st, num=i, **kwargs) for i,key in enumerate(folders)]
+                                folders[key], st, num=numlist[i], **kwargs) for i,key in enumerate(folders)]
         
         setattr(self, grps, lst)
         
