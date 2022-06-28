@@ -38,7 +38,7 @@ __credits__ = ["Kushal Vyas", "Leanne Friedrich"]
 #         return 1
 #     try:
 #         s2 = float(scale)
-#     except Exception as e
+#     except Exception as e:
 #         return 1
 #     else:
 #         return scale
@@ -186,7 +186,7 @@ class matchers:
     def getSURFFeatures(self, im):
         try:
             gray = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
-        except Exception as e
+        except Exception as e:
             gray = im
         kp, des = self.surf.detectAndCompute(gray, None)
         return {'kp':kp, 'des':des}
@@ -317,13 +317,13 @@ class Stitch:
         try:
             h = im.shape[0]
             w = im.shape[1]
-        except Exception as e
+        except Exception as e:
             logging.error(f'Image read error on {file}')
             traceback.print_exc()
         im = im[crop:h-crop, crop:w-crop]
         try:
             self.images.append(im)
-        except Exception as e
+        except Exception as e:
             self.images = [im]
         scale = float(fh.fileScale(file))
         if self.sourceScale==0:

@@ -16,8 +16,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 from config import cfg
 from plainIm import *
-from fluidVals import *
-import fileHandling as fh
+import file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)

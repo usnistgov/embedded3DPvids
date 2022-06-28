@@ -17,8 +17,8 @@ import matplotlib.ticker as mticker
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-import fileHandling as fh
-from printVals import *
+import file_handling as fh
+from val_print import *
 import vidMorph as vm
 
 # logging
@@ -35,10 +35,6 @@ matplotlib.rc('font', size='10.0')
 
 #----------------------------------------------
 
-    
-
-
-#------
 
 class folderPlots:
     '''A generic class used for plotting many folders at once. Subclasses are comboPlot, which puts everything on one plot, and gridOfPlots, which puts everythign in separate plots based on viscosity.'''
@@ -53,23 +49,30 @@ class folderPlots:
         self.imsize = imsize
         self.plotsLists(**kwargs) 
         
-    def plotsLists(self, vname:str='val', **kwargs):
+    def plotsLists(self, xvar:str='ink.var', yvar:str='sup.var', **kwargs):
         '''plotsLists initializes variable names for gridOfPlots and comboPlots objects. 
         vname=val for fluid composition data. vname=v for speed data'''
         self.pvlists = [printVals(f) for f in self.flist]
 #         if not self.checkVals(**kwargs):
 #             raise ValueError(f'Inconsistent variables: {[f.bn for f in self.pvlists]}')
-        self.vname = vname
-        self.xfluid ='ink'
-        self.yfluid = 'sup'
-        if vname=='val':
-            self.xvar = self.xfluid+'.var'
-            self.yvar = self.yfluid+'.var'
-        else:
-            self.xvar = self.xfluid+'.v'
-            self.yvar = self.yfluid+'.v'
-        self.xfunc = self.xfluid+'.'+vname
-        self.yfunc = self.yfluid+'.'+vname
+        
+        self.xvar = xvar
+        self.yvar = yvar
+        self.xfunc = xvar
+        self.yfunc = yvar
+#         else:
+
+#             self.vname = vname
+#             self.xfluid ='ink'
+#             self.yfluid = 'sup'
+#             if vname=='val':
+#                 self.xvar = f'{self.xfluid}.var'
+#                 self.yvar = f'{self.yfluid}.var'
+#             elif vname=='v':
+#                 self.xvar = f'{self.xfluid}.v'
+#                 self.yvar = f'{self.yfluid}.v'
+#             self.xfunc = f'{self.xfluid}.{vname}'
+#             self.yfunc = f'{self.yfluid}.{vname}'
         
         self.getBases()
         for s in ['x', 'y']:
@@ -91,7 +94,7 @@ class folderPlots:
         '''get the list of materials bases (e.g. mineral oil) to determine how many plots to make'''
         self.bases = []
         for pv in self.pvlists:
-            base = pv.base(self.xfluid, self.yfluid, vname=self.vname)
+            base = pv.base()
             if not base in self.bases:
                 self.bases.append(base)
         return True
@@ -100,13 +103,11 @@ class folderPlots:
         '''get a list of unique x or y variables for each plot. var should be x or y'''
         func = getattr(self, f'{var}func')
         pvlist = self.pvlists
-        split = re.split('\.', func)
-        fluid = split[0]
-        val = split[1]
+        
         unqs = [[]]*len(self.bases)
         for pv in pvlist:
             axnum = pv.ax
-            pvval = getattr(getattr(pv, fluid),val)
+            pvval = pv.value(func, var)
             if not pvval in unqs[axnum]:
                 unqs[axnum].append(pvval)
         for i in range(len(self.bases)):
@@ -116,21 +117,15 @@ class folderPlots:
     def getLabels(self, var:str) -> List[str]:
         '''get the axis labels and store axis numbers for each folder. vname=var for composition data. vname=v for velocity data'''
         labels = ['']*len(self.bases)
-        if var=='x':
-            fluid = self.xfluid
-        else:
-            fluid = self.yfluid
+        func = getattr(self, f'{var}func')
         for pv in self.pvlists:
-            base = pv.base(self.xfluid, self.yfluid, vname=self.vname)
+            base = pv.base()
             for i,b in enumerate(self.bases): # fill the list of labels corresponding to list of bases
                 if b==base:
                     pv.ax = i # store the axis number for this folder
                     if len(labels[i])==0: # fill this label if not already filled
-                        if self.vname=='val':
-                            labels[i] = ('ink ' if var=='x' else 'support ') + str(getattr(getattr(pv, fluid),'var'))
-                        elif self.vname=='v':
-                            labels[i] = ('ink' if var=='x' else 'support') + ' speed (mm/s)'
-        setattr(self, var+'labels', labels)
+                        labels[i] = pv.label(func)
+        setattr(self, f'{var}labels', labels)
         
     
     def checkVals(self, xbase:bool=True, xvar:bool=True, ybase:bool=True, yvar:bool=True, **kwargs) -> bool:
@@ -330,7 +325,7 @@ def imFn(exportfolder:str, topfolder:str, label:str, **kwargs) -> str:
     s = ''
     for k in kwargs:
         if not k in ['adjustBounds', 'overlay', 'overwrite', 'removeBorders', 'whiteBalance', 'normalize', 'crops', 'export'] and type(kwargs[k]) is not dict:
-            s = s + k + '_'+str(kwargs[k])+'_'
+            s = f'{s}{k}_{kwargs[k]}_'
     s = s[0:-1]
     s = s.replace('*', 'x')
     s = s.replace('/', 'div')
@@ -459,7 +454,7 @@ def importAndCrop(folder:str, tag:str, whiteBalance:bool=True, normalize:bool=Tr
         im = vm.normalize(im)
     return im
 
-def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
+def getImages(pv:printVals, tag:str, concat:str='h', **kwargs) -> np.array:
     '''get the images, crop them, and put them together into one image'''
     im = []
     try:
@@ -473,23 +468,31 @@ def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
                 k2['crops'] = kwargs['crops'][i]
             else:
                 k2 = kwargs
-            im1 = importAndCrop(pv.folder, t, **k2)
+            im1 = importAndCrop(pv.printFolder, t, **k2)
             if len(im1)>0:
                 if len(im)==0:
                     im = im1
                 else:
                     # pad the images to make them the same shape
-                    if im1.shape[0]>im.shape[0]:
-                        pad = im1.shape[0]-im.shape[0]
-                        im = cv.copyMakeBorder(im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
-                    elif im.shape[0]>im1.shape[0]:
-                        pad = im.shape[0]-im1.shape[0]
-                        im1 = cv.copyMakeBorder(im1, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
-                    try:
+                    
+                    if concat=='h':
+                        if im1.shape[0]>im.shape[0]:
+                            pad = im1.shape[0]-im.shape[0]
+                            im = cv.copyMakeBorder(im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
+                        elif im.shape[0]>im1.shape[0]:
+                            pad = im.shape[0]-im1.shape[0]
+                            im1 = cv.copyMakeBorder(im1, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
                         im = cv.hconcat([im, im1]) # add to the right
-                    except Exception as e:
-                        traceback.print_exc()
-                        im = im1 # set imtot to first image
+                    elif concat=='v':
+                        if im1.shape[1]>im.shape[1]:
+                            pad = im1.shape[1]-im.shape[1]
+                            im = cv.copyMakeBorder(im, 0, pad, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
+                        elif im.shape[1]>im1.shape[1]:
+                            pad = im.shape[1]-im1.shape[1]
+                            im1 = cv.copyMakeBorder(im1, 0, pad, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
+                        im = cv.vconcat([im1, im])
+                    else:
+                        raise ValueError(f'Bad value for concat: {concat}')
     except Exception as e:
         logging.error(f'Cropping error: {str(e)}')
         traceback.print_exc()
@@ -497,11 +500,13 @@ def getImages(pv:printVals, tag:str, **kwargs) -> np.array:
     if len(im)==0:
         raise e
     return im, t, tag
-    
-def getWidthScaling(im:np.array, dx0:float, tag:str, **kwargs) -> Tuple[float,float,float]:
-    '''determine how to scale the image. dx0 is the space between images on the plot, in plot coordinates. tag is the line type, e.g. xs or horiz'''
+
+
+def wfull(im:np.array, tag:List[str], concat:str='h', **kwargs) -> Tuple[float,float]:
+    '''get the width and height of the combined image'''
     height,width = im.shape[0:2]
     if 'crops' in kwargs:
+        
         crops = kwargs['crops']
         if type(crops) is list:
             # multiple crop zones indicated for different images
@@ -520,28 +525,53 @@ def getWidthScaling(im:np.array, dx0:float, tag:str, **kwargs) -> Tuple[float,fl
             heightI = c.h.max()
         else:
             # single crop zone indicated
+            if concat=='h':
+                hs = 1
+                if type(tag) is list:
+                    ws = len(tag)
+                else:
+                    ws = 1
+            elif concat=='v':
+                ws = 1
+                if type(tag) is list:
+                    hs = len(tag)
+                else:
+                    hs = 1
             if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
                 if crops['yf']<0:
-                    heightI = height
+                    heightI = height*hs
                 else:
-                    heightI = crops['yf']-crops['y0']
+                    heightI = (crops['yf']-crops['y0'])*hs
                 if crops['xf']<0:
-                    widthI = width*len(tag)
+                    widthI = width*ws
                 else:
-                    widthI = (crops['xf']-crops['x0'])*len(tag)
+                    widthI = (crops['xf']-crops['x0'])*ws
+
                 # use intended height/width to scale all pictures the same
     else:
         widthI = width
         heightI = height
+        
+    return widthI, heightI, width,height
+    
+def getWidthScaling(im:np.array, dx0:float, dy0:float, tag:List[str], concat:str='h', **kwargs) -> Tuple[float,float,float]:
+    '''determine how to scale the image. dx0 is the space between images on the plot, in plot coordinates. tag is the line type, e.g. xs or horiz'''
+    
+    widthI, heightI, width,height = wfull(im, tag, concat=concat, **kwargs)
     
     # fix the scaling
     pxperunit = max(widthI, heightI) # image pixels per image block
-    dx = dx0*(width/pxperunit)
-    dy = dx0*(height/pxperunit)
+    if widthI>heightI:
+        dx = dx0*(width/pxperunit)
+        dy = dx*height/width
+    else:
+        dy = dy0*height/pxperunit
+        dx = dy*width/height
+        
     
-    return dx, dy, pxperunit, dx0
+    return dx, dy, pxperunit
 
-def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y0:float, s:float, ax, **kwargs):
+def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, dy0:float, x0:float, y0:float, s:float, ax, concat:str='h', **kwargs):
     '''draw an annotation, e.g. a circular or rectangular scale bar, over the image
     pxperunit is the image pixels per image block
     t is a dictionary holding info about the line, including, e.g. {'tag':'xs1'}
@@ -552,25 +582,21 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
     ax is the axis to plot this annotation on
     '''
     overlay = kwargs['overlay'] # get overlay dictionary from kwargs
-    file = picFileFromFolder(pv.folder, parseTag(t)['tag'])
+    file = picFileFromFolder(pv.printFolder, parseTag(t)['tag'])
     scale = float(fh.fileScale(file))
     pxPerBlock = pxperunit/s # rescale px to include white space
     realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
-    mmPerBlock = realPxPerBlock/cfg.const.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
-    mmPerPlotUnit = mmPerBlock/(2*dx0) # convert to dimensions of the plot
-    if not overlay['shape'] in ['rectangle', 'circle']:
+    mmPerBlock = realPxPerBlock/pv.geo.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
+    mmPerPlotUnit = mmPerBlock/(2*max(dx0, dy0)) # convert to dimensions of the plot
+    if not overlay['shape'] in ['rectangle', 'circle', '3circles']:
         return
 
-    # determine scaling
-    if 'diam' in overlay:
-        circlewMM = getFilamentDiameter(file, diam=overlay['diam'])
-    else:
-        circlewMM = getFilamentDiameter(file)
+    circlewMM = pv.dEst   # estimated filament diameter
     circlewPlotUnits = circlewMM/mmPerPlotUnit # diameter in plot units
     if 'dx' in overlay:
-        x0 = x0+overlay['dx']
+        x0 = x0+overlay['dx']*dx0
     if 'dy' in overlay:
-        y0 = y0+overlay['dy']
+        y0 = y0+overlay['dy']*dy0
     
     if 'color' in overlay:
         color = overlay['color']
@@ -581,6 +607,23 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
         # plot circle
         circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color=color, fill=False)
         ax.add_patch(circle2)
+    elif overlay['shape']=='3circles':
+        # plot circle
+        if hasattr(pv,'spacing'):
+            spacing = pv.spacing
+            num = 3
+        else:
+            spacing = 0
+            num = 1
+        for i in range(num):
+            if concat=='h':
+                x = x0+i*circlewPlotUnits*spacing
+                y = y0
+            else:
+                y = y0+i*circlewPlotUnits*spacing
+                x = x0
+            circle2 = plt.Circle((x, y), circlewPlotUnits/2, color=color, fill=False)
+            ax.add_patch(circle2)
     elif overlay['shape']=='rectangle' and ('w' in overlay or 'h' in overlay):
         # plot rectangle
         if 'w' in overlay:
@@ -594,19 +637,22 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, x0:float, y
         rect = plt.Rectangle((x0, y0), w, h, color=color, fill=True, edgecolor=None)
         ax.add_patch(rect)
     
-def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
+def picPlot(pv:printVals, cp:comboPlot, dx0:float, dy0:float, tag:str, **kwargs) -> None:
     '''plots picture from just one folder. 
     folder is the full path name
-    cp is the comboPlot object that stores the plot
+    cp is the comboPpositioninglot object that stores the plot
     dx0 is the spacing between images in plot space, e.g. 0.7
     tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
     
     # determine where to plot the image
     try:
         x0, y0, axnum = vvplot(pv, cp)
+    except ValueError:
+        return
     except Exception as e:
         if not 'already filled' in str(e):
             logging.error(f'Positioning error: {str(e)}')
+        traceback.print_exc()
         return
     
     # get the images
@@ -616,7 +662,7 @@ def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
         return
     
     # get scaling
-    dx, dy, pxperunit, dx0 = getWidthScaling(im, dx0, tag, **kwargs)
+    dx, dy, pxperunit = getWidthScaling(im, dx0, dy0, tag, **kwargs)
     
     s = 0.95 # scale images to leave white space
     im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
@@ -625,32 +671,17 @@ def picPlot(pv:printVals, cp:comboPlot, dx0:float, tag:str, **kwargs) -> None:
     cp.axs[axnum].imshow(im, extent=[x0-dx*s, x0+dx*s, y0-dy*s, y0+dy*s])
     
     if 'overlay' in kwargs:
-        picPlotOverlay(pv, pxperunit, t, dx0, x0, y0, s, cp.axs[axnum], **kwargs)
+        picPlotOverlay(pv, pxperunit, t, dx0, dy0, x0, y0, s, cp.axs[axnum], **kwargs)
         
-            
-def getFilamentDiameter(file:str, diam:float=cfg.const.di) -> float:
-    '''get the intended filament diameter in mm'''
-    if '_VI_' in file:
-        f = re.split('_', os.path.basename(file))
-        for i,char in enumerate(f):
-            if char=='VI':
-                inkv = float(f[i+1])
-            elif char=='VS':
-                supv = float(f[i+1])
-    else:
-        inkv = 5
-        supv = 5
-    return diam*np.sqrt(inkv/supv)
-
-
-def picPlots(cp:comboPlot, dx:float, tag:str, **kwargs) -> None:
+        
+def picPlots(cp:comboPlot, dx:float, dy:float, tag:str, **kwargs) -> None:
     '''plot all pictures for simulations in a folder
     folderList is a list of paths
     cp holds the plot
     dx is the spacing between images in plot space, e.g. 0.7
     tag is the name of the image type, e.g. 'y_umag'. Used to find images. '''
     for pv in cp.pvlists:
-        picPlot(pv, cp, dx, tag, **kwargs)
+        picPlot(pv, cp, dx, dy, tag, **kwargs)
     cp.figtitle = tag
     cp.clean()
 
@@ -664,25 +695,41 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
     '''
 
     if not os.path.isdir(topFolder):
+        logging.error(f'{topFolder} is not a directory')
         return
     if type(tag) is list:
         taglabel = "".join(tag)
     else:
         taglabel = tag
     fn = imFn(exportFolder, topFolder, taglabel, dates=dates[0], **kwargs)
-    if not overwrite and os.path.exists(fn+'.png'):
+    if not overwrite and os.path.exists(f'{fn}.png'):
+        logging.debug(f'File already exists {fn}')
         return
     
-    flist = fh.subFolders(topFolder, tags=dates, **kwargs)
+    flist = fh.printFolders(topFolder, tags=dates, **kwargs)
     flist.reverse()
     if len(flist)==0:
+        logging.debug(f'No folders to plot: {dates}')
         return
     
-    dx = 0.7
-    cp = comboPlot(flist, [-dx, dx], [-dx, dx], 6.5, gridlines=False, **kwargs)
-    picPlots(cp, dx, tag, **kwargs)
+
+    widthI, heightI, _, _ = wfull(np.array([[0]]), tag,  **kwargs)
+    if widthI<10:
+        dx = 0.5
+        dy = 0.5
+    else:
+        if heightI>widthI:
+            dy = 0.5
+            dx = dy*widthI/heightI
+        else:
+            dx = 0.5
+            dy = dx*heightI/widthI
     
-    if not ('export' in kwargs and not kwargs['export']):
+#     dx = 0.7
+    cp = comboPlot(flist, [-dx, dx], [-dy, dy], 6.5, gridlines=False, **kwargs)
+    picPlots(cp, dx, dy, tag, **kwargs)
+    
+    if not ('export' in kwargs and not kwargs['export']) and os.path.exists(exportFolder):
         exportIm(fn, cp.fig)
         
     if not showFig:

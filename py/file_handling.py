@@ -268,6 +268,9 @@ class labelLevels:
     '''label the levels of the file hierarchy, with one characteristic file per level'''
 
     def __init__(self, file:str):
+        
+        if not os.path.exists(file):
+            raise ValueError(f'File does not exist: {file}')
     
         levels = {}
         bottom = file
@@ -397,16 +400,80 @@ def subFolder(folder:str) -> str:
     
 def isSBPFolder(folder:str) -> bool:
     '''determine if the folder is a sbpfolder'''
-    levels = labelLevels(folder)
-    if levels.currentLevel=='sbpFolder':
-        return True
-    else:
-        return False
+    bn = os.path.basename(folder)
+    for s in list(tripleLineSBPfiles().keys())+list(tripleLineSBPPicfiles().keys()):
+        if s in bn:
+            return True
     
 def isPrintFolder(folder:str) -> bool:
     '''determine if the folder is the print folder'''
-    levels = labelLevels(folder)
-    return folder==levels.printFolder()
+    bn = os.path.basename(folder)
+    # has tripleLines SBP name in basename
+    if isSBPFolder(folder):
+        return True
+        
+    if not ('I_' in bn and 'S_' in bn):
+        return False
+        
+    # has singleLines SBP name in any file in the folder
+    for s in singleLineSBPfiles():
+        for f in os.listdir(folder):
+            if s in f:
+                return True
+    return False
+ 
+
+# def printFolders(folder:str, tags:list=['']) -> List[str]:
+#     '''get a list of print folders'''
+#     if not os.path.isdir(folder):
+#         return []
+#     levels = labelLevels(folder)
+#     if folder==levels.printFolder():
+#         for t in tags:
+#             if not t in folder:
+#                 return []
+#         return [folder]
+#     elif levels.currentLevel in ['printTypeFolder', 'sampleTypeFolder', 'sampleFolder', 'subFolder']:
+#         l = []
+#         for f in os.listdir(folder):
+#             l = l+printFolders(os.path.join(folder, f), tags=tags)
+#         return l
+#     else:
+#         return []
+    
+def listDirs(folder:str) -> List[str]:
+    '''List of directories in the folder'''
+    return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
+
+def anyIn(slist:List[str], s:str) -> bool:
+    '''bool if any of the strings in slist are in s'''
+    for si in slist:
+        if si in s:
+            return True
+    return False
+
+def allIn(slist:List[str], s:str) -> bool:
+    '''bool if all of the strings are in s'''
+    for si in slist:
+        if not si in s:
+            return False
+    return True
+    
+def printFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
+    '''Get a list of bottom level print folders in the top folder'''
+    if isPrintFolder(topFolder):
+        if allIn(tags, topFolder):
+            folders = [topFolder]
+        else:
+            folders = []
+    else:
+        folders = []
+        dirs = listDirs(topFolder)
+        for d in dirs:
+            folders = folders+printFolders(d, tags=tags)
+    return folders
+    
+    
     
 #------------
 
@@ -435,6 +502,21 @@ def tripleLineSt() -> list:
     # I = in layer, O = out of layer
     # P = parallel, B = bridge, C = cross
     return ['HIB', 'HIPh', 'HIPxs', 'HOB', 'HOC', 'HOPh', 'HOPxs', 'VB', 'VC', 'VP']
+
+def tripleLine2FileDict() -> str:
+    '''get the corresponding object name and sbp file'''
+    d = {'HOB':'crossDoubleHoriz_0.5',
+         'HOC':'crossDoubleHoriz_0',
+         'VB':'crossDoubleVert_0.5',
+         'VC':'crossDoubleVert_0',
+         'HIC':'underCross_0.5',
+         'HIB':'underCross_0',
+         'HIPxs':'tripleLinesXS_+y',
+         'HOPxs':'tripleLinesXS_+z',
+         'HIPh':'tripleLinesUnder',
+         'HOPh':'tripleLinesHoriz',
+         'VP':'tripleLinesVert'}
+    return d
     
 def singleLineSBPfiles() -> dict:
     '''get a dictionary of singleLine sbp file names and their shortcuts'''
@@ -832,30 +914,11 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
             
 #------------------------------------------------------
         
-def listDirs(folder:str) -> List[str]:
-    '''List of directories in the folder'''
-    return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
 
-def anyIn(slist:List[str], s:str) -> bool:
-    '''bool if any of the strings in slist are in s'''
-    for si in slist:
-        if si in s:
-            return True
-    return False
+
+
             
-def printFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
-    '''Get a list of bottom level print folders in the top folder'''
-    if isPrintFolder(topFolder):
-        if anyIn(tags, topFolder):
-            folders = [topFolder]
-        else:
-            folders = []
-    else:
-        folders = []
-        dirs = listDirs(topFolder)
-        for d in dirs:
-            folders = folders+printFolders(d, tags=tags)
-    return folders
+
             
     
 #-------------------------------

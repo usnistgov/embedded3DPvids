@@ -16,8 +16,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 from config import cfg
 from plainIm import *
-from fluidVals import *
-import fileHandling as fh
+import file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -132,7 +131,7 @@ class pressureVals:
     
     #-----------------                        
     # ShopbotPyQt before addition of _speed_ and _meta_ files
-    def findCalibFile(self, ink:fluidVals) -> str:
+    def findCalibFile(self, ink) -> str:
         '''find the pressure calibration file'''
         folder = cfg.path.pCalibFolder
         if not os.path.exists(folder):

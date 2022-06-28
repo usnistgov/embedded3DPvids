@@ -397,64 +397,24 @@ class stitchSorterTriple(stitchSorter):
     def labelFolders(self) -> None:
         '''find the shopbot folders in the subfolder and sort them'''
         self.resetFolders()
+        d = fh.tripleLine2FileDict()
+        sbp2obj = {v: k for k, v in d.items()}
+        sbpfiles = fh.tripleLineSBPfiles()
         
         for f in os.listdir(self.subFolder):
             ffull = os.path.join(self.subFolder, f)
             spl = re.split('_', f)
-            if 'crossDoubleHoriz' in f:
-                if len(spl)==1:
-                    self.CDHpicFolder = ffull
-                else:
-                    if spl[1]=='0.5':
-                        # put into dictionary with spacing as key
-                        self.HOBStitchFolders[spl[2]] = ffull
-                    else:
-                        self.HOCStitchFolders[spl[2]] = ffull
-            elif 'crossDoubleVert' in f:
-                if len(spl)==1:
-                    self.CDVpicFolder = ffull
-                else:
-                    if spl[1]=='0.5':
-                        # put into dictionary with spacing as key
-                        self.VBStitchFolders[spl[2]] = ffull
-                    else:
-                        self.VCStitchFolders[spl[2]] = ffull
-            elif 'underCross' in f:
-                if len(spl)==1:
-                    self.CUpicFolder = ffull
-                else:
-                    if spl[1]=='0.5':
-                        # put into dictionary with spacing as key
-                        self.HICStitchFolders[spl[2]] = ffull
-                    else:
-                        self.HIBStitchFolders[spl[2]] = ffull
-            elif 'tripleLinesXS' in f:
-                if len(spl)==1:
-                    self.TLXpicFolder = ffull
-                else:
-                    if spl[1]=='+y':
-                        # put into dictionary with spacing as key
-                        self.HIPxsStitchFolders[spl[2]] = ffull
-                    else:
-                        self.HOPxsStitchFolders[spl[2]] = ffull
-            elif 'tripleLinesUnder' in f:
-                if len(spl)==1:
-                    self.TLUpicFolder = ffull
-                else:
-                    # put into dictionary with spacing as key
-                    self.HIPhStitchFolders[spl[1]] = ffull
-            elif 'tripleLinesHoriz' in f:
-                if len(spl)==1:
-                    self.TLHpicFolder = ffull
-                else:
-                    # put into dictionary with spacing as key
-                    self.HOPhStitchFolders[spl[1]] = ffull
-            elif 'tripleLinesVert' in f:
-                if len(spl)==1:
-                    self.TLVpicFolder = ffull
-                else:
-                    # put into dictionary with spacing as key
-                    self.VPStitchFolders[spl[1]] = ffull
+            if len(spl)==1 and 'Pics' in f:
+                # assign pics folder
+                s = sbpfiles[f[:-4]]
+                setattr(self, f'{s}picFolder', ffull)
+            else:
+                # assign object/spacing folder
+                s = '_'.join(spl[:-1])
+                if s in sbp2obj:
+                    stitchFolders = getattr(self, f'{sbp2obj[s]}StitchFolders')
+                    stitchFolders[spl[-1]]=ffull
+ 
                     
                     
     def labelPics(self) -> None:

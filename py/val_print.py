@@ -16,10 +16,10 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 from config import cfg
 from plainIm import *
-from fluidVals import *
-import fileHandling as fh
-from pressureVals import pressureVals
-from geometryVals import geometryVals
+from val_fluid import *
+import file_handling as fh
+from val_pressure import pressureVals
+from val_geometry import geometryVals
 
 # logging
 logger = logging.getLogger(__name__)
@@ -40,28 +40,36 @@ class printVals:
         vink and vsup are in mm/s. 
         di (inner nozzle diameter) and do (outer) are in mm'''
         self.printFolder = folder
-        self.pfd = printFileDict(self.printFolder)
-        self.bn = os.path.basename(folder)
+        self.levels = fh.labelLevels(self.printFolder)
+        self.pfd = fh.printFileDict(self.printFolder)
+        self.bn = os.path.basename(self.levels.subFolder)
         self.fluFile = False
         self.calibFile = False
+        self.constUnits = {}
+    
         split = re.split('_', self.bn)
         inkShortName = split[1]
         supShortName = split[3]
-        self.date = int(split[-1][0:6])
+        self.date = fh.fileDate(self.levels.subFolder)
         self.ink = fluidVals(inkShortName, 'ink')
         self.sup = fluidVals(supShortName, 'sup')
+        
+        if self.pfd.printType=='tripleLine':
+            split = re.split('_', os.path.basename(self.levels.sbpFolder))
+            self.spacing = float(split[-1])
+            self.constUnits['spacing'] = '$d_i$'
 
         self.press = pressureVals(self.printFolder, pfd=self.pfd)
         self.geo = geometryVals(self.printFolder, pfd=self.pfd)
         self.tension()
-        self.ink.constants(self.vink, self.geo.di, self.sigma)
-        self.sup.constants(self.vsup, self.geo.do, self.sigma)
+        self.ink.constants(self.press.vink, self.geo.di, self.sigma)
+        self.sup.constants(self.press.vsup, self.geo.do, self.sigma)
         self.const()
         
   
     def const(self) -> None:
         '''define dimensionless numbers and critical values'''
-        self.constUnits = {}
+        
         
         # viscosity ratio
         self.viscRatio = self.ink.visc0/self.sup.visc0 
@@ -120,14 +128,46 @@ class printVals:
         out = {**meta, **const, **pvals, **inkvals, **supvals}
         units = {**munits, **cunits, **punits, **inkunits, **supunits}
         return out, units
+    
+    def value(self, varfunc:str, var:str) -> float:
+        '''get the value of a given function. var is x or y'''
+        split = re.split('\.', varfunc)
+        if 'ink' in varfunc or 'sup' in varfunc:
+            fluid = split[0]
+            valname = split[1]
+            fobject = getattr(self, fluid)
+            if valname=='var':
+                valname = 'val'
+            value = getattr(fobject, valname)
+        elif 'self' in varfunc:
+            value = getattr(self, split[1])
+        else:
+            raise ValueError(f'Value not found for {var}: {varfunc}')
+        setattr(self, f'{var}val', value)
+        return value
         
-    def base(self, xfluid:str, yfluid:str, vname:str='val') -> str:
+    def label(self, varfunc:str) -> float:
+        split = re.split('\.', varfunc)
+        if 'ink' in varfunc or 'sup' in varfunc:
+            fluid = split[0]
+            valname = split[1]
+            fobject = getattr(self, fluid)
+            if valname=='var' or valname=='val':
+                return f'{fluid} {fobject.var}'
+            elif valname=='v':
+                return f'{fluid} speed (mm/s)'
+            else:
+                return ''
+        elif 'self' in varfunc:
+            valname = split[1]
+            return f'{valname} ({self.constUnits[valname]})'
+
+    def base(self) -> str:
         '''get the plot title'''
-        self.xval = getattr(getattr(self, xfluid),vname)
-        self.yval = getattr(getattr(self, yfluid),vname)
-        xbase = getattr(self, xfluid).base
-        ybase = getattr(self, yfluid).base
-        base = f'{xbase}, {ybase}'
+#         if vname in ['val', 'v']:
+#             self.xval = getattr(getattr(self, xfluid),vname)
+#             self.yval = getattr(getattr(self, yfluid),vname)
+        base = f'{self.ink.base}, {self.sup.base}'
         return base
     
     def tension(self) -> float:
