@@ -263,6 +263,23 @@ def firstEntry(folder:str, directory:bool=True) -> str:
     else:
         return ''
     
+def findBottom(bottom:str) -> str:
+    '''find the bottom level file in the hierarchy'''
+    # recurse until you hit the bottom level
+    while os.path.isdir(bottom): # bottom is a directory
+        newbot = firstEntry(bottom, directory=True) # find the first directory
+        if os.path.exists(newbot):
+            # this is a directory
+            bottom = newbot
+        else:
+            # no directories in bottom. find first file
+            bottom2 = firstEntry(bottom, directory=False) 
+            if not os.path.exists(bottom2):
+                return bottom
+            else:
+                return bottom2
+    return bottom
+    
 
 class labelLevels:
     '''label the levels of the file hierarchy, with one characteristic file per level'''
@@ -273,21 +290,14 @@ class labelLevels:
             raise ValueError(f'File does not exist: {file}')
     
         levels = {}
-        bottom = file
-
-        # recurse until you hit the bottom level
-        while os.path.isdir(bottom): # bottom is a directory
-            newbot = firstEntry(bottom, directory=True) # find the first directory
-            if os.path.exists(newbot):
-                # this is a directory
-                bottom = newbot
-            else:
-                # no directories in bottom. find first file
-                bottom = firstEntry(bottom, directory=False) 
-
+        bottom = findBottom(file)
 
         # bottom is now a bottom level file
-        bfold = os.path.dirname(bottom)
+        if os.path.isdir(bottom):
+            bfold = bottom
+            bottom = ''
+        else:
+            bfold = os.path.dirname(bottom)
         if 'raw' in bfold or 'temp' in bfold:
             # raw image folder
             self.rawFile = bottom
@@ -401,7 +411,9 @@ def subFolder(folder:str) -> str:
 def isSBPFolder(folder:str) -> bool:
     '''determine if the folder is a sbpfolder'''
     bn = os.path.basename(folder)
-    for s in list(tripleLineSBPfiles().keys())+list(tripleLineSBPPicfiles().keys()):
+    if 'Pics' in bn:
+        return False
+    for s in list(tripleLineSBPfiles().keys()):
         if s in bn:
             return True
     
@@ -422,24 +434,6 @@ def isPrintFolder(folder:str) -> bool:
                 return True
     return False
  
-
-# def printFolders(folder:str, tags:list=['']) -> List[str]:
-#     '''get a list of print folders'''
-#     if not os.path.isdir(folder):
-#         return []
-#     levels = labelLevels(folder)
-#     if folder==levels.printFolder():
-#         for t in tags:
-#             if not t in folder:
-#                 return []
-#         return [folder]
-#     elif levels.currentLevel in ['printTypeFolder', 'sampleTypeFolder', 'sampleFolder', 'subFolder']:
-#         l = []
-#         for f in os.listdir(folder):
-#             l = l+printFolders(os.path.join(folder, f), tags=tags)
-#         return l
-#     else:
-#         return []
     
 def listDirs(folder:str) -> List[str]:
     '''List of directories in the folder'''
@@ -588,7 +582,7 @@ class printFileDict:
     def __init__(self, printFolder:str):
         self.levels = labelLevels(printFolder)
         if not self.levels.currentLevel in ['subFolder', 'sbpFolder']:
-            raise ValueError(f'Input to labelPrintFiles must be subfolder or sbp folder')
+            raise ValueError(f'Input to labelPrintFiles must be subfolder or sbp folder. Given {printFolder}')
 
         printFolder = self.levels.currentLevel
         self.printFolder=self.levels.printFolder()

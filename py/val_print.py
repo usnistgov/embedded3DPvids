@@ -56,8 +56,11 @@ class printVals:
         
         if self.pfd.printType=='tripleLine':
             split = re.split('_', os.path.basename(self.levels.sbpFolder))
-            self.spacing = float(split[-1])
-            self.constUnits['spacing'] = '$d_i$'
+            if len(split)>1:
+                self.spacing = float(split[-1])
+                self.constUnits['spacing'] = '$d_i$'
+            else:
+                return
 
         self.press = pressureVals(self.printFolder, pfd=self.pfd)
         self.geo = geometryVals(self.printFolder, pfd=self.pfd)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video and image data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''Functions for plotting video and image data for tripleLines'''
 
 # external packages
 import os, sys
@@ -74,11 +74,17 @@ class multiPlots:
             self.xvar = 'ink.v'
             self.yvar = 'sup.v'
             
-    def keyPlots(self, showFig:bool=False, export:bool=True, **kwargs):
+    def keyPlots(self, **kwargs):
         '''most important plots'''
-        for s in ['HIPxs', 'HOPxs']:
-            self.plot(s, spacing=0.875, overwrite=True, index=[0,1,2,3])
-            self.plot(s, ink=self.inkList[-1], overwrite=True, index=[1])
+        for s in ['HIPxs', 'HOPxs', 'HOPh']:
+            self.plot(s, spacing=0.875, index=[0,1,2,3], **kwargs)
+            self.plot(s, ink=self.inkList[-1], index=[1], **kwargs)
+        for s in ['VP']:
+            self.plot(s, spacing=0.875, index=[0,1,2,3], **kwargs)
+            self.plot(s, ink=self.inkList[-1], index=[2], **kwargs)
+        for s in ['HOB', 'HOC', 'VB', 'VC']:
+            self.plot(s, spacing=0.875, index=[0], **kwargs)
+            self.plot(s, ink=self.inkList[-1], index=[0], **kwargs)
         
             
         
@@ -134,18 +140,23 @@ class multiPlots:
             
         crops = {'HOC':{'y0':0, 'yf':600, 'x0':0, 'xf':750},
                 'HOB':{'y0':0, 'yf':750, 'x0':0, 'xf':750},
-                'HIPxs':{'y0':50, 'yf':250, 'x0':50, 'xf':250},
-                'HOPxs':{'y0':0, 'yf':300, 'x0':50, 'xf':200}}
+                'HIPxs':{'y0':0, 'yf':250, 'x0':50, 'xf':300},
+                'HOPxs':{'y0':0, 'yf':300, 'x0':50, 'xf':200},
+                'VB':{'y0':0, 'yf':600, 'x0':100, 'xf':700},
+                'VC':{'y0':0, 'yf':600, 'x0':100, 'xf':700},
+                'HOPh':{'y0':50, 'yf':350, 'x0':50, 'xf':750},
+                'VP':{'y0':0, 'yf':800, 'x0':0, 'xf':284}}
         if name in crops:
             kwargs2['crops'] = crops[name]
         if name in ['HIPh', 'HOPh']:
             concat = 'v'
-        elif name in ['HIPxs', 'HOPxs']:
+        else:
             concat = 'h'
             
         exportFolder =  os.path.join(self.exportFolder, name)
         if not os.path.exists(exportFolder):
             os.mkdir(exportFolder)
+
         fig = picPlots0(self.folder, exportFolder
                         , dates, tag, showFig=showFig, export=export
                         , overlay={'shape':'3circles', 'dx':-0.8, 'dy':-0.8}

@@ -136,8 +136,14 @@ class stitchSorter:
         if not overwrite and self.stitchDone():
             return
         logging.info(f'\n--------------\n--------------\n{self.subFolder}\n-------')
-        for st in self.stlist:
-            self.stitchGroup(st, overwrite=overwrite, **kwargs)
+        for sti in self.stlist:
+            if 'st' in kwargs:
+                if sti in kwargs['st']:
+                    kwargs2 = kwargs.copy()
+                    kwargs2.pop('st')
+                    self.stitchGroup(sti, overwrite=overwrite, **kwargs2)
+            else:
+                self.stitchGroup(sti, overwrite=overwrite, **kwargs)
             
     def stitchDone(self) -> bool:
         '''determine if the folder is done stitching'''

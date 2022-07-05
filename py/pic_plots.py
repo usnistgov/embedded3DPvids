@@ -107,9 +107,13 @@ class folderPlots:
         unqs = [[]]*len(self.bases)
         for pv in pvlist:
             axnum = pv.ax
-            pvval = pv.value(func, var)
-            if not pvval in unqs[axnum]:
-                unqs[axnum].append(pvval)
+            try:
+                pvval = pv.value(func, var)
+            except AttributeError:
+                pass
+            else:
+                if not pvval in unqs[axnum]:
+                    unqs[axnum].append(pvval)
         for i in range(len(self.bases)):
             unqs[i].sort()
         return unqs
@@ -568,7 +572,6 @@ def getWidthScaling(im:np.array, dx0:float, dy0:float, tag:List[str], concat:str
         dy = dy0*height/pxperunit
         dx = dy*width/height
         
-    
     return dx, dy, pxperunit
 
 def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, dy0:float, x0:float, y0:float, s:float, ax, concat:str='h', **kwargs):
@@ -703,7 +706,6 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
         taglabel = tag
     fn = imFn(exportFolder, topFolder, taglabel, dates=dates[0], **kwargs)
     if not overwrite and os.path.exists(f'{fn}.png'):
-        logging.debug(f'File already exists {fn}')
         return
     
     flist = fh.printFolders(topFolder, tags=dates, **kwargs)
