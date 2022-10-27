@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing metadata about print folders'''
+'''Functions for storing pressure and speed metadata about print folders'''
 
 # external packages
 import os, sys
@@ -38,6 +38,8 @@ class pressureVals:
         self.caliba = 0
         self.calibb = 0
         self.calibc = 0
+        self.calibFile = False
+        self.calibFile = True
         
         # default velocity values
         self.vink = cfg.const.vink
@@ -56,8 +58,12 @@ class pressureVals:
             out = self.readCalibFile()
             if out>0:
                 logging.warning(f'No pressure calibration found for {self.printFolder}')
+                self.calibFile = False
             else:
                 self.exportSpeedFile()
+                self.calibFile = True
+        else:
+            self.calibFile = True
         
             
     def calculateP(self, s:float) -> float:
@@ -202,8 +208,7 @@ class pressureVals:
         file = self.pfd.newFileName('speeds', 'csv')
         with open(file, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            for k,v in self.targetPressures.items():
-                writer.writerow([f'ink pressure channel {k}', 'mbar', str(v)])
+            writer.writerow([f'ink pressure channel {self.channel}', 'mbar', str(self.targetPressure)])
             writer.writerow(['ink speed', 'mm/s', str(self.vink)])
             writer.writerow(['support speed', 'mm/s', str(self.vsup)])
             writer.writerow(['caliba', 'mm/s/mbar^2', str(self.caliba)])

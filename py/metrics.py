@@ -17,13 +17,13 @@ import subprocess
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from singleLines.stitchBas import fileList
-from fileHandling import isSubFolder
-import vidCrop as vc
-import vidMorph as vm
-from imshow import imshow
-from plainIm import *
-from printVals import *
+from pic_stitch_bas import stitchSorter
+from file_handling import isSubFolder, fileScale
+import im_crop as vc
+import im_morph as vm
+from tools.imshow import imshow
+from tools.plainIm import *
+from val_print import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -37,13 +37,6 @@ pd.set_option("display.precision", 2)
 
 #----------------------------------------------
 
-def fileScale(file:str) -> str:
-    '''get the scale from the file name'''
-    try:
-        scale = float(re.split('_', os.path.basename(file))[-2])
-    except:
-        return 1
-    return scale
 
 def lineName(file:str, tag:str) -> float:
     '''get the number of the line from the file name based on tag, e.g. 'vert', 'horiz', 'xs'. '''
@@ -52,6 +45,7 @@ def lineName(file:str, tag:str) -> float:
         if tag in st:
             return float(st.replace(tag, ''))
     return -1
+
 
 
 def getRoughness(componentMask:np.array, diag:int=0) -> float:
@@ -71,7 +65,7 @@ def getRoughness(componentMask:np.array, diag:int=0) -> float:
     hull = cv.convexHull(cnt)
     hullperimeter = cv.arcLength(hull,True)
     roughness = perimeter/hullperimeter-1  # how much extra perimeter there is compared to the convex hull
-    if diag and perimeter>1000:
+    if diag:
         # show annotated image
         cm = componentMask.copy()
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
@@ -141,18 +135,10 @@ def measureComponent(componentMask:np.array, horiz:bool, scale:float, maxlen:int
 
 #-------------------------------
 
-def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
-    '''im is imported image. 
-    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
-    title is the title to put on the plot
-    name is the name of the line, e.g. xs1
-    acrit is the minimum segment size to be considered a cross-section
-    '''
-    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
-    if markers[0]==1:
-        return {}, {}
+def filterXSComponents(markers:Tuple, im2:np.ndarray) -> pd.DataFrame:
+    '''filter out cross-section components'''
+    errorRet = [],[]
     df = vm.markers2df(markers)
-    roughness = getRoughness(im2, diag=max(0,diag-1))
     xest = im2.shape[1]/2 # estimated x
     if im2.shape[0]>600:
         yest = im2.shape[0]-300
@@ -160,18 +146,35 @@ def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag
     else:
         yest = im2.shape[0]/2
         dycrit = im2.shape[0]/2
-    df = df[(df.x0>10)&(df.y0>10)&(df.x0+df.w<im.shape[1]-10)&(df.y0+df.h<im.shape[0]-10)] 
+    df2 = df.copy()
+    df2 = df2[(df2.x0>10)&(df2.y0>10)&(df2.x0+df2.w<im2.shape[1]-10)&(df2.y0+df2.h<im2.shape[0]-10)] 
         # remove anything too close to the border
-    df = df[(df.a>acrit)]
     df2 = df[(abs(df.xc-xest)<100)&(abs(df.yc-yest)<dycrit)] 
         # filter by location relative to expectation and area
     if len(df2)==0:
         df2 = df[(df.a>1000)] # if everything was filtered out, only filter by area
         if len(df2)==0:
-            return {},{}
+            return errorRet
+    return df, df2
+
+def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
+    '''im is imported image. 
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
+    title is the title to put on the plot
+    name is the name of the line, e.g. xs1
+    acrit is the minimum segment size to be considered a cross-section
+    '''
+    errorRet = {}, {}
+    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
+    if markers[0]==1:
+        return errorRet
+    roughness = getRoughness(im2, diag=max(0,diag-1))
+    df, df2 = filterXSComponents(markers, im2)
     if len(df2)>1 and df2.a.max() < 2*list(df.a.nlargest(2))[1]:
         # largest object not much larger than 2nd largest
-        return {},{}
+        return errorRet
+    if len(df2)==0:
+        return errorRet
     m = (df2[df2.a==df2.a.max()]).iloc[0] # select largest object
     x0 = int(m['x0'])
     y0 = int(m['y0'])
@@ -210,7 +213,83 @@ def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
     title = os.path.basename(file)
     im = vm.normalize(im)
     return xsMeasureIm(im, s, title, name, diag=diag)
+
+#--------
+
+
+
+def xs3Measure(file:str, acrit:int=100, diag:int=0, **kwargs) -> Tuple[dict,dict]:
+    '''measure cross-section of 3 lines'''
+    errorRet = {},{}
+    spl = re.split('xs', os.path.basename(file))
+    name = re.split('_', spl[0])[-1] + 'xs' + re.split('_', spl[1])[1]
+    im = cv.imread(file)
+    s = 1/float(fileScale(file))
+    title = os.path.basename(file)
+    im = vm.normalize(im)
     
+    # segment components
+    if 'LapRD_LapRD' in file:
+        # use more aggressive segmentation to remove leaks
+        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, botthresh=75, topthresh=75, diag=max(0,diag-1))
+    else:
+        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
+    df, df2 = filterXSComponents(markers, im2)
+    if len(df2)==0:
+        return errorRet
+    labels = markers[1]
+    for i in list(df.index):
+        if i in df2.index:
+            labels[labels==i] = 255
+        else:
+            labels[labels==i] = 0
+    labels = labels.astype(np.uint8)
+
+    # find contours
+    contours = cv.findContours(labels,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    cnt = np.vstack(contours[0])
+    hull = cv.convexHull(cnt)
+    
+    if diag>0:
+        cm = im2.copy()
+        cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
+        cv.drawContours(cm, [hull], -1, (110, 245, 209), 6)
+        cv.drawContours(cm, cnt, -1, (186, 6, 162), 6)
+        imshow(cm)
+        
+    # measure components
+    hullArea = cv.contourArea(hull)
+    filledArea = df2.a.sum()
+    porosity = 1-(filledArea/hullArea)
+    
+    perimeter = 0
+    for cnti in contours[0]:
+        perimeter+=cv.arcLength(cnti, True)
+    hullPerimeter = cv.arcLength(hull, True)
+    excessPerimeter = perimeter/hullPerimeter - 1
+    
+    x0,y0,w,h = cv.boundingRect(hull)
+    aspect = h/w
+    
+    M = cv.moments(cnt)
+    xc = int(M['m10']/M['m00'])
+    yc = int(M['m01']/M['m00'])
+    boxcx = x0+w/2 # x center of bounding box
+    boxcy = y0+h/2 # y center of bounding box
+    xshift = (xc-boxcx)/w
+    yshift = (yc-boxcy)/h
+    
+    units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'porosity':'', 'excessPerimeter':''} # where pixels are in original scale
+    retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':filledArea*s**2, 'w':w*s, 'h':h*s, 'porosity':porosity, 'excessPerimeter':excessPerimeter}
+    return retval, units
+
+    
+    
+        
+    
+        
+    
+
 
 #------------------------------------
 
@@ -484,7 +563,7 @@ def importProgDims(folder:str) -> Tuple[pd.DataFrame, dict]:
 def stitchFile(folder:str, st:str, i:int) -> str:
     '''get the name of the stitch file, where st is vert, horiz, or xs, and i is a line number'''
     try:
-        fl = fileList(folder)
+        fl = stitchSorter(folder)
     except:
         return
     if st=='horiz':
@@ -526,9 +605,7 @@ def openImageInPaint(folder:str, st:str, i:int) -> None:
         return
     subprocess.Popen([r'C:\Windows\System32\mspaint.exe', file]);
     
-def openExplorer(folder:str) -> None:
-    '''open the folder in explorer'''
-    subprocess.Popen(['explorer', folder.replace(r"/", "\\")], shell=True);
+
 
 
 def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:List[str]=['xs', 'vert', 'horiz'], **kwargs) -> None:
@@ -538,7 +615,7 @@ def measureStills(folder:str, overwrite:bool=False, diag:int=0, overwriteList:Li
     if not isSubFolder(folder):
         return
     try:
-        fl = fileList(folder)
+        fl = stitchSorter(folder)
     except Exception as e:
         return
     if fl.date<210500:

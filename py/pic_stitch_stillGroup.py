@@ -25,7 +25,10 @@ from pic_stitch import Stitch
 class stillGroup:
     '''class that holds lists of stills to be stitched into a single image'''
     
-    def __init__(self, stillList:List[str], rows:int, cols:int, rc:str, targetFolder:str, st:str, dxrows:int=0, dxcols:int=0, dyrows:int=0, dycols:int=0, scale:float=1, num:int=0, cropleft:int=0, cropright:int=0, cropbot:int=0, croptop:int=0, checkRC:bool=True):
+    def __init__(self, stillList:List[str], rows:int, cols:int, rc:str, targetFolder:str, st:str
+                 , dxrows:int=0, dxcols:int=0, dyrows:int=0, dycols:int=0, scale:float=1
+                 , num:int=0, cropleft:int=0, cropright:int=0, cropbot:int=0, croptop:int=0
+                 , checkRC:bool=True, **kwargs):
         '''
         stillList is a list of file full path
         cols is the number of columns
@@ -41,7 +44,7 @@ class stillGroup:
         scale is the factor to scale stitched images by
         num is the line number
         '''
-        
+
         self.skipLast = False
         if not len(stillList) == cols*rows:
             if checkRC:
@@ -110,6 +113,8 @@ class stillGroup:
         elif self.pfd.printType=='singleLine':
             scale = '{0:.4g}'.format(self.scale)
             fnstitch = os.path.join(self.targetFolder, f'{self.name()}_{scale}_00{ext}')
+        else:
+            raise ValueError(f'Unknown print type in {self.levels.printFolder()}')
         return fnstitch
         
         

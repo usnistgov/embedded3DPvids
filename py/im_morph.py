@@ -92,6 +92,7 @@ def fillComponents(thresh:np.array)->np.array:
     img_floodfill = cv.floodFill(pad, mask, (0,0), 0, (5), (0), flags=8)[1] # floodfill outer white border with black
     thresh2 = img_floodfill[1:h-1, 1:w-1]  # remove border
     
+    # fill in objects
     im_flood_fill = thresh2.copy()
     h, w = thresh.shape[:2]
     mask = np.zeros((h + 2, w + 2), np.uint8)
@@ -200,7 +201,7 @@ def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthres
         impx = np.product(gray.shape)
         allwhite = impx*whiteval
         prod = allwhite
-        while prod>=allwhite and crit>100: # segmentation included too much
+        while prod>=allwhite and crit>50: # segmentation included too much
             ret, thresh1 = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
             ret, thresh2 = cv.threshold(gray,crit+10,255,cv.THRESH_BINARY_INV)
             thresh = np.ones(shape=thresh2.shape, dtype=np.uint8)
@@ -266,20 +267,28 @@ def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:boo
         else:
             filled = thresh.copy()
         markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
-
-        if diag>0:
-            imshow(img, gray, thresh, filled)
-            plt.title(f'attempt:{attempt}')
         if markers[0]>1:
+            # we collected points
             boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
             if max(boxes.loc[1:,'area'])<acrit:
                 # poor segmentation. redo with adaptive thresholding.
                 attempt=attempt+1
             else:
+                # we're done. remove small points
                 attempt = 6
+            labels = markers[1]
+            boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
+            for i in list(boxes[boxes.area<100].index):
+                labels[labels==i] = 0
+            markers = markers[0], labels, markers[2], markers[3]
+            labels[labels>0]=255
+            labels = labels.astype(np.uint8)
         else:
             attempt = attempt+1
-    return filled, markers, finalAt
+        if diag>0:
+            imshow(img, gray, thresh, labels)
+            plt.title(f'attempt:{attempt}')
+    return labels, markers, finalAt
 
 
 

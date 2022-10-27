@@ -76,16 +76,9 @@ class multiPlots:
             
     def keyPlots(self, **kwargs):
         '''most important plots'''
-        for s in ['HIPxs', 'HOPxs', 'HOPh']:
-            self.plot(s, spacing=0.875, index=[0,1,2,3], **kwargs)
-            self.plot(s, ink=self.inkList[-1], index=[1], **kwargs)
-        for s in ['VP']:
-            self.plot(s, spacing=0.875, index=[0,1,2,3], **kwargs)
-            self.plot(s, ink=self.inkList[-1], index=[2], **kwargs)
-        for s in ['HOB', 'HOC', 'VB', 'VC']:
-            self.plot(s, spacing=0.875, index=[0], **kwargs)
-            self.plot(s, ink=self.inkList[-1], index=[0], **kwargs)
-        
+        for s in ['HIx', 'HOx', 'HOh', 'V']:
+            self.plot(s, spacing=0.875, **kwargs)
+            self.plot(s, ink=self.inkList[-1], **kwargs)     
             
         
     def spacingPlots(self, name:str, showFig:bool=False, export:bool=True):
@@ -93,25 +86,24 @@ class multiPlots:
         for spacing in self.spacingList:
             self.plot(spacing=spacing, showFig=showFig, export=export)
             
-    def plot(self, name:str, showFig:bool=False, export:bool=True, index:List[int]=[0], **kwargs):
-        '''plot the values for object name (e.g. HOB, HIPxs)'''
+    def plot(self, name:str, showFig:bool=False, export:bool=True,  **kwargs):
+        '''plot the values for name (e.g. horiz, xs_+y, xs_+z, or vert)'''
         yvar = self.yvar
         xvar = 'self.spacing'
         kwargs2 = {**self.kwargs.copy(), **kwargs.copy()}
-        obj2file = fh.tripleLine2FileDict()
+        obj2file = fh.singleDisturb2FileDict()
         if not name in obj2file:
             raise ValueError(f'Unknown object requested: {name}')
         file = obj2file[name]
         allIn = [file]
         dates = self.dates
-        tag = [f'{name}_{i}' for i in index]
+        tag = ['l1wo', 'l1do']
         freevars = 0
         if 'spacing' in kwargs:
             spacing = kwargs['spacing']
             if not type(spacing) is str:
                 spacing = '{:.3f}'.format(spacing)
             allIn.append(f'{file}_{spacing}')
-            tag = [f'{spacing}_{name}_{i}' for i in index]
             xvar = self.xvar
             freevars+=1
         if 'ink' in kwargs:
@@ -141,17 +133,13 @@ class multiPlots:
         if 'crops' in kwargs:
             kwargs2['crops'] = kwargs['crops']
         else:
-            crops = {'HOC':{'y0':0, 'yf':600, 'x0':0, 'xf':750},
-                    'HOB':{'y0':0, 'yf':750, 'x0':0, 'xf':750},
-                    'HIPxs':{'y0':0, 'yf':250, 'x0':50, 'xf':300},
-                    'HOPxs':{'y0':0, 'yf':300, 'x0':50, 'xf':200},
-                    'VB':{'y0':0, 'yf':800, 'x0':100, 'xf':700},
-                    'VC':{'y0':0, 'yf':800, 'x0':100, 'xf':700},
-                    'HOPh':{'y0':50, 'yf':350, 'x0':50, 'xf':750},
-                    'VP':{'y0':0, 'yf':800, 'x0':0, 'xf':284}}
+            crops = {'HIx':{'y0':150, 'yf':350, 'x0':200, 'xf':300},
+                    'HOx':{'y0':150, 'yf':350, 'x0':200, 'xf':300},
+                    'HOh':{'y0':0, 'yf':300, 'x0':10, 'xf':790},
+                    'V':{'y0':0, 'yf':600, 'x0':200, 'xf':400}}
             if name in crops:
                 kwargs2['crops'] = crops[name]
-        if name in ['HIPh', 'HOPh', 'HOPxs']:
+        if name in ['HOh']:
             concat = 'v'
         else:
             concat = 'h'
@@ -162,7 +150,7 @@ class multiPlots:
 
         fig = picPlots0(self.folder, exportFolder
                         , allIn, dates, tag, showFig=showFig, export=export
-                        , overlay={'shape':'3circles', 'dx':-0.8, 'dy':-0.8}
+                        , overlay={'shape':'2circles', 'dx':-0.8, 'dy':-0.8}
                         , xvar=xvar, yvar=yvar, concat=concat
                         , **kwargs2)
    

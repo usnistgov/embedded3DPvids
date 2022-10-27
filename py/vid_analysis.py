@@ -16,12 +16,12 @@ import csv
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from printVals import printVals
+from val_print import printVals
 from imshow import imshow
-import vidMorph as vm
+import im_morph as vm
 from config import cfg
-from plainIm import *
-from fileHandling import isSubFolder
+from tools.plainIm import *
+from file_handling import isSubFolder
 import metrics as me
 
 # logging

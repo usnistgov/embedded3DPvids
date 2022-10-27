@@ -88,17 +88,18 @@ class fluidVals:
     def metarow(self, tag:s='') -> Tuple[dict,dict]:
         '''row containing metadata'''
         mlist = ['shortname', 'days', 'rheModifier', 'surfactant' ,'dye', 'var', 'val', 'base', 'type']
-        ti = f'{tag}{i}'
-        meta = [[ti,getattr(self,i)] for i in mlist]  # metadata
-        munits = [[ti, ''] for i in mlist]            # metadata units
+        meta = [[f'{tag}{i}',getattr(self,i)] for i in mlist]  # metadata
+        munits = [[f'{tag}{i}', ''] for i in mlist]            # metadata units
+        
         rhelist = ['tau0', 'eta0']             
-        rhe = [[ti,getattr(self,i)] for i in rhelist]        # rheology data
-        rheunits = [[ti, self.rheUnits[i]] for i in rhelist] # rheology units
+        rhe = [[f'{tag}{i}',getattr(self,i)] for i in rhelist]        # rheology data
+        rheunits = [[f'{tag}{i}', self.rheUnits[i]] for i in rhelist] # rheology units
         clist = self.constUnits.keys()
-        const = [[ti,getattr(self,i)] for i in clist]           # constants data
-        constunits = [[ti, self.constUnits[i]] for i in clist]  # constants units
+        const = [[f'{tag}{i}',getattr(self,i)] for i in clist]           # constants data
+        constunits = [[f'{tag}{i}', self.constUnits[i]] for i in clist]  # constants units
         out = dict(meta+rhe+const)
         units = dict(munits+rheunits+constunits)
+        units[f'{tag}val'] = self.var
         return out,units
             
     def findRhe(self) -> dict:

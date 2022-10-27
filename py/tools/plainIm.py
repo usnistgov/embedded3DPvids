@@ -7,6 +7,7 @@ import pandas as pd
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
 import numpy as np
+import re
 
 # local packages
 
@@ -44,12 +45,34 @@ def plainIm(file:str, ic:Union[int, bool]=0, checkUnits:bool=True) -> Tuple[Unio
         return [], {}
     
     
-def plainExp(fn:str, data:pd.DataFrame, units:dict) -> None:
+def splitUnits(df:pd.DataFrame) -> Tuple[pd.DataFrame,dict]:
+    '''given a header row where units are in parentheses, rename the dataframe headers to have no units and return a dictionary with units'''
+    header = {}
+    units = {}
+    for c in df.columns:
+        if '(' in c:
+            spl = re.split('\(', c)
+            name = spl[0]
+            if len(c)>1:
+                u = spl[1][:-1]
+        else:
+            name = c
+            u = ''
+        header[c]=name
+        units[name] = u
+    df.rename(columns=header, inplace=True)
+    return df,units
+
+    
+def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True) -> None:
     '''export the file'''
-    if len(data)==0 or len(units)==0:
+    if len(data)==0:
         return
-    col = pd.MultiIndex.from_tuples([(k,units[k]) for k in data]) # index with units
+    if len(units)==0:
+        col = data.columns
+    else:
+        col = pd.MultiIndex.from_tuples([(k,units[k]) for k in data]) # index with units
     data = np.array(data)
     df = pd.DataFrame(data, columns=col)       
-    df.to_csv(fn)
+    df.to_csv(fn, index=index)
     logging.info(f'Exported {fn}')

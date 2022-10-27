@@ -412,7 +412,8 @@ class stitchSorterTriple(stitchSorter):
             spl = re.split('_', f)
             if len(spl)==1 and 'Pics' in f:
                 # assign pics folder
-                s = sbpfiles[f[:-4]]
+                lineName = re.split('Pics', f)[0]
+                s = sbpfiles[lineName]
                 setattr(self, f'{s}picFolder', ffull)
             else:
                 # assign object/spacing folder
@@ -426,6 +427,7 @@ class stitchSorterTriple(stitchSorter):
     def labelPics(self) -> None:
         '''sort the raw stills into folders'''
         for sb in self.sbFiles:
+#         for sb in ['TLH']:
             try:
                 getattr(self, f'label{sb}pics')()
             except Exception as e:
@@ -433,21 +435,27 @@ class stitchSorterTriple(stitchSorter):
                 traceback.print_exc()
                 pass
         
-    def picsPerSet(self, pf:str, objects:int) -> Tuple[List[str], int]:
+    def picsPerSet(self, pf:str, objects:int, offset:bool=False) -> Tuple[List[str], int]:
         '''get the number of pictures per set given a path to the picture folder pf and a number of objects to image'''
         if not os.path.exists(pf):
             return
         files = os.listdir(pf) # all files in folder
         files = list(filter(lambda f: 'Basler' in f, files))  # only select images by the basler camera
         picsPerSet = len(files)/objects                           # 12 objects to image
+        skip = 0
         if picsPerSet-np.floor(picsPerSet)>10**-6:            # should be same number of pics in each object
-            raise ValueError(f'Uneven number of stills in {pf}:{len(files)}/{picsPerSet}')
+            if offset:
+            # allow us to throw out the first pic
+                skip = 1
+                picsPerSet = (len(files)-1)/objects
+                if picsPerSet-np.floor(picsPerSet)>10**-6:
+                    raise ValueError(f'Uneven number of stills in {pf}:{len(files)}/{picsPerSet}')
+            else:
+                raise ValueError(f'Uneven number of stills in {pf}:{len(files)}/{picsPerSet}')
         picsPerSet = int(picsPerSet)  
+        files = files[skip:]
         return files, picsPerSet
-    
-    
-        
-        
+
     def labelCDHpics(self) -> None:
         '''sort the crossDoubleHoriz pics'''
         pf = self.CDHpicFolder
@@ -456,11 +464,14 @@ class stitchSorterTriple(stitchSorter):
         files, picsPerSet = self.picsPerSet(pf, 12)
         kwargs = {}
         
-        if picsPerSet==2:
+        if picsPerSet==2:   
             rows = 2
             cols = 1
             rc = 'c'
-            kwargs['dycols'] = -172
+            if 'Pics2' in pf:
+                kwargs['dycols'] = -259
+            else:
+                kwargs['dycols'] = -172
             kwargs['dxcols'] = 0
         elif picsPerSet==9:
             rows = 3
@@ -523,13 +534,25 @@ class stitchSorterTriple(stitchSorter):
             rows = 4
             cols = 2
             rc = 'c'
-            self.VBgroups = [stillGroup(pf, files[(picsPerSet*i):(picsPerSet*i+cols*rows)], 
+            self.VBgroups = [stillGroup(files[(picsPerSet*i):(picsPerSet*i+cols*rows)], 
                                 rows, cols, rc, 
-                                self.VBStitchFolders[key], 'VB', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VBStitchFolders)]
-            self.VCgroups = [stillGroup(pf, files[(picsPerSet*(i+6)):(picsPerSet*(i+6)+cols*rows)], 
+                                self.VBStitchFolders[key], 'VB', dxrows=dxrowskey[float(key)], **kwargs)
+                             for i,key in enumerate(self.VBStitchFolders)]
+            self.VCgroups = [stillGroup(files[(picsPerSet*(i+6)):(picsPerSet*(i+6)+cols*rows)], 
                                 rows, cols, rc, 
-                                self.VCStitchFolders[key], 'VC', dxrows=dxrowskey[float(key)], **kwargs) for i,key in enumerate(self.VCStitchFolders)]
+                                self.VCStitchFolders[key], 'VC', dxrows=dxrowskey[float(key)], **kwargs) 
+                             for i,key in enumerate(self.VCStitchFolders)]
             return
+        elif picsPerSet==2:
+            
+                
+            rows=2
+            cols=1
+            rc='r'
+            if 'Pics2' in pf:
+                kwargs['dycols'] = -280
+            else:
+                kwargs['dycols'] = -73
         elif picsPerSet==1:
             rows=1
             cols=1
@@ -540,6 +563,7 @@ class stitchSorterTriple(stitchSorter):
         self.setGroup('VB', pf, files, rows, cols, rc, offset=0, **kwargs)
         self.setGroup('VC', pf, files, rows, cols, rc, offset=6*rows*cols, **kwargs)
         
+        
     def labelTLHpics(self) -> None:
         '''sort the tripleLinesHoriz pics'''
         pf = self.TLHpicFolder
@@ -548,6 +572,12 @@ class stitchSorterTriple(stitchSorter):
         files, picsPerSet = self.picsPerSet(pf, 24)
         
         kwargs = {}
+        
+        if picsPerSet==4:
+            # extra picture at beginning
+            remove = set(files[0::4])
+            files = [f for f in files if f not in remove]  # remove every 1st of 4 elements
+            picsPerSet=3
         
         if picsPerSet==3:
             rows = 1
@@ -594,19 +624,19 @@ class stitchSorterTriple(stitchSorter):
         pf = self.TLVpicFolder
         if not os.path.exists(pf):
             return
-        files, picsPerSet = self.picsPerSet(pf, 12) # check whole column which has 2 objects
+        files, picsPerSet = self.picsPerSet(pf, 12, offset=True) # check whole column which has 2 objects
         
         kwargs = {}
         
-        kwargs['cropleft'] = 250
+        kwargs['cropleft'] = 200
         kwargs['cropright'] = 250
+        
         
         if picsPerSet==4:
             rows = 2
             cols = 1
             rc = 'c'
             kwargs['dycols'] = -277
-            
         elif picsPerSet==2:
             rows=1
             cols=1
@@ -614,17 +644,17 @@ class stitchSorterTriple(stitchSorter):
         elif picsPerSet==9:
             # 5 on bottom, 4 on top
             kwargs['dycols'] = -280
-            self.VPgroups = flatten(flatten([[[stillGroup(pf, files[(picsPerSet*(i*2+j)):(picsPerSet*(i*2+j)+5)], 
+            self.VPgroups = flatten(flatten([[[stillGroup(files[(picsPerSet*(i*2+j)):(picsPerSet*(i*2+j)+5)], 
                                 5, 1, 'c', 
                                 self.VPStitchFolders[key], 'VP', num=j*2, **kwargs), 
-                                      stillGroup(pf, files[(picsPerSet*(i*2+j)+5):(picsPerSet*(i*2+j)+9)], 
+                                      stillGroup(files[(picsPerSet*(i*2+j)+5):(picsPerSet*(i*2+j)+9)], 
                                 4, 1, 'c', 
                                 self.VPStitchFolders[key], 'VP', num=j*2+1, **kwargs)]
                             for j in range(2)]
                            for i,key in enumerate(self.VPStitchFolders)]))
             return
         else:
-            raise ValueError(f'Unexpected number of stills in {pf}:{picsPerSet}')
+            raise ValueError(f'Unexpected number of stills per set in {pf}:{picsPerSet}')
 
         picsPerSet = picsPerSet/2
         self.setGroup2D('VP', pf, files, rows, cols, rc, 4, offset=0, **kwargs)
@@ -701,9 +731,14 @@ def stitchRecursive(folder:str, **kwargs) -> None:
     if not os.path.isdir(folder):
         return
     if fh.isSubFolder(folder):
-        stitchSubFolder(folder,  **kwargs)
+        try:
+            stitchSubFolder(folder,  **kwargs)
+        except:
+            pass
     else:
         for f in os.listdir(folder):
             stitchRecursive(os.path.join(folder, f), **kwargs)
+            
+
     
             

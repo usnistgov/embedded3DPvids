@@ -9,6 +9,7 @@ import time
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
 import pandas as pd
+import subprocess
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -23,7 +24,9 @@ logger.setLevel(logging.DEBUG)
 
 
 #----------------------------------------------
-
+def openExplorer(folder:str) -> None:
+    '''open the folder in explorer'''
+    subprocess.Popen(['explorer', folder.replace(r"/", "\\")], shell=True);
 
 def twoBN(file:str) -> str:
     '''get the basename and folder it is in'''
@@ -413,7 +416,7 @@ def isSBPFolder(folder:str) -> bool:
     bn = os.path.basename(folder)
     if 'Pics' in bn:
         return False
-    for s in list(tripleLineSBPfiles().keys()):
+    for s in list(tripleLineSBPfiles().keys()) + list(singleDisturbSBPfiles().keys()):
         if s in bn:
             return True
     
@@ -441,6 +444,8 @@ def listDirs(folder:str) -> List[str]:
 
 def anyIn(slist:List[str], s:str) -> bool:
     '''bool if any of the strings in slist are in s'''
+    if len(slist)==0:
+        return True
     for si in slist:
         if si in s:
             return True
@@ -448,15 +453,17 @@ def anyIn(slist:List[str], s:str) -> bool:
 
 def allIn(slist:List[str], s:str) -> bool:
     '''bool if all of the strings are in s'''
+    if len(slist)==0:
+        return True
     for si in slist:
         if not si in s:
             return False
     return True
     
-def printFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
+def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[], **kwargs) -> List[str]:
     '''Get a list of bottom level print folders in the top folder'''
     if isPrintFolder(topFolder):
-        if allIn(tags, topFolder):
+        if allIn(tags, topFolder) and anyIn(someIn, topFolder):
             folders = [topFolder]
         else:
             folders = []
@@ -464,12 +471,40 @@ def printFolders(topFolder:str, tags:List[str]=[''], **kwargs) -> List[str]:
         folders = []
         dirs = listDirs(topFolder)
         for d in dirs:
-            folders = folders+printFolders(d, tags=tags)
+            folders = folders+printFolders(d, tags=tags, someIn=someIn)
     return folders
     
     
     
 #------------
+
+def singleDisturbSBPfiles() -> dict:
+    '''get a dictionary of singleDisturb sbp file names and their shortcuts'''
+    files = {'disturbHoriz':'DH', 'disturbVert':'DV', 'disturbXS':'DX'}
+    return files
+
+def singleDisturbSt() -> list:
+    '''get a list of disturbed line object types'''
+    return ['HIx', 'HOx', 'HOh', 'V']
+
+def singleDisturb2FileDict() -> str:
+    '''get the corresponding object name and sbp file'''
+    d = {'HIx':'disturbXS_+y', 
+        'HOx':'disturbXS_+z',
+        'HOh':'disturbHoriz',
+        'V':'disturbVert'}
+    return d
+    
+def singleDisturbName(file:str) -> str:
+    '''get the short name, given the sbp file name'''
+    d = singleDisturb2FileDict()
+    for key,val in d.items():
+        if val in file:
+            return key
+    raise ValueError(f'Unexpected sbp file name: {file}')
+    
+    
+#---
 
 def tripleLineSBPfiles() -> dict:
     '''get a dictionary of tripleLine sbp file names and their shortcuts'''
@@ -511,6 +546,8 @@ def tripleLine2FileDict() -> str:
          'HOPh':'tripleLinesHoriz',
          'VP':'tripleLinesVert'}
     return d
+
+#---
     
 def singleLineSBPfiles() -> dict:
     '''get a dictionary of singleLine sbp file names and their shortcuts'''
@@ -548,7 +585,7 @@ def isStitch(file:str) ->bool:
         return False
     if '_vid_' in file or '_vstill_' in file:
         return False
-    for st in (singleLineStN()+tripleLineSt()):
+    for st in (singleLineStN()+tripleLineSt()+singleDisturbSt()):
         if f'_{st}_' in file:
             return True
     
@@ -563,18 +600,45 @@ def isVidStill(file:str) ->bool:
             return True
     return False
 
+def splitName(fname:str) -> List[str]:
+    '''drop the version number from sbp name in files'''
+    spl = re.split('_', fname)
+    while spl[0][-1].isnumeric():
+        spl[0] = spl[0][:-1]
+    return spl
+    
+
 def isStill(file:str) -> bool:
     '''determine if the file is an unstitched image'''
     exspl = os.path.splitext(os.path.basename(file))
     ext = exspl[-1]
     fname = exspl[0]
-    spl = re.split('_', fname)
+    spl = splitName(fname)
     if spl[0] in tripleLineSBPPicfiles() or spl[0] in singleLineSBPPicfiles():
         return True
     else:
         return False
     
 #------------    
+
+def sbpPath(topFolder:str, name:str) -> str:
+    '''find the full path of the sbp file, where name is just the file name, no extension'''
+    if '.sbp' in name:
+        name = re.split('.sbp', name)[0]
+    fn = os.path.join(topFolder, f'{name}.sbp')
+    if os.path.exists(fn):
+        # found the file in this folder
+        return fn
+    else:
+        # go through subfolders and look for the file
+        for d in os.listdir(topFolder):
+            dfull = os.path.join(topFolder, d)
+            if os.path.isdir(dfull):
+                s = sbpPath(dfull, name)
+                if len(s)>0:
+                    return s
+    # didn't find any file
+    return ''
 
 class printFileDict:
     '''get a dictionary of the paths for each file inside of the print folder'''
@@ -587,6 +651,7 @@ class printFileDict:
         printFolder = self.levels.currentLevel
         self.printFolder=self.levels.printFolder()
         self.sort()
+        self.getDate()
             
     def newFileName(self, s:str, ext:str) -> str:
         '''generate a new file name'''
@@ -610,14 +675,26 @@ class printFileDict:
     def sbpName(self) -> str:
         '''gets the name of the shopbot file'''
         if self.levels.currentLevel=='sbpFolder':
-            return self.levels.sbpFolder
+            self.sbp = os.path.basename(self.levels.sbpFolder)
+            return self.sbp
         if len(self.vid)>0:
             file = self.vid[0]
             if '_Basler' in file:
                 spl = re.split('_Basler', os.path.basename(file))
-                return spl[0]
+                self.sbp = spl[0]
+                return self.sbp
             else:
                 raise ValueError(f'Unexpected video file {file}')
+                
+    def sbpFile(self) -> str:
+        '''find the full path name of the sbp file'''
+        self.sbpName()
+        return sbpPath(cfg.path.pyqtFolder, self.sbp)
+    
+    def sbpPointsFile(self) -> str:
+        '''get the full path name of the sbp points csv'''
+        file = self.sbpFile()
+        return file.replace('.sbp', '.csv')
 
             
     def getDate(self):
@@ -667,7 +744,10 @@ class printFileDict:
         self.unknown=[]
         self.phoneCam = []
         self.timeSeries = []
+        self.timeRewrite = []
         self.meta = []
+        self.progDims = []
+        self.progPos = []
         self.printType = ''
         
     def sortFiles(self, folder:str):
@@ -675,6 +755,15 @@ class printFileDict:
         
         tls = tripleLineSBPfiles()
         sls = singleLineSBPfiles()
+        sds = singleDisturbSBPfiles()
+        
+        bn = re.split('_',os.path.basename(folder))[0]
+        if bn in tls:
+            self.printType='tripleLine'
+        elif bn in sls:
+            self.printType='singleLine'
+        elif bn in sds:
+            self.printType = 'singleDisturb'
 
         for f1 in os.listdir(folder):
             ffull = os.path.join(folder, f1)
@@ -685,7 +774,7 @@ class printFileDict:
                 exspl = os.path.splitext(f1)
                 ext = exspl[-1]
                 fname = exspl[0]
-                spl = re.split('_', fname)
+                spl = splitName(fname)
                 if ext=='.avi':
                     if 'Basler camera' in fname:
                         if spl[0] in tls:
@@ -694,18 +783,26 @@ class printFileDict:
                         elif spl[0] in sls:
                             self.printType='singleLine'
                             self.vid.append(ffull)
+                        elif spl[0] in sds:
+                            self.printType='singleDisturb'
+                            self.vid.append(ffull)
                         else:
                             self.vid_unknown.append(ffull)
                     else:
                         self.vid_unknown.append(ffull)
                 elif ext=='.csv':
-                    if spl[0] in tls or spl[0] in sls:
-                        if 'Fluigent' in fname or 'time' in fname:
+                    if spl[0] in tls or spl[0] in sls or spl[0] in sds:
+                        if 'timeRewrite' in fname:
+                            self.timeRewrite.append(ffull)
+                        elif 'Fluigent' in fname or 'time' in fname:
                             self.timeSeries.append(ffull)
                         elif 'speeds' in fname or 'meta' in fname:
                             self.meta.append(ffull)
+                        elif 'progDims' in fname:
+                            self.progDims.append(ffull)
+                        elif 'progPos' in fname:
+                            self.progPos.append(ffull)
                         else:
-                            print(spl[0])
                             self.csv_unknown.append(ffull)
                     elif spl[0] in singleLineSBPPicfiles():
                         # extraneous fluigent or speed file from pic
@@ -726,7 +823,7 @@ class printFileDict:
                             elif spl[0] in tripleLineSBPPicfiles():
                                 self.printType='tripleLine'
                             self.still.append(ffull)
-                        else:
+                        else: 
                             self.still_unknown.append(ffull)
                     elif isStitch(f1):
                         # stitched image
@@ -864,29 +961,29 @@ def checkFolders(topFolder:str) -> Tuple[list, list]:
 def labelAndSort(folder:str, debug:bool=False) -> None:
     '''label the levels and create folders where needed'''
     levels = labelLevels(folder)
-    if levels['sampleFolder'] =='generate':
+    if levels.sampleFolder =='generate':
         # generate a sample folder
-        sample = sampleName(levels['subFolder'], formatOutput=False)
-        sampleFolder = os.path.join(levels['sampleTypeFolder'], sample)
+        sample = sampleName(levels.subFolder, formatOutput=True)
+        sampleFolder = os.path.join(levels.sampleTypeFolder, sample)
         if not os.path.exists(sampleFolder):
             if debug:
                 logging.debug(f'Create {sampleFolder}')
             else:
                 os.mkdir(sampleFolder)
-        levels['sampleFolder'] = sampleFolder
-        file = levels['subFolder']
-        newname = os.path.join(levels['sampleFolder'], os.path.basename(file))
+        levels.sampleFolder = sampleFolder
+        file = levels.subFolder
+        newname = os.path.join(levels.sampleFolder, os.path.basename(file))
         if debug:
             logging.info(f'Move {file} to {newname}')
         else:
             os.rename(file, newname)
             logging.info(f'Moved {file} to {newname}')
-    if levels['subFolder']=='generate':
+    if levels.subFolder=='generate':
         # generate a subfolder
-        fd = fileDate(levels['file'])
-        sample = os.path.basename(levels['sampleFolder']) 
+        fd = fileDate(levels.file)
+        sample = os.path.basename(levels.sampleFolder) 
         bn = f'{sample}_{fd}'
-        subfolder = os.path.join(levels['sampleFolder'], bn)
+        subfolder = os.path.join(levels.sampleFolder, bn)
 
 
 def sortRecursive(folder:str, debug:bool=False) -> None:
@@ -896,20 +993,33 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
     if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
         return
     levels = labelLevels(folder)
-    if levels['currentLevel'] =='sampleTypeFolder':
-        for f in os.listdir(levels['sampleTypeFolder']):
-            labelAndSort(os.path.join(levels['sampleTypeFolder'], f), debug=debug) # sort the folders inside sampleTypeFolder
-    elif levels['currentLevel']=='printTypeFolder':
-        for f in os.listdir(levels['printTypeFolder']):
-            sortRecursive(os.path.join(levels['printTypeFolder'], f), debug=debug)
-    elif levels['currentLevel'] in ['sampleFolder', 'subFolder', 'sbpFolder']:
+    if levels.currentLevel =='sampleTypeFolder':
+        for f in os.listdir(levels.sampleTypeFolder):
+            labelAndSort(os.path.join(levels.sampleTypeFolder, f), debug=debug) # sort the folders inside sampleTypeFolder
+    elif levels.currentLevel=='printTypeFolder':
+        for f in os.listdir(levels.printTypeFolder):
+            sortRecursive(os.path.join(levels.printTypeFolder, f), debug=debug)
+    elif levels.currentLevel in ['sampleFolder', 'subFolder', 'sbpFolder']:
         labelAndSort(folder, debug=debug)
 
             
 #------------------------------------------------------
-        
+      
+def mkdirif(folder:str) -> None:
+    if not os.path.exists(folder):
+        os.mkdir(folder)
 
-
+def fillDirsTriple(topFolder:str) -> None:
+    '''make missing folders'''
+    for s in ['0.500', '0.625', '0.750', '0.875', '1.000', '1.250']:
+        for f in ['tripleLinesHoriz', 'tripleLinesVert']:
+            mkdirif(os.path.join(topFolder, f'{f}_{s}'))
+        for z in ['0', '0.5']:
+            for f in ['crossDoubleHoriz', 'crossDoubleVert']:
+                mkdirif(os.path.join(topFolder, f'{f}_{z}_{s}'))
+        for z in ['+y', '+z']:
+            for f in ['tripleLinesXS']:
+                mkdirif(os.path.join(topFolder, f'{f}_{z}_{s}'))
 
             
 
@@ -939,5 +1049,8 @@ def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
         display(df[df['BasVideo']==0])
         display(df[df['BasStills']==0])
     return df
+
+
+
         
     

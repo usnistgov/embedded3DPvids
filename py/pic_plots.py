@@ -19,7 +19,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 import file_handling as fh
 from val_print import *
-import vidMorph as vm
+import im_morph as vm
 
 # logging
 logger = logging.getLogger(__name__)
@@ -84,6 +84,7 @@ class folderPlots:
             self.ylists = self.unqList('y')
             self.xlistsreal = [[]]*len(self.bases)
             self.ylistsreal = [[]]*len(self.bases)
+            self.indicesreal = pd.DataFrame({'x':[],'y':[]})
             self.xylistsreal = [[[]]]*len(self.bases)
         except:
             raise ValueError('Failed to identify x and y variables')
@@ -184,6 +185,7 @@ class comboPlot(folderPlots):
         self.yr = yr
         self.dx = xr[1]-xr[0] # size of each plot chunk
         self.dy = yr[1]-yr[0]
+        self.legdy = 0
         self.xrtots = [[xr[0], xr[0]+(len(xlist))*self.dx] for xlist in self.xlists] # total bounds of the whole plot
         self.yrtots = [[yr[0], yr[0]+(len(ylist))*self.dy] for ylist in self.ylists]
         self.xmlists = [[xr[0]+(i+1/2)*self.dx for i in range(len(xlist))] for xlist in self.xlists]
@@ -227,8 +229,14 @@ class comboPlot(folderPlots):
         # This step cuts out the space we set out for those folders that didn't end up in the final plot
         # if we were given adjustBounds=False during initialization, don't adjust the bounds
         if self.ab:
-            self.xrtots = self.adjustBounds(self.xlistsreal, self.xr, self.xlists)
-            self.yrtots = self.adjustBounds(self.ylistsreal, self.yr, self.ylists)
+#             self.xrtots = self.adjustBounds(self.xlistsreal, self.xr, self.xlists)
+#             self.yrtots = self.adjustBounds(self.ylistsreal, self.yr, self.ylists)
+            self.xrtot = adjustBounds(self.indicesreal.x, self.xr, 0)
+            self.yrtot = adjustBounds(self.indicesreal.y, self.yr, self.legdy)
+        else:
+            self.xrtot[1] = self.xrtot[1]-self.dx
+            self.yrtot[1] = self.yrtot[1]-self.dy
+            self.yrtot[0] = self.yrtot[0]/2+self.indicesreal.y.min()*self.dy
         
 
         # put x labels on all plots
@@ -263,35 +271,60 @@ class comboPlot(folderPlots):
             ax.set_aspect('equal', adjustable='box')
             ax.set_title(self.bases[i], fontname="Arial", fontsize=10)
         
-            # reset the figure size so the title is in the right place
-            if self.ab and len(self.xlistsreal[i])>0 and len(self.ylistsreal[i])>0:
-                width = self.imsize
-                height = width*len(self.ylistsreal[i])/(len(self.xlistsreal[i])*len(self.axs))
-                self.fig.set_size_inches(width, height)
+#             # reset the figure size so the title is in the right place
+#             if self.ab and len(self.xlistsreal[i])>0 and len(self.ylistsreal[i])>0:
+#                 width = self.imsize
+#                 height = width*len(self.ylistsreal[i])/(len(self.xlistsreal[i])*len(self.axs))
+#                 self.fig.set_size_inches(width, height)
+            if self.ab:
+                # reset the figure size so the title is in the right place
+                if len(self.xlistsreal[0])>0 and len(self.ylistsreal[0])>0:
+                    width = self.imsize
+                    height = width*(self.yrtot[1]-self.yrtot[0])/(self.xrtot[1]-self.xrtot[0])
+                    self.fig.set_size_inches(width,h=height, forward=True)
        
+        self.titley = 1
         self.fig.suptitle(self.figtitle, y=self.titley, fontname="Arial", fontsize=10)
         
 #         self.fig.tight_layout()
         
         return
     
-    def adjustBounds(self, xlistsreal:List[List[float]], xr:List[float], xlists:List[float]) -> List[List[float]]:
-        '''adjust the bounds of the plot.
-        xlistreal is a list of x points to be included in the plot
-        xr is the [min, max] position of each segment, e.g. [-0.7, 0.7]
-        xlist is the initial list of x points we included in the plot'''
-        xrtot = [[]]*len(self.bases)
-        for i in range(len(self.bases)):
-            if len(xlistsreal[i])>1:
-                xmin = min(xlistsreal[i])
-                xmax = max(xlistsreal[i])
-                pos1 = xlists[i].index(min(xlistsreal[i]))
-                pos2 = xlists[i].index(max(xlistsreal[i]))+1
-                dx = xr[1]-xr[0]
-                xrtot[i] = [xr[0]+pos1*dx, xr[0]+pos2*dx]
-            else:
-                xrtot[i] = [0]
-        return xrtot
+#     def adjustBounds(self, xlistsreal:List[List[float]], xr:List[float], xlists:List[float]) -> List[List[float]]:
+#         '''adjust the bounds of the plot.
+#         xlistreal is a list of x points to be included in the plot
+#         xr is the [min, max] position of each segment, e.g. [-0.7, 0.7]
+#         xlist is the initial list of x points we included in the plot'''
+#         xrtot = [[]]*len(self.bases)
+#         for i in range(len(self.bases)):
+#             if len(xlistsreal[i])>1:
+#                 xmin = min(xlistsreal[i])
+#                 xmax = max(xlistsreal[i])
+#                 pos1 = xlists[i].index(min(xlistsreal[i]))
+#                 pos2 = xlists[i].index(max(xlistsreal[i]))+1
+#                 dx = xr[1]-xr[0]
+#                 xrtot[i] = [xr[0]+pos1*dx, xr[0]+pos2*dx]
+#             else:
+#                 xrtot[i] = [0]
+#         return xrtot
+
+def adjustBounds(indices:List[int], xr:List[float], legdy:float):
+    '''adjust the bounds of the plot.
+    indices is a list of indices which were included in the plot
+    xr is the [min, max] position of each segment, e.g. [-0.7, 0.7]
+    legdy is the block height for the legend'''
+    if len(indices)>0:
+        pos1 = min(indices)
+        pos2 = max(indices)
+        dx = (xr[1]-xr[0])
+        if legdy>0:
+            x0 = pos1-legdy/2
+        else:
+            x0 = xr[0]+pos1*dx
+        xrtot = [x0, xr[0]+pos2*dx+dx]
+    else:
+        xrtot = xr
+    return xrtot
 
 def findPos(l:List, v:Any) -> Any:
     '''find the position of v in list l. l is a list. v is a value in the list.
@@ -319,6 +352,7 @@ def vvplot(pv:printVals, cp:comboPlot) -> Tuple[float, float, float]:
         cp.xylistsreal[axnum].append([x,y])
     else:
         raise ValueError('Square already filled')
+    cp.indicesreal = cp.indicesreal.append({'x':int(xpos), 'y':int(ypos)}, ignore_index=True)
     return x0, y0, axnum
     
 #-----------------------------------------------
@@ -591,7 +625,7 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, dy0:float, 
     realPxPerBlock = pxPerBlock/scale # rescale to include shrinkage of original image
     mmPerBlock = realPxPerBlock/pv.geo.pxpmm # mm per block: pixels per image block, scaled by s is displayed size
     mmPerPlotUnit = mmPerBlock/(2*max(dx0, dy0)) # convert to dimensions of the plot
-    if not overlay['shape'] in ['rectangle', 'circle', '3circles']:
+    if not overlay['shape'] in ['rectangle', 'circle', '3circles', '2circles']:
         return
 
     circlewMM = pv.dEst   # estimated filament diameter
@@ -610,11 +644,11 @@ def picPlotOverlay(pv:printVals, pxperunit:float, t:dict, dx0:float, dy0:float, 
         # plot circle
         circle2 = plt.Circle((x0, y0), circlewPlotUnits/2, color=color, fill=False)
         ax.add_patch(circle2)
-    elif overlay['shape']=='3circles':
+    elif overlay['shape']=='3circles' or overlay['shape']=='2circles':
         # plot circle
         if hasattr(pv,'spacing'):
             spacing = pv.spacing
-            num = 3
+            num = int(overlay['shape'][0])
         else:
             spacing = 0
             num = 1
@@ -689,7 +723,7 @@ def picPlots(cp:comboPlot, dx:float, dy:float, tag:str, **kwargs) -> None:
     cp.clean()
 
 
-def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs):
+def picPlots0(topFolder:str, exportFolder:str, allIn:List[str], dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs):
     '''plot all pictures for simulations in a folder, but use automatic settings for cropping and spacing and export the result
     topFolder is the folder that holds the simulations
     exportFolder is the folder to export the images to
@@ -707,9 +741,10 @@ def picPlots0(topFolder:str, exportFolder:str, dates:List[str], tag:str, overwri
     fn = imFn(exportFolder, topFolder, taglabel, dates=dates[0], **kwargs)
     if not overwrite and os.path.exists(f'{fn}.png'):
         return
-    
-    flist = fh.printFolders(topFolder, tags=dates, **kwargs)
+
+    flist = fh.printFolders(topFolder, tags=allIn, someIn=dates, **kwargs)
     flist.reverse()
+    
     if len(flist)==0:
         logging.debug(f'No folders to plot: {dates}')
         return
