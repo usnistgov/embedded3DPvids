@@ -157,15 +157,10 @@ def filterXSComponents(markers:Tuple, im2:np.ndarray) -> pd.DataFrame:
             return errorRet
     return df, df2
 
-def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
-    '''im is imported image. 
-    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
-    title is the title to put on the plot
-    name is the name of the line, e.g. xs1
-    acrit is the minimum segment size to be considered a cross-section
-    '''
+
+def singleXSMeasure(im:np.array, im2:np.array, markers:Tuple, attempt:int, s:float, title:str, name:str, diag:bool=False, **kwargs) -> dict:
+    '''measure a single xs'''
     errorRet = {}, {}
-    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
     if markers[0]==1:
         return errorRet
     roughness = getRoughness(im2, diag=max(0,diag-1))
@@ -201,6 +196,18 @@ def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag
     units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'xc':'px', 'yc':'px', 'roughness':''} # where pixels are in original scale
     retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':area*s**2, 'x0':x0*s, 'y0':y0*s, 'w':w*s, 'h':h*s, 'xc':xc*s, 'yc':yc*s, 'roughness':roughness}
     return retval, units
+    
+
+def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
+    '''im is imported image. 
+    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
+    title is the title to put on the plot
+    name is the name of the line, e.g. xs1
+    acrit is the minimum segment size to be considered a cross-section
+    '''
+    
+    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
+    return singleXSMeasure(im, im2, markers, attempt, s, title, name, diag=diag)
 
 def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
     '''measure cross-section'''
@@ -285,7 +292,34 @@ def xs3Measure(file:str, acrit:int=100, diag:int=0, **kwargs) -> Tuple[dict,dict
 
     
     
+def xsDisturbMeasure(file:str, acrit:int=100, diag:int=0, **kwargs) -> Tuple[dict,dict]:
+    '''measure cross-section of single disturbed line'''
+    errorRet = {},{}
+    spl = re.split('_', re.split('still_', os.path.basename(file))[1])
+    name = f'{spl[0]}_{spl[1]}'
+    im = cv.imread(file)
+    h,w,_ = im.shape
+    s = 1
+    title = os.path.basename(file)
+    im = vm.normalize(im)
+    
+    # segment components
+    hc = 150
+    crop = {'y0':150, 'yf':h-hc, 'x0':200, 'xf':300}
+    im = vc.imcrop(im, crop)
+    
+    if 'LapRD_LapRD' in file:
+        # use more aggressive segmentation to remove leaks
+        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, botthresh=150, topthresh=150, diag=max(0,diag-1))
+    else:
+        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
         
+    retval, units = singleXSMeasure(im, im2, markers, attempt, s, title, name, diag=diag)
+    for s in ['x0', 'xc']:
+        retval[s] = retval[s]+crop['x0']
+    for s in ['y0', 'yc']:
+        retval[s] = retval[s] + hc
+    return retval, units
     
         
     
@@ -1192,66 +1226,6 @@ def speedTable(topfolder:str, exportFolder:str, filename:str) -> pd.DataFrame:
     return tt,units
 
 
-def progTableRecursive(topfolder:str, useDefault:bool=False, overwrite:bool=False, **kwargs) -> pd.DataFrame:
-    '''go through all of the folders and summarize the programmed timings'''
-    if isSubFolder(topfolder):
-        try:
-            pv = printVals(topfolder)
-            if (not 'dates' in kwargs or pv.date in kwargs['dates']) and overwrite:
-                pv.redoSpeedFile()
-                pv.fluigent()
-                pv.exportProgDims() # redo programmed dimensions
-            if useDefault:
-                pv.useDefaultTimings()
-            t,u = pv.progDimsSummary()
-        except:
-            traceback.print_exc()
-            logging.warning(f'failed to get programmed timings from {topfolder}')
-            return {}, {}
-        return t,u
-    elif os.path.isdir(topfolder):
-        tt = []
-        u = {}
-        for f in os.listdir(topfolder):
-            f1f = os.path.join(topfolder, f)
-            if os.path.isdir(f1f):
-                t,u0=progTableRecursive(f1f, useDefault=useDefault, overwrite=overwrite, **kwargs)
-                if len(t)>0:
-                    if len(tt)>0:
-                        tt = pd.concat([tt,t])
-                    else:
-                        tt = t
-                    if len(u)==0:
-                        u = u0
-        return tt, u
-    
-def checkProgTableRecursive(topfolder:str, **kwargs) -> None:
-    '''go through the folder recursively and check if the pressure calibration curves are correct, and overwrite if they're wrong'''
-    if isSubFolder(topfolder):
-        try:
-            pv = printVals(topfolder)
-            pv.importProgDims()
-            if 0 in list(pv.progDims.a):
-                pv.fluigent()
-                pv.exportProgDims() # redo programmed dimensions
-        except:
-            traceback.print_exc()
-            logging.warning(f'failed to get programmed timings from {topfolder}')
-            return
-        return 
-    elif os.path.isdir(topfolder):
-        for f in os.listdir(topfolder):
-            f1f = os.path.join(topfolder, f)
-            if os.path.isdir(f1f):
-                checkProgTableRecursive(f1f, **kwargs)
-        return
 
-def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.DataFrame:
-    '''go through all the folders, get a table of the speeds and pressures, and export to filename'''
-    tt,units = progTableRecursive(topfolder, **kwargs)
-    tt = pd.DataFrame(tt)
-    if os.path.exists(exportFolder):
-        plainExp(os.path.join(exportFolder, filename), tt, units)
-    return tt,units
                 
     

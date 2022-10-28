@@ -92,65 +92,73 @@ class multiPlots:
         xvar = 'self.spacing'
         kwargs2 = {**self.kwargs.copy(), **kwargs.copy()}
         obj2file = fh.singleDisturb2FileDict()
-        if not name in obj2file:
+        if not name in obj2file and not obj2file in name:
             raise ValueError(f'Unknown object requested: {name}')
         file = obj2file[name]
         allIn = [file]
         dates = self.dates
-        tag = ['l1wo', 'l1do']
-        freevars = 0
-        if 'spacing' in kwargs:
-            spacing = kwargs['spacing']
-            if not type(spacing) is str:
-                spacing = '{:.3f}'.format(spacing)
-            allIn.append(f'{file}_{spacing}')
-            xvar = self.xvar
-            freevars+=1
-        if 'ink' in kwargs:
-            ink = kwargs['ink']
-            allIn.append(f'I_{ink}')
-            kwargs2['I'] = ink
-            freevars+=1
-        if 'sup' in kwargs:
-            sup = kwargs['sup']
-            allIn.append(f'S_{sup}')
-            kwargs2['S'] = sup
-            xvar = self.yvar
-            freevars+=1
-        if 'inkv' in kwargs:
-            inkv = kwargs['inkv']
-            allIn.append(f'VI_{inkv}')
-            kwargs2['VI']=inkv
-            freevars+=1
-        if 'supv' in kwargs:
-            supv = kwargs['supv']
-            allIn.append(f'VS_{supv}')
-            kwargs2['VS']=supv
-            freevars+=1
-        if freevars+2<self.freevars:
-            raise ValueError(f'Too many variables to plot. Designate {self.freevarList} where needed')
-            
-        if 'crops' in kwargs:
-            kwargs2['crops'] = kwargs['crops']
-        else:
-            crops = {'HIx':{'y0':150, 'yf':350, 'x0':200, 'xf':300},
-                    'HOx':{'y0':150, 'yf':350, 'x0':200, 'xf':300},
-                    'HOh':{'y0':0, 'yf':300, 'x0':10, 'xf':790},
-                    'V':{'y0':0, 'yf':600, 'x0':200, 'xf':400}}
-            if name in crops:
-                kwargs2['crops'] = crops[name]
-        if name in ['HOh']:
-            concat = 'v'
-        else:
-            concat = 'h'
-            
-        exportFolder =  os.path.join(self.exportFolder, name)
-        if not os.path.exists(exportFolder):
-            os.mkdir(exportFolder)
+        for ss in ['o', '']:
+            tag = [f'l2w{ss}', f'l2d{ss}']
+            if 'crops' in kwargs:
+                kwargs2['crops'] = kwargs['crops']
+            else:
+                if ss=='o':
+                    crops = {'HIx':{'y0':200, 'yf':400, 'x0':200, 'xf':300},
+                            'HOx':{'y0':175, 'yf':375, 'x0':200, 'xf':300},
+                            'HOh':{'y0':0, 'yf':300, 'x0':10, 'xf':790},
+                            'V':{'y0':0, 'yf':600, 'x0':200, 'xf':400}}
+                else:
+                    crops = {'HIx':{'y0':200, 'yf':400, 'x0':225, 'xf':425},
+                            'HOx':{'y0':175, 'yf':375, 'x0':325, 'xf':450},
+                            'HOh':{'y0':100, 'yf':400, 'x0':0, 'xf':800},
+                            'V':{'y0':0, 'yf':600, 'x0':250, 'xf':450}}
+                if name in crops:
+                    kwargs2['crops'] = crops[name]
+            freevars = 0
+            if 'spacing' in kwargs:
+                spacing = kwargs['spacing']
+                if not type(spacing) is str:
+                    spacing = '{:.3f}'.format(spacing)
+                allIn.append(spacing)
+                xvar = self.xvar
+                freevars+=1
+            if 'ink' in kwargs:
+                ink = kwargs['ink']
+                allIn.append(f'I_{ink}')
+                kwargs2['I'] = ink
+                freevars+=1
+            if 'sup' in kwargs:
+                sup = kwargs['sup']
+                allIn.append(f'S_{sup}')
+                kwargs2['S'] = sup
+                xvar = self.yvar
+                freevars+=1
+            if 'inkv' in kwargs:
+                inkv = kwargs['inkv']
+                allIn.append(f'VI_{inkv}')
+                kwargs2['VI']=inkv
+                freevars+=1
+            if 'supv' in kwargs:
+                supv = kwargs['supv']
+                allIn.append(f'VS_{supv}')
+                kwargs2['VS']=supv
+                freevars+=1
+            if freevars+2<self.freevars:
+                raise ValueError(f'Too many variables to plot. Designate {self.freevarList} where needed')
 
-        fig = picPlots0(self.folder, exportFolder
-                        , allIn, dates, tag, showFig=showFig, export=export
-                        , overlay={'shape':'2circles', 'dx':-0.8, 'dy':-0.8}
-                        , xvar=xvar, yvar=yvar, concat=concat
-                        , **kwargs2)
+
+            if name in ['HOh']:
+                concat = 'v'
+            else:
+                concat = 'h'
+
+            exportFolder =  os.path.join(self.exportFolder, name)
+            if not os.path.exists(exportFolder):
+                os.mkdir(exportFolder)
+
+            fig = picPlots0(self.folder, exportFolder
+                            , allIn, dates, tag, showFig=showFig, export=export
+                            , overlay={'shape':'2circles', 'dx':-0.8, 'dy':-0.8}
+                            , xvar=xvar, yvar=yvar, concat=concat
+                            , **kwargs2)
    

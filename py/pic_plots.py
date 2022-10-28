@@ -39,7 +39,7 @@ matplotlib.rc('font', size='10.0')
 class folderPlots:
     '''A generic class used for plotting many folders at once. Subclasses are comboPlot, which puts everything on one plot, and gridOfPlots, which puts everythign in separate plots based on viscosity.'''
     
-    def __init__(self, folders:List[str], imsize:float,**kwargs):
+    def __init__(self, folders:List[str], imsize:float, fontsize:int=10, **kwargs):
         '''topFolder is the folder we're plotting
             imsize is the size of the total image in inches
             split is true to split into separate plots by surface tension'''
@@ -47,32 +47,19 @@ class folderPlots:
         self.ab = not 'adjustBounds' in self.kwargs or self.kwargs['adjustBounds']==True
         self.flist = folders
         self.imsize = imsize
+        self.fontsize = fontsize
+        plt.rc('font', size=fontsize) 
         self.plotsLists(**kwargs) 
         
     def plotsLists(self, xvar:str='ink.var', yvar:str='sup.var', **kwargs):
         '''plotsLists initializes variable names for gridOfPlots and comboPlots objects. 
         vname=val for fluid composition data. vname=v for speed data'''
         self.pvlists = [printVals(f) for f in self.flist]
-#         if not self.checkVals(**kwargs):
-#             raise ValueError(f'Inconsistent variables: {[f.bn for f in self.pvlists]}')
         
         self.xvar = xvar
         self.yvar = yvar
         self.xfunc = xvar
         self.yfunc = yvar
-#         else:
-
-#             self.vname = vname
-#             self.xfluid ='ink'
-#             self.yfluid = 'sup'
-#             if vname=='val':
-#                 self.xvar = f'{self.xfluid}.var'
-#                 self.yvar = f'{self.yfluid}.var'
-#             elif vname=='v':
-#                 self.xvar = f'{self.xfluid}.v'
-#                 self.yvar = f'{self.yfluid}.v'
-#             self.xfunc = f'{self.xfluid}.{vname}'
-#             self.yfunc = f'{self.yfluid}.{vname}'
         
         self.getBases()
         for s in ['x', 'y']:
@@ -241,13 +228,13 @@ class comboPlot(folderPlots):
 
         # put x labels on all plots
         for i, ax in enumerate(self.axs):
-            ax.set_xlabel(self.xlabels[i], fontname="Arial", fontsize=10)
+            ax.set_xlabel(self.xlabels[i], fontname="Arial", fontsize=self.fontsize)
             
             if i==0 or (not self.ylabels[i]==self.ylabels[i-1]):
                 # if first plot or ylabel is different:
-                ax.set_ylabel(self.ylabels[i], fontname="Arial", fontsize=10)
+                ax.set_ylabel(self.ylabels[i], fontname="Arial", fontsize=self.fontsize)
                 ax.yaxis.set_major_locator(mticker.FixedLocator(self.ymlists[i]))
-                ax.set_yticklabels(self.ylists[i], fontname="Arial", fontsize=10)
+                ax.set_yticklabels(self.ylists[i], fontname="Arial", fontsize=self.fontsize)
 
             # the way comboPlots is set up, it has one big plot, 
             # and each folder is plotted in a different section of the plot
@@ -261,7 +248,7 @@ class comboPlot(folderPlots):
             ax.set_yticks(self.ymlists[i], minor=False)
 
             ax.xaxis.set_major_locator(mticker.FixedLocator(self.xmlists[i]))
-            ax.set_xticklabels(self.xlists[i], fontname="Arial", fontsize=10)  
+            ax.set_xticklabels(self.xlists[i], fontname="Arial", fontsize=self.fontsize)  
             if len(self.xrtots[i])==2:
                 ax.set_xlim(self.xrtots[i]) # set the limits to the whole bounds
             if len(self.yrtots[i])==2:
@@ -269,44 +256,22 @@ class comboPlot(folderPlots):
 
             # make each section of the plot square
             ax.set_aspect('equal', adjustable='box')
-            ax.set_title(self.bases[i], fontname="Arial", fontsize=10)
+            ax.set_title(self.bases[i], fontname="Arial", fontsize=self.fontsize)
         
-#             # reset the figure size so the title is in the right place
-#             if self.ab and len(self.xlistsreal[i])>0 and len(self.ylistsreal[i])>0:
-#                 width = self.imsize
-#                 height = width*len(self.ylistsreal[i])/(len(self.xlistsreal[i])*len(self.axs))
-#                 self.fig.set_size_inches(width, height)
             if self.ab:
                 # reset the figure size so the title is in the right place
                 if len(self.xlistsreal[0])>0 and len(self.ylistsreal[0])>0:
                     width = self.imsize
                     height = width*(self.yrtot[1]-self.yrtot[0])/(self.xrtot[1]-self.xrtot[0])
                     self.fig.set_size_inches(width,h=height, forward=True)
+                    
        
         self.titley = 1
-        self.fig.suptitle(self.figtitle, y=self.titley, fontname="Arial", fontsize=10)
-        
-#         self.fig.tight_layout()
+        self.fig.suptitle(self.figtitle, y=self.titley, fontname="Arial", fontsize=self.fontsize)
+ 
         
         return
-    
-#     def adjustBounds(self, xlistsreal:List[List[float]], xr:List[float], xlists:List[float]) -> List[List[float]]:
-#         '''adjust the bounds of the plot.
-#         xlistreal is a list of x points to be included in the plot
-#         xr is the [min, max] position of each segment, e.g. [-0.7, 0.7]
-#         xlist is the initial list of x points we included in the plot'''
-#         xrtot = [[]]*len(self.bases)
-#         for i in range(len(self.bases)):
-#             if len(xlistsreal[i])>1:
-#                 xmin = min(xlistsreal[i])
-#                 xmax = max(xlistsreal[i])
-#                 pos1 = xlists[i].index(min(xlistsreal[i]))
-#                 pos2 = xlists[i].index(max(xlistsreal[i]))+1
-#                 dx = xr[1]-xr[0]
-#                 xrtot[i] = [xr[0]+pos1*dx, xr[0]+pos2*dx]
-#             else:
-#                 xrtot[i] = [0]
-#         return xrtot
+
 
 def adjustBounds(indices:List[int], xr:List[float], legdy:float):
     '''adjust the bounds of the plot.
@@ -723,7 +688,7 @@ def picPlots(cp:comboPlot, dx:float, dy:float, tag:str, **kwargs) -> None:
     cp.clean()
 
 
-def picPlots0(topFolder:str, exportFolder:str, allIn:List[str], dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, **kwargs):
+def picPlots0(topFolder:str, exportFolder:str, allIn:List[str], dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, imsize:float=6.5, **kwargs):
     '''plot all pictures for simulations in a folder, but use automatic settings for cropping and spacing and export the result
     topFolder is the folder that holds the simulations
     exportFolder is the folder to export the images to
@@ -741,7 +706,6 @@ def picPlots0(topFolder:str, exportFolder:str, allIn:List[str], dates:List[str],
     fn = imFn(exportFolder, topFolder, taglabel, dates=dates[0], **kwargs)
     if not overwrite and os.path.exists(f'{fn}.png'):
         return
-
     flist = fh.printFolders(topFolder, tags=allIn, someIn=dates, **kwargs)
     flist.reverse()
     
@@ -763,7 +727,7 @@ def picPlots0(topFolder:str, exportFolder:str, allIn:List[str], dates:List[str],
             dy = dx*heightI/widthI
     
 #     dx = 0.7
-    cp = comboPlot(flist, [-dx, dx], [-dy, dy], 6.5, gridlines=False, **kwargs)
+    cp = comboPlot(flist, [-dx, dx], [-dy, dy], imsize, gridlines=False, **kwargs)
     picPlots(cp, dx, dy, tag, **kwargs)
     
     if not ('export' in kwargs and not kwargs['export']) and os.path.exists(exportFolder):

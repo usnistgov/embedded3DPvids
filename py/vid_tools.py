@@ -103,6 +103,7 @@ class vidData:
             self.progDims.importProgPos()
             pp = self.progDims.progPos
             self.maxT = pp[pp.zt<0].tf.max()
+#             self.maxT = pp.tf.max()
         else:
             self.progDims.importTimeFile()
             self.maxT = self.progDims.ftable.time.max() # final time in programmed run
@@ -118,17 +119,20 @@ class vidData:
             self.streamOpen = True
             if self.pfd.date>220901:
                 # timing rate should be correct, but vid started earlier than timing
-                self.dstart = max(self.duration-self.maxT,0)+1
+                self.dstart = max(self.duration-self.maxT,0)+1.25
             
         
     def setTime(self, t:float) -> None:
         '''go to the time in seconds, scaling by video length to fluigent length'''
         if self.pfd.date>220901:
             # offset start time
-            self.stream.set(cv.CAP_PROP_POS_FRAMES,int((t+self.dstart)*self.fps))
+            f = int((t+self.dstart)*self.fps)
         else:
             # rescale time
-            self.stream.set(cv.CAP_PROP_POS_FRAMES,int(t/self.maxT*self.frames))
+            f = int(t/self.maxT*self.frames)
+        if f>=self.frames:
+            f = self.frames-1
+        self.stream.set(cv.CAP_PROP_POS_FRAMES,f)
         
     def getFrameAtTime(self, t:float) -> None:
         '''get the frame at a specific time'''
@@ -149,36 +153,38 @@ class vidData:
             self.streamOpen = False
             
             
-    def exportStills(self, overwrite:bool=False) -> None:
+    def exportStills(self, prefixes:list=[], overwrite:bool=False, **kwargs) -> None:
         '''export stills for all times in the progdims table'''
         if not 'tpic' in self.prog:
             raise ValueError('No pic time noted')
+        prefix = fh.singleDisturbName(os.path.basename(self.folder))
+        if len(prefixes)>0 and not prefix in prefixes:
+            return
         for i,row in self.prog.iterrows():
             name = row['name']
-            prefix = fh.singleDisturbName(os.path.basename(self.folder))
             fn = self.pfd.newFileName(f'still_{prefix}_{name}', 'png')
-            elif not os.path.exists(fn) or overwrite:
+            if not os.path.exists(fn) or overwrite:
                 frame = self.getFrameAtTime(row['tpic'])
                 cv.imwrite(fn, frame)
                 logging.info(f'Exported {fn}')
             
 #----------------------------------------------
 
-def exportStillsRecursive(folder:str, overwrite:bool=False, overwriteDims:bool=False) -> None:
+def exportStillsRecursive(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> None:
     '''export stills of key lines from videos'''
     errorList = []
     if not os.path.isdir(folder):
         return errorList
     if not fh.isPrintFolder(folder):
         for f1 in os.listdir(folder):
-            errorList = errorList + exportStillsRecursive(os.path.join(folder, f1), overwrite=overwrite, overwriteDims=overwriteDims)
+            errorList = errorList + exportStillsRecursive(os.path.join(folder, f1), overwrite=overwrite, overwriteDims=overwriteDims, **kwargs)
         return errorList
 
     try:
         pdim = getProgDims(folder)
         pdim.exportAll(overwrite=overwriteDims)
         vd = vidData(folder)
-        vd.exportStills(overwrite=overwrite)
+        vd.exportStills(overwrite=overwrite, **kwargs)
     except Exception as e:
         errorList.append(folder)
         print(e)

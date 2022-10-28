@@ -72,10 +72,7 @@ class progDim:
             
         self.sbp = self.pfd.sbpName()    # name of shopbot file
         self.progDims = pd.DataFrame(columns=['name','l','w','t','a','vol', 't0','tf'])
-        self.units = {'name':'', 'l':'mm','w':'mm','t':'s'
-                      ,'a':'mm^2','vol':'mm^3','t0':'s', 'tf':'s'
-                     ,'xt':'mm', 'yt':'mm', 'zt':'mm', 'dx':'mm', 'dy':'mm', 'dz':'mm', 'dprog':'mm'
-                     , 't0_flow':'s', 'tf_flow':'s', 'tpic':'s'}
+
                 
     #---------------------------------------------------
     # rewrite time file     
@@ -172,16 +169,16 @@ class progDim:
                 tp.append(timeT.loc[tii])
                 sp.append(sT.loc[sii])
             if self.samePoint(tp[0],sp[-1]):
-                # same point or extra time points 
+                # same point or extra shopbot points 
                 if diag>0:
-                    print(ti, si, ti, sii, list(tp[0]), list(sp[-1]), 'extra time')
+                    print(ti, si, ti, sii, list(tp[0]), list(sp[-1]), 'extra shopbot')
                 targets = targets+sp
                 ti+=1
                 si+=len(sp)
             elif self.samePoint(tp[-1],sp[0]):
-                # extra shopbot points
+                # extra time points
                 if diag>0:
-                    print(ti, si, tii, si, list(tp[0]), list(sp[-1]), 'extra sbp')
+                    print(ti, si, tii, si, list(tp[0]), list(sp[-1]), 'extra time')
                 targets = targets + tp
                 si+=1
                 ti+=len(tp)
@@ -211,7 +208,7 @@ class progDim:
         # get target points from sbp file
         self.importSBPPoints()
         self.sbpPoints.fillna({'x':timeT.loc[0, 'xt'], 'y':timeT.loc[0, 'yt'], 'z':timeT.loc[0, 'zt']}, inplace=True)
-        sT = uniqueConsecutive(self.sbpPoints, ['x', 'y', 'z'])   # list of target points from shopbot file
+        sT = uniqueConsecutive(self.sbpPoints, ['x', 'y', 'z', 'speed'])   # list of target points from shopbot file
         sT.rename(columns={'x':'xt', 'y':'yt', 'z':'zt'}, inplace=True)
         
         # compare lists
@@ -238,23 +235,21 @@ class progDim:
                 self.combineTargets(1, 0, [timeT.loc[0]], diag=diag-1)  
 
         return self.targetPoints
-
-            
-    def rewriteTargets(self, diag:int=0) -> int:
-        '''overwrite the target points in the time file'''
-        self.importTimeFile()
-        if not 'xt' in self.ftable:
-            return 1
-        
-        self.getTargetPoints(diag=diag)
-        
+    
+    def rewriteFRows(self, diag:int=0) -> int:
+        '''rewrite targets in the time table'''
         spi = 0
-        cp = self.targetPoints.loc[spi, ['xt', 'yt', 'zt']]  # current target point
+        cp = self.targetPoints.loc[spi]  # current target point
         r0 = 0
         dprev = 1000
         hit = False
-        for fi, row in self.ftable.iterrows():
+        dprog = 0
+        fi = 0
+        while fi<len(self.ftable):
+            fi+=1
+            row = self.ftable.loc[fi]
             d = np.sqrt((row['xd']-cp['xt'])**2+(row['yd']-cp['yt'])**2+(row['zd']-cp['zt'])**2)
+            self.ftable.loc[fi, 'ldt'] = d   # store distance
             if diag>1:
                 print(fi, list(row[['xd', 'yd', 'zd']]), list(cp), d, dprev)
             if not hit and d<3 or dprev>3:
@@ -264,34 +259,105 @@ class progDim:
                 if diag>0:
                     print(fi, list(row[['xd', 'yd', 'zd']]), list(cp), d, dprev)
                 # started to move away. reset target
-                for s in ['x', 'y', 'z']:
-                    self.ftable.loc[r0:fi-1, f'{s}t'] = cp[f'{s}t']
-                r0 = fi # reset row counter
+                for s in ['xt', 'yt', 'zt', 'speed']:
+                    self.ftable.loc[r0:fi-1, s] = cp[s]
+                    
+                f11 = self.ftable.loc[r0:fi-1]
+                if f11.flag.max()>2048 and f11[f11.flag>2048].index.min()<fi-5:
+                    # flag on during this run that turns on more than 5 time steps before end of chunk. compensate
+                    t0 = self.ftable.loc[r0, 'time']
+                    dtrav = (self.ftable.loc[fi-1, 'time'] - t0)*cp['speed']
+                    if dtrav<dprog:
+                        # ended point too early
+                        tf = t0 + (dprog+1)/cp['speed']  # anticipated final time
+                        fi2 = (self.ftable['time']-tf).abs().argsort()[0]   # get row that is closest to that time
+                        for s in ['xt', 'yt', 'zt', 'speed']:
+                            self.ftable.loc[fi-1:fi2-1, s] = cp[s]
+                        # check if we hit other points during the overwritten part
+                        
+                        check = True
+                        fii=0
+                        while check and fi2+fii<len(self.ftable):
+                            spi+=1
+                            
+                            skip = self.ftable.copy()
+                            skip = skip.loc[fi-1:fi2+fii-1]
+                            cp2 = self.targetPoints.loc[spi]  # next target point
+                            skip['ldt'] = np.sqrt((skip['xd']-cp2['xt'])**2+(skip['yd']-cp2['yt'])**2+(skip['zd']-cp2['zt'])**2)   # find distance to point
+                            lmin = skip.ldt.min()
+                            if lmin<3 and skip[skip.ldt==lmin].index.min()<fi2-1:
+                                # hit point and then moved away. keep one point
+                                for s in ['xt', 'yt', 'zt', 'speed']:
+                                    self.ftable.loc[fi2+fii, s] = cp2[s]
+                                fii+=1
+                            else:
+                                check = False
+                        spi = spi-2                      
+                        
+                        fi = fi2+fii
+
                 spi+=1
-                if spi>=len(self.targetPoints):
+                
+                # check position
+                if spi==len(self.targetPoints)-1:
+                    # we've hit the last point
+                    self.ftable.loc[r0:, 'speed'] = cp['speed']
+                    return 0
+                elif spi>=len(self.targetPoints):
                     # reset the table and return
                     print(self.mer)
                     logging.error(f'Failed to rewrite targets in {self.printFolder}: ran out of targets')
                     self.importTimeFile()
                     return 1
-                cp2 = self.targetPoints.loc[spi, ['xt', 'yt', 'zt']]  # current target point
+                
+                # get next point
+                cp2 = self.targetPoints.loc[spi]  # current target point
                 if np.sqrt((cp2['xt']-cp['xt'])**2+(cp2['yt']-cp['yt'])**2+(cp2['zt']-cp['zt'])**2)<0.01:
+                    if cp2['speed']==0:
+                        # mark pause using speed
+                        f1 = self.ftable.loc[r0:fi-1]
+                        self.ftable.loc[f1[f1.ldt<0.01].index, 'speed'] = 0
                     spi+=1   # target point is the same. skip
-                    cp = self.targetPoints.loc[spi, ['xt', 'yt', 'zt']]  # current target point
+                    cprev = cp
+                    cp = self.targetPoints.loc[spi]  # current target point
+                    
                 else:
+                    cprev = cp
                     cp = cp2
+                    
+                # get programmed distance
+                dprog = np.sqrt((cp['xt']-cprev['xt'])**2+(cp['yt']-cprev['yt'])**2+(cp['zt']-cprev['zt'])**2)
+                    
+                r0 = fi # reset row counter
                 hit = False
                 dprev = np.sqrt((row['xd']-cp['xt'])**2+(row['yd']-cp['yt'])**2+(row['zd']-cp['zt'])**2)
             else:
                 dprev = d
-        
-        # distance between displayed and target points
-        self.ftable['ldt'] = np.sqrt((self.ftable['xt']-self.ftable['xd'])**2 +(self.ftable['yt']-self.ftable['yd'])**2 +(self.ftable['zt']-self.ftable['zd'])**2 )
-        self.ftableUnits['ldt'] = self.ftableUnits['x_target']
+                
         if spi+1<len(self.targetPoints):
             logging.error(f'Failed to rewrite targets in {self.printFolder}: did not hit last {len(self.targetPoints)-spi-1} targets')
             self.importTimeFile()
             return 1
+
+            
+    def rewriteTargets(self, diag:int=0) -> int:
+        '''overwrite the target points in the time file'''
+        self.importTimeFile()
+        if not 'xt' in self.ftable:
+            return 1
+        
+        self.getTargetPoints(diag=diag)
+        lu = self.ftableUnits['x_target']
+        tu = self.ftableUnits['time']
+        self.ftableUnits['ldt'] = lu
+        self.ftableUnits['speed'] = f'{lu}/{tu}'
+        out = self.rewriteFRows(diag=diag)
+        if out>0:
+            return out
+
+#         # distance between displayed and target points
+#         self.ftable['ldt'] = np.sqrt((self.ftable['xt']-self.ftable['xd'])**2 +(self.ftable['yt']-self.ftable['yd'])**2 +(self.ftable['zt']-self.ftable['zd'])**2 )
+        
         self.rewritten = True
         return 0
                 
@@ -336,6 +402,7 @@ class progDim:
         pp = self.pprev       # previous target point coords
         pt = v.iloc[0]        # current target point
         pospoints = v[v.pressure>0]  # get points where pressure is on
+        translationSpeed = v.speed.max()
         
         # characterize step size, direction
         if 'xt' in pp:
@@ -344,23 +411,33 @@ class progDim:
         else:
             dist = np.nan
             direc = [np.nan, np.nan, np.nan]
-        t0 = v.time.min()
+#         t0 = v.time.min()
+        t0 = self.t0
         tf = v.time.max()
-        app = {'xt':pt['xt'], 'yt':pt['yt'], 'zt':pt['zt'], 'dx':direc[0], 'dy':direc[1], 'dz':direc[2], 'dprog':dist, 't0':t0, 'tf':tf}
+        self.t0 = tf
+        dtraveled = translationSpeed*(tf-t0)
+        app = {'xt':pt['xt'], 'yt':pt['yt'], 'zt':pt['zt']
+               , 'dx':direc[0], 'dy':direc[1], 'dz':direc[2]
+               , 'dprog':dist, 'dtr':dtraveled, 't0':t0, 'tf':tf, 'speed':translationSpeed}
         if len(pospoints)>0:
             # we have flow
             tfflow = pospoints.time.max()
             t0flow = pospoints.time.min()
             ttot = pospoints.dt.sum()
-            l = self.pv.sup.v*ttot  
+            
+            l = translationSpeed*ttot  
                 # estimate length based on speed. 
                 # don't use table estimates because they can be influenced by bad output from Sb3.exe
             volflux = [max(self.press.calculateSpeed(p['pressure'])*anoz*p['dt'], 0) for i,p in pospoints.iterrows()]  
                 # convert pressure to volume flux using calibration curve
 
             vol = sum(volflux)
-            a = vol/l
-            w = 2*np.sqrt(a/np.pi)
+            if l==0:
+                w = 2*(vol*3/4/np.pi)**1/3
+                a = np.pi*(w/2)**2
+            else:
+                a = vol/l
+                w = 2*np.sqrt(a/np.pi)
             app = {**app, **{'t0_flow':t0flow, 'tf_flow':tfflow, 'l':l, 'w':w, 't':ttot, 'a':a, 'vol':vol}}
         else:
             # no flow
@@ -384,6 +461,7 @@ class progDim:
                                         (self.ftable['yt'].shift() != self.ftable['yt'])|
                                         (self.ftable['zt'].shift() != self.ftable['zt'])).cumsum())
         self.pprev = []
+        self.t0 = 0
         for k,v in grouping:
             self.readProgGroup(v)
         self.progPos = pd.DataFrame(self.progPos)
@@ -391,8 +469,8 @@ class progDim:
         # determine units
         lu = self.ftableUnits['x_target']
         tu = self.ftableUnits['time']
-        self.progPosUnits = {'xt':lu, 'yt':lu, 'zt':lu, 'dx':lu, 'dy':lu, 'dz':lu, 'dprog':lu, 
-                             't0':tu, 'tf':tu, 't0_flow':tu, 'tf_flow':tu,
+        self.progPosUnits = {'xt':lu, 'yt':lu, 'zt':lu, 'dx':lu, 'dy':lu, 'dz':lu, 'dprog':lu, 'dtr':lu,
+                             't0':tu, 'tf':tu, 't0_flow':tu, 'tf_flow':tu, 'speed':f'{lu}/{tu}',
                             'l':lu, 'w':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3'}
         
     def exportProgPos(self, overwrite:bool=False, diag:int=0) -> int:
@@ -443,8 +521,8 @@ class progDim:
             tu = self.ftableUnits['time']
         else:
             tu = 's'
-        self.progDimsUnits = {'t':tu, 't0':tu, 'tf':tu, 'tpic':tu, 'name':'', 'lprog':lu,
-                        'l':lu, 'w':lu, 'a':f'{lu}^2', 'vol':f'{lu}^3'}
+        self.progDimsUnits = {'t':tu, 't0':tu, 'tf':tu, 'tpic':tu, 'name':'', 'lprog':lu, 'ltr':lu,
+                        'l':lu, 'w':lu, 'a':f'{lu}^2', 'vol':f'{lu}^3', 'speed':f'{lu}/{tu}'}
     
     def exportProgDims(self, overwrite:bool=False, diag:int=0) -> None:
         '''sort programmed moves into intended moves'''
@@ -477,6 +555,10 @@ class progDimsSingleLine(progDim):
     
     def __init__(self, printFolder:str, pv:printVals, **kwargs):
         super().__init__(printFolder, pv)
+        self.units = {'name':'', 'l':'mm','w':'mm','t':'s'
+                      ,'a':'mm^2','vol':'mm^3','t0':'s', 'tf':'s'
+                     ,'xt':'mm', 'yt':'mm', 'zt':'mm', 'dx':'mm', 'dy':'mm', 'dz':'mm', 'dprog':'mm'
+                     , 't0_flow':'s', 'tf_flow':'s', 'tpic':'s'}
         self.fluigent()
         
     def progDimsSummary(self) -> Tuple[pd.DataFrame,dict]:
@@ -702,9 +784,11 @@ class progDimsSingleDisturb(progDim):
                     self.progDims.loc[self.progDims['name']==f'l{j}{cha}',y] = line[y]
 
                 # determine where to take pic
-                tpic = (line['t0']+line['dprog']/self.pv.sup.v/2)
+                tpic = line['t0']+line['dprog']*0.5/line['speed']
                 self.progDims.loc[self.progDims['name']==f'l{j}{cha}','tpic'] = tpic
                 self.progDims.loc[self.progDims['name']==f'l{j}{cha}','lprog'] = line['dprog']
+                self.progDims.loc[self.progDims['name']==f'l{j}{cha}','ltr'] = line['dtr']
+                self.progDims.loc[self.progDims['name']==f'l{j}{cha}','speed'] = line['speed']
                 
                 # select observation line
                 olines0 = olines[olines.t0>line['t0']]
@@ -825,150 +909,69 @@ def exportProgDims(folder:str, overwrite:bool=False) -> list:
         return errorList
     else:
         return errorList
+    
+    
+#--------------
 
+def progTableRecursive(topfolder:str, useDefault:bool=False, overwrite:bool=False, **kwargs) -> pd.DataFrame:
+    '''go through all of the folders and summarize the programmed timings'''
+    if isSubFolder(topfolder):
+        try:
+            pv = printVals(topfolder)
+            if (not 'dates' in kwargs or pv.date in kwargs['dates']) and overwrite:
+                pv.redoSpeedFile()
+                pv.fluigent()
+                pv.exportProgDims() # redo programmed dimensions
+            if useDefault:
+                pv.useDefaultTimings()
+            t,u = pv.progDimsSummary()
+        except:
+            traceback.print_exc()
+            logging.warning(f'failed to get programmed timings from {topfolder}')
+            return {}, {}
+        return t,u
+    elif os.path.isdir(topfolder):
+        tt = []
+        u = {}
+        for f in os.listdir(topfolder):
+            f1f = os.path.join(topfolder, f)
+            if os.path.isdir(f1f):
+                t,u0=progTableRecursive(f1f, useDefault=useDefault, overwrite=overwrite, **kwargs)
+                if len(t)>0:
+                    if len(tt)>0:
+                        tt = pd.concat([tt,t])
+                    else:
+                        tt = t
+                    if len(u)==0:
+                        u = u0
+        return tt, u
+    
+def checkProgTableRecursive(topfolder:str, **kwargs) -> None:
+    '''go through the folder recursively and check if the pressure calibration curves are correct, and overwrite if they're wrong'''
+    if isSubFolder(topfolder):
+        try:
+            pv = printVals(topfolder)
+            pv.importProgDims()
+            if 0 in list(pv.progDims.a):
+                pv.fluigent()
+                pv.exportProgDims() # redo programmed dimensions
+        except:
+            traceback.print_exc()
+            logging.warning(f'failed to get programmed timings from {topfolder}')
+            return
+        return 
+    elif os.path.isdir(topfolder):
+        for f in os.listdir(topfolder):
+            f1f = os.path.join(topfolder, f)
+            if os.path.isdir(f1f):
+                checkProgTableRecursive(f1f, **kwargs)
+        return
 
-# archive
-#     def matchSBPToTargets(self):
-#         '''line up the progPos and sbpPoints tables'''
-#         if not hasattr(self, 'progPos'):
-#             self.
-#         pp = self.progPos.copy()
-#         ppi = 0
-#         for i,row in self.sbpPoints.iterrows():
-#             if pp.loc[ppi, 'xt']==row['x'] and pp.loc[ppi, 'yt']==row['y'] and pp.loc[ppi, 'zt']==row['z']:
-#                 # points match
-#                 self.sbpPoints.loc[i, 't0'] = pp.loc[ppi, 't0']
-#                 self.sbpPoints.loc[i, 'tf'] = pp.loc[ppi, 'tf']
-#                 ppi+=1
-#                 if ppi>=len(pp):
-#                     return
-#             else:
-#                 # mismatched point
-#                 ppi+=1
-#                 if ppi>=len(pp):
-#                     return
-#                 if pp.loc[ppi, 'xt']==row['x'] and pp.loc[ppi, 'yt']==row['y'] and pp.loc[ppi, 'zt']==row['z']:
-#                     # we had an extra point
-#                     self.sbpPoints.loc[i, 't0'] = pp.loc[ppi, 't0']
-#                     self.sbpPoints.loc[i, 'tf'] = pp.loc[ppi, 'tf']
-#                 else:
-#                     # we're missing a point
-#                     ppi-=1
-#         return
+def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.DataFrame:
+    '''go through all the folders, get a table of the speeds and pressures, and export to filename'''
+    tt,units = progTableRecursive(topfolder, **kwargs)
+    tt = pd.DataFrame(tt)
+    if os.path.exists(exportFolder):
+        plainExp(os.path.join(exportFolder, filename), tt, units)
+    return tt,units
 
-
-#     def rollTogetherLines(self, i:int, targetPrev:bool=True) -> None:
-#         '''combine a line with the previous line in progPos. if targetPrev, use target from prev line. else, use target from line'''
-#         row = self.progPos.loc[i]
-#         for s in ['dprog', 'vol', 't', 'l']:
-#             self.progPos.loc[i-1,s] = self.progPos.loc[i-1,s]+row[s]
-#         self.progPos.loc[i-1,'tf'] = row['tf']
-#         self.progPos.loc[i-1,'tf_flow'] = row['tf_flow']
-#         if self.progPos.loc[i-1,'l']>0:
-#             self.progPos.loc[i-1,'a'] = self.progPos.loc[i-1,'vol']/self.progPos.loc[i-1,'l']
-#         self.progPos.loc[i-1,'w'] = 2*np.sqrt(self.progPos.loc[i-1,'a']/np.pi)
-#         for s in ['x', 'y', 'z']:
-#             if not targetPrev:
-#                 self.progPos.loc[i-1,f'{s}t'] = row[f'{s}t']
-#                 self.progPos.loc[i-1, f'd{s}'] = row[f'{s}t'] - self.progPos.loc[i-2, f'{s}t']
-#             self.progPos.loc[i+1, f'd{s}'] = self.progPos.loc[i+1, f'{s}t'] - self.progPos.loc[i-1, f'{s}t']
-#         self.progPos.drop(i, inplace=True)
-#         self.progPos.reset_index(drop=True, inplace=True)
-
-#     def restorePosTargets(self) -> None:
-#         '''reset the target positions to the originally marked positions in the time table'''
-#         if not hasattr(self, 'progPos'):
-#             return
-#         for i,row in self.progPos[self.progPos.reset==True].iterrows():
-#             # roll this row into the previous row
-#             self.rollTogetherLines(i)
-#         self.progPos.drop(columns=['reset'], inplace=True)
-
-
-#     def readProgGroup(self, v:pd.DataFrame) -> dict:
-#         '''summarize the group of time steps'''
-#         a = np.pi*(self.pv.dEst/2)**2 # ideal cross-sectional area
-#         anoz = np.pi*(self.geo.di/2)**2 # inner cross-sectional area of nozzle
-#         if len(v)>4:
-#             plast = v.iloc[-4]      # last point
-#             if not 'trd' in v:
-#                 d = measureTRD(plast)   # target to read distance
-#                 if d>1:
-#                     # read did not end on target
-#                     vi = v.copy()
-#                     vi['trd'] = [measureTRD(pp) for i,pp in v.iterrows()]
-#                     close = vi[vi.trd<0.1]
-#                     if len(close)>0:
-#                         # split at the last time step when read is at target
-#                         lastin = close.iloc[-1].name
-
-#                         # change target on 2nd group
-#                         for s in ['x', 'y', 'z']:
-#                             vi.loc[lastin+1:, 'reset'] = True
-#                             vi.loc[lastin+1:, f'{s}t'] = round(vi.iloc[-1][f'{s}d'],2)
-#                         vi['trd'] =  [measureTRD(pp) for i,pp in vi.iterrows()]
-#                         v1 = vi.loc[:lastin]
-#                         v2 = vi.loc[lastin+1:]
-#                         if len(v1)>0:
-#                             self.readProgGroup(v1)
-#                         if len(v2)>0:
-#                             self.readProgGroup(v2)
-#                         return
-            
-#         pp = self.pprev
-#         pt = v.iloc[0]
-#         pospoints = v[v.pressure>0]  # get points where pressure is on
-#         if 'xt' in pp:
-#             direc = [(pt['xt']-pp['xt']), (pt['yt']-pp['yt']), (pt['zt']-pp['zt'])]
-#             dist = np.sqrt((direc[0])**2+(direc[1])**2+(direc[2])**2)
-#         else:
-#             dist = np.nan
-#             direc = [np.nan, np.nan, np.nan]
-#         t0 = v.time.min()
-#         tf = v.time.max()
-#         app = {'xt':pt['xt'], 'yt':pt['yt'], 'zt':pt['zt'], 'dx':direc[0], 'dy':direc[1], 'dz':direc[2], 'dprog':dist, 't0':t0, 'tf':tf}
-#         if 'reset' in pt:
-#             app = {**app, **{'reset':pt['reset']}}
-#         if len(pospoints)>0:
-#             # we have flow
-#             tfflow = pospoints.time.max()
-#             t0flow = pospoints.time.min()
-#             ttot = pospoints.dt.sum()
-#             l = self.pv.sup.v*ttot  
-#                 # estimate length based on speed. 
-#                 # don't use table estimates because they can be influenced by bad output from Sb3.exe
-#             volflux = [max(self.press.calculateSpeed(p['pressure'])*anoz*p['dt'], 0) for i,p in pospoints.iterrows()]  
-#                 # convert pressure to volume flux using calibration curve
-
-#             vol = sum(volflux)
-#             a = vol/l
-#             w = 2*np.sqrt(a/np.pi)
-#             app = {**app, **{'t0_flow':t0flow, 'tf_flow':tfflow, 'l':l, 'w':w, 't':ttot, 'a':a, 'vol':vol}}
-#         else:
-#             # no flow
-#             app = {**app, **{'t0_flow':np.nan, 'tf_flow':np.nan, 'l':0, 'w':0, 't':0, 'a':0, 'vol':0}}
-#         self.progPos.append(app)
-#         self.pprev = pt
-
-
-#     def fluigent(self) -> None:
-#         '''get lengths of actual extrusion from fluigent'''
-#         try:
-#             if not hasattr(self, 'ftable'):
-#                 self.ftable = self.importTimeFile()
-#             self.fluFile = True
-#         except:
-#             # no fluigent file, use default timings
-#             self.useDefaultTimings()
-#             self.fluFile = False
-#             return
-        
-#         if self.press.targetPressure==0:
-#             self.press.targetPressure = self.ftable.pressure.max()
-#         if 'xt' in self.ftable:
-#             self.readProgPos()
-#         else:
-#             if self.pfd.printType=='singleLine':
-#                 self.readProgDims(self.ftable)
-#             else:
-#                 logging.warning(f'Missing info in time table in {self.folder}')
