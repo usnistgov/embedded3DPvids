@@ -49,6 +49,7 @@ class printVals:
             self.fluFile = False
 
         self.constUnits = {}
+        self.pxpmm = self.pfd.pxpmm()
 
     
         split = re.split('_', self.bn)
@@ -252,19 +253,19 @@ class pvSingle(printVals):
             t2 = {}
 #             for s in ['w', 'h', 'vintegral', 'meanT']:
 #                 t2[s] = row[s]
-            t2['wN'] = row['w']/cfg.const.pxpmm/progrow['w'] # convert to mm, divide by intended dimension
-            t2['hN'] = row['h']/cfg.const.pxpmm/progrow['l'] # convert to mm
-            t2['vN'] = row['vest']/cfg.const.pxpmm**3/progrow['vol'] # convert to mm^3. vN is the estimated volume of the bounding box
-            t2['vintegral'] = row['vintegral']/cfg.const.pxpmm**3
+            t2['wN'] = row['w']/self.pxpmm/progrow['w'] # convert to mm, divide by intended dimension
+            t2['hN'] = row['h']/self.pxpmm/progrow['l'] # convert to mm
+            t2['vN'] = row['vest']/self.pxpmm**3/progrow['vol'] # convert to mm^3. vN is the estimated volume of the bounding box
+            t2['vintegral'] = row['vintegral']/self.pxpmm**3
             t2['viN'] = t2['vintegral']/progrow['vol'] # convert to mm^3. viN is the estimated volume by integrating over the length of the line
-            t2['vleak'] = row['vleak']/cfg.const.pxpmm**3
+            t2['vleak'] = row['vleak']/self.pxpmm**3
             t2['vleakN'] = t2['vleak']/(progrow['a']*(15-progrow['l'])) 
                 # convert to mm^3. viN is the estimated volume by integrating past the programmed length of the line, 
                 # normalized by the remaining allowed volume after flow stops
             t2['roughness'] = row['roughness']
-            t2['meanTN'] = row['meanT']/cfg.const.pxpmm/progrow['w'] # convert to mm
-            t2['stdevTN'] = row['stdevT']/cfg.const.pxpmm/progrow['w'] # convert to mm
-            t2['minmaxTN'] = row['minmaxT']/cfg.const.pxpmm/progrow['w'] # convert to mm
+            t2['meanTN'] = row['meanT']/self.pxpmm/progrow['w'] # convert to mm
+            t2['stdevTN'] = row['stdevT']/self.pxpmm/progrow['w'] # convert to mm
+            t2['minmaxTN'] = row['minmaxT']/self.pxpmm/progrow['w'] # convert to mm
             t1.append(t2)
         t1 = pd.DataFrame(t1)
         t3 = [[f'vert_{s}', t1[s].mean()] for s in t1] # averages
@@ -289,13 +290,13 @@ class pvSingle(printVals):
             progrow = progrow.iloc[0]
             t2 = {}
             t2['segments'] = row['segments']
-            t2['maxlenN'] = row['maxlen']/cfg.const.pxpmm/progrow['l']
-            t2['totlenN'] = row['totlen']/cfg.const.pxpmm/progrow['l']
-            t2['vN'] = row['vest']/cfg.const.pxpmm**3/progrow['vol'] # convert to mm^3
+            t2['maxlenN'] = row['maxlen']/self.pxpmm/progrow['l']
+            t2['totlenN'] = row['totlen']/self.pxpmm/progrow['l']
+            t2['vN'] = row['vest']/self.pxpmm**3/progrow['vol'] # convert to mm^3
             t2['roughness'] = row['roughness']
-            t2['meanTN'] = row['meanT']/cfg.const.pxpmm/progrow['w'] # convert to mm
-            t2['stdevTN'] = row['stdevT']/cfg.const.pxpmm/progrow['w'] # convert to mm
-            t2['minmaxTN'] = row['minmaxT']/cfg.const.pxpmm/progrow['w'] # convert to mm
+            t2['meanTN'] = row['meanT']/self.pxpmm/progrow['w'] # convert to mm
+            t2['stdevTN'] = row['stdevT']/self.pxpmm/progrow['w'] # convert to mm
+            t2['minmaxTN'] = row['minmaxT']/self.pxpmm/progrow['w'] # convert to mm
             t1.append(t2)
         t1 = pd.DataFrame(t1)
         t3 = [[f'horiz_{s}', t1[s].mean()] for s in t1] # averages
@@ -329,10 +330,10 @@ class pvSingle(printVals):
             t2['aspect'] = row['aspect']
             t2['xshift'] = row['xshift']
             t2['yshift'] = row['yshift']
-            t2['area'] = row['area']/(cfg.const.pxpmm**2)
+            t2['area'] = row['area']/(self.pxpmm**2)
             t2['areaN'] = t2['area']/progrow['a']
-            t2['wN'] = row['w']/cfg.const.pxpmm/progrow['w']
-            t2['hN'] = row['h']/cfg.const.pxpmm/progrow['w']
+            t2['wN'] = row['w']/self.pxpmm/progrow['w']
+            t2['hN'] = row['h']/self.pxpmm/progrow['w']
             t2['roughness'] = row['roughness']
             t1.append(t2)
         t1 = pd.DataFrame(t1)

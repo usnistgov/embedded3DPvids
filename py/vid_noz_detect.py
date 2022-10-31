@@ -17,10 +17,11 @@ import csv
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 from imshow import imshow
-import vidMorph as vm
-from config import cfg
-from plainIm import *
-import fileHandling as fh
+import im_morph as vm
+from tools.config import cfg
+from tools.plainIm import *
+import file_handling as fh
+from vid_tools import vidData
 
 
 # logging
@@ -60,18 +61,22 @@ def lineIntersect(line1:pd.Series, line2:pd.Series) -> Tuple[float,float]:
 class nozData:
     '''holds metadata about the nozzle'''
     
-    def __init__(self, vidfile:str):
-        self.vidFile = vidfile
-        self.levels = fh.labelLevels(vidfile)
+    def __init__(self, folder:str):
+        
+        self.levels = fh.labelLevels(folder)
         self.printFolder = self.levels.printFolder()
         self.pfd = fh.printFileDict(self.printFolder)
+        if len(self.pfd.vid)>0:
+            self.vidFile = self.pfd.vid[0]
+        else:
+            self.vidFile = ''
         self.sampleName = os.path.basename(self.levels.subFolder)
         self.nozMask = []                   # mask that blocks nozzle
         self.prog = []                      # programmed timings
         self.streamOpen = False
-        self.gv = 
-        self.pxpmm = pxpmm
+        self.pxpmm = self.pfd.pxpmm()
         self.importNozzleDims()
+        self.defineCritVals()
 
         
     #-----------------------------
@@ -79,12 +84,21 @@ class nozData:
     def nozDimsFN(self) -> str:
         '''file name of nozzle dimensions table'''
         # store noz dimensions in the subfolder
-        return os.path.join(self.printFolder, f'{self.sampleName}_nozDims.csv')
+        if hasattr(self.pfd, 'nozDims'):
+            return self.pfd.nozDims
+        else:
+            return self.pfd.newFileName('nozDims', 'csv')
+    
+    def nozDims(self) -> dict:
+        '''get the nozzle dimensions'''
+        return {'xL':self.xL, 'xR':self.xR, 'yB':self.yB}
     
     
-    def exportNozzleDims(self) -> None:
+    def exportNozzleDims(self, overwrite:bool=False) -> None:
         '''export the nozzle location to file'''
         fn = self.nozDimsFN()  # nozzle dimensions file name
+        if os.path.exists(fn) and not overwrite:
+            return
         with open(fn, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for st in ['yB', 'xL', 'xR', 'pxpmm']:
@@ -139,21 +153,34 @@ class nozData:
     def nozzleFrame(self, mode:int=0) -> np.array:
         '''get an averaged frame from several points in the stream to blur out all fluid and leave just the nozzle. 
         mode=0 to use median frame, mode=1 to use mean frame, mode=2 to use lightest frame'''
-        if len(self.prog)==0:
-            raise ValueError('No programmed timings in folder')
-        else:
-            l0 = list(self.prog.loc[:10, 'tf'])     # list of end times
-            l1 = list(self.prog.loc[1:, 't0'])      # list of start times
-            ar = np.asarray([l0,l1]).transpose()    # put start times and end times together
-            tlist = np.mean(ar, axis=1)             # list of times in gaps between prints
-            tlist = np.insert(tlist, 0, 0)          # put a 0 at the beginning, so take a still at t=0 before the print starts
-        frames = [self.getFrameAtTime(t) for t in tlist]  # get frames in gaps between prints
+        if not hasattr(self, 'frames'):
+            if len(self.pfd.progPos)>0:
+                prog,units = plainIm(self.pfd.progPos[0], ic=0)
+                prog = prog[prog.l==0]        # select moves with no extrusion
+                prog.reset_index(inplace=True, drop=True)
+                prog = prog.loc[3:len(prog):int(len(prog)/4)]
+                tlist = (prog['tf']+prog['t0'])/2
+            else:
+                if len(self.pfd.progDims)>0:
+                    self.prog, units = plainIm(self.pfd.progDims[0], ic=0)
+                    if len(self.prog)==0:
+                        raise ValueError('No programmed timings in folder')
+                    else:
+                        l0 = list(self.prog.loc[:10, 'tf'])     # list of end times
+                        l1 = list(self.prog.loc[1:, 't0'])      # list of start times
+                        ar = np.asarray([l0,l1]).transpose()    # put start times and end times together
+                        tlist = np.mean(ar, axis=1)             # list of times in gaps between prints
+                        tlist = np.insert(tlist, 0, 0)          # put a 0 at the beginning, so take a still at t=0 before the print starts
+                else:
+                    raise ValueError('No programmed dimensions in folder')
+            self.vd = vidData(self.printFolder)
+            self.frames = [self.vd.getFrameAtTime(t) for t in tlist]  # get frames in gaps between prints
         if mode==0:
-            out = np.median(frames, axis=0).astype(dtype=np.uint8) # median frame
+            out = np.median(self.frames, axis=0).astype(dtype=np.uint8) # median frame
         elif mode==1:
-            out = np.mean(frames, axis=0).astype(dtype=np.uint8)  # average all the frames
+            out = np.mean(self.frames, axis=0).astype(dtype=np.uint8)  # average all the frames
         elif mode==2:
-            out = np.max(frames, axis=0).astype(dtype=np.uint8)   # lightest frame
+            out = np.max(self.frames, axis=0).astype(dtype=np.uint8)   # lightest frame
         return out
     
     def drawNozzleOnFrame(self, colors:bool=True) -> None:
@@ -196,9 +223,7 @@ class nozData:
         try:
             self.line_image = self.line_image0.copy()
         except:
-            self.openStream()
             frame = self.nozzleFrame()           # get median or averaged frame
-            self.closeStream()
             self.line_image0 = np.copy(frame) 
             self.line_image = self.line_image0.copy()
             
@@ -259,9 +284,7 @@ class nozData:
         '''get a nozzle frame and convert it into an edge image.
         mode=0 to use median frame, mode=1 to use mean frame, mode=2 to use lightest frame
         '''
-        self.openStream()
         frame = self.nozzleFrame(mode=mode)           # get median or averaged frame
-        self.closeStream()
         self.line_image0 = np.copy(frame)              # copy of original frame to draw nozzle lines on
         
         # convert to gray, blurred, normalized
@@ -283,7 +306,7 @@ class nozData:
         
     def nozzleLines(self) -> pd.DataFrame:
         '''get lines from the stored edge image'''
-        rho = 3             # distance resolution in pixels of the Hough grid
+        rho = int(3*self.pxpmm/139)         # distance resolution in pixels of the Hough grid
         theta = np.pi/180   # angular resolution in radians of the Hough grid
         threshold = 30      # minimum number of votes (intersections in Hough grid cell)
         min_line_length = 50  # minimum number of pixels making up a line
@@ -400,19 +423,19 @@ class nozData:
     def createNozzleMask(self) -> None:
         '''create a nozzle mask, so we can erase nozzle from images'''
         # create mask
-        try:
+        if hasattr(self, 'line_image'):
             frame = self.line_image
-        except:
-            frame = self.getFrameAtTime(1)
+        else:
+            frame = self.vd.getFrameAtTime(1)
         
         self.nozMask = 255*np.ones((frame.shape[0], frame.shape[1]), dtype=np.uint8)
         self.nozCover = np.copy(frame)*0                          # create empty mask
 #         average = frame.mean(axis=0).mean(axis=0)                 # background color
-        self.nozCover[0:int(self.yB), self.xL-10:self.xR+10]=255      # set the nozzle region to white
+        self.nozCover[0:int(self.yB), int(self.xL)-10:int(self.xR)+10]=255      # set the nozzle region to white
         m = cv.cvtColor(self.nozCover,cv.COLOR_BGR2GRAY)              # convert to gray
         _,self.nozMask = cv.threshold(m,0,255,cv.THRESH_BINARY_INV)   # binary mask of nozzle
     
-    def detectNozzle0(self, diag:int=0, suppressSuccess:bool=False, mode:int=0) -> None:
+    def detectNozzle0(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False) -> None:
         '''find the bottom corners of the nozzle. suppressSuccess=True to only print diagnostics if the run fails'''
         self.thresholdNozzle(mode)    # threshold the nozzle
         self.nozzleLines()            # edge detect and Hough transform to get nozzle edges as lines
@@ -420,18 +443,16 @@ class nozData:
             raise ValueError('Failed to detect any vertical lines in nozzle')
         self.findNozzlePoints()       # filter the lines to get nozzle coords
         self.checkNozzleValues()      # make sure coords make sense
-        self.exportNozzleDims()       # save coords
+        self.exportNozzleDims(overwrite=overwrite)       # save coords
         self.createNozzleMask()       # create mask that we can use to remove the nozzle from images
-        if diag>0 and not suppressSuccess and im==1:
+        
+        if diag>0 and not suppressSuccess:
             self.drawDiagnostics(diag) # show diagnostics
         
 
     def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
-        logging.info(f'detecting nozzle in {self.printFolder}')
-        if len(self.prog)==0:
-            # no programmed timings detected
-            return 1
+#         logging.info(f'Detecting nozzle in {self.printFolder}')
         if not overwrite:
             im = self.importNozzleDims()
         if im==0:
@@ -442,8 +463,8 @@ class nozData:
         # no existing file: detect nozzle
         for mode in [0,1,2]: # min, then median, then mean
             try:
-                self.detectNozzle0(diag=diag, suppressSuccess=suppressSuccess, mode=mode)
-            except:
+                self.detectNozzle0(diag=diag, suppressSuccess=suppressSuccess, mode=mode, overwrite=overwrite)
+            except ValueError:
                 if diag>1:
                     traceback.print_exc()
                 pass
@@ -473,3 +494,27 @@ class nozData:
         norm = np.zeros(out.shape)
         out = cv.normalize(out,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
         return out
+    
+def exportNozDims(folder:str, overwrite:bool=False) -> list:
+    '''export programmed dimensions. returns list of bad folders'''
+    errorList = []
+    if not os.path.isdir(folder):
+        return errorList
+    if not fh.isPrintFolder(folder):
+        for f1 in os.listdir(folder):
+            errorList = errorList + exportNozDims(os.path.join(folder, f1), overwrite=overwrite)
+        return errorList
+
+    pfd = fh.printFileDict(folder)
+    if not overwrite and hasattr(pfd, 'nozDims'):
+        return errorList
+
+    try:
+        nv = nozData(folder)
+        nv.detectNozzle(diag=0, overwrite=overwrite)
+    except ValueError as e:
+        errorList.append(folder)
+        print(f'{folder}:{e}')
+        return errorList
+    else:
+        return errorList

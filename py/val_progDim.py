@@ -113,6 +113,7 @@ class progDim:
         if self.sbp.startswith('disturbHoriz2'):
             # correct for zero jog point
             self.correctZeroJog()
+        self.ftable.loc[:,'time'] = self.ftable.loc[:,'time']-self.ftable.time.min()
         self.createTargetOrig()   # put old targets in another column
         self.rewritten = False
         
@@ -131,7 +132,8 @@ class progDim:
         '''create a column for original targets'''
         if 'xt_orig' in self.ftable:
             return
-        
+        if not 'xt' in self.ftable:
+            return
         for s in ['x', 'y', 'z']:
             self.ftable[f'{s}t_orig'] = self.ftable[f'{s}t']
             self.ftableUnits[f'{s}t_orig'] = self.ftableUnits[f'{s}_target']
@@ -495,9 +497,13 @@ class progDim:
     
     def progDimsFile(self) -> str:
         '''get the name of the progDims file'''
-        return self.pfd.newFileName('progDims', 'csv')
+        if len(self.pfd.progDims)>0:
+            fn = self.pfd.progDims[0]
+        else:
+            fn = self.pfd.newFileName('progDims', 'csv')
+        return fn
     
-    def importProgDims(self, export:bool=True) -> str:
+    def importProgDims(self, export:bool=True, overwrite:bool=False) -> str:
         '''import the progdims file'''
         fn = self.progDimsFile()
         if os.path.exists(fn):
@@ -798,37 +804,7 @@ class progDimsSingleDisturb(progDim):
                 self.progDims.loc[self.progDims['name']==f'l{j}{cha}o','tpic'] = olines0.iloc[0]['tf']-1
                 j+=1
                 
-
- 
-                
-
-    
-    
-#     def fixDisturbHoriz2Pos(self):
-#         '''combine partial lines and fix skipped points'''
-#         # used reset before end of line. combine those lines
-#         wlines = self.progPos[self.progPos.dy==9]
-#         for i in wlines.index:
-#             if self.progPos.loc[i+1, 'dy']==1 and self.progPos.loc[i+1, 'dz']==0:
-#                 # 9 then 1: combine these lines
-#                 self.rollTogetherLines(i+1, targetPrev=False)
-#             else:
-#                 # missing 1 move, write it in
-#                 self.progPos.loc[i, 'dy']=10
-#                 self.progPos.loc[i, 'yt'] = self.progPos.loc[i, 'yt']+1
-#                 self.progPos.loc[i+1, 'dy'] = self.progPos.loc[i+1, 'yt']-self.progPos.loc[i, 'yt']
-#         if len(wlines)>0:
-#             self.ftable.loc[self.ftable.yt==wlines.iloc[0]['yt'], 'yt']=wlines.iloc[0]['yt']+1
-#         skipObserve = self.progPos[self.progPos.dy==-10]
-#         if len(skipObserve)>0:
-#             # we're missing an observation point. change fluigent table and recalculate
-#             midobserve = self.progPos[self.progPos.dy==-5].yt.max()
-#             for i,row in skipObserve.iterrows():
-#                 f1 = self.ftable[(self.ftable['time']<=row['tf'])&(self.ftable['time']>=row['t0'])]
-#                 f1 = f1[(f1.yd>midobserve-0.01)&(f1.yd<midobserve+0.01)]
-#                 if len(f1)>0:
-#                     self.ftable.loc[f1.index, 'yt'] = midobserve
-#                     self.readProgPos()
+#----------
     
     
 class progDimsTripleLine(progDim):

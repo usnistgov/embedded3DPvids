@@ -547,6 +547,14 @@ def tripleLine2FileDict() -> str:
          'VP':'tripleLinesVert'}
     return d
 
+def tripleLineName(file:str) -> str:
+    '''get the short name, given the sbp file name'''
+    d = tripleLine2FileDict()
+    for key,val in d.items():
+        if val in file:
+            return key
+    raise ValueError(f'Unexpected sbp file name: {file}')
+
 #---
     
 def singleLineSBPfiles() -> dict:
@@ -810,8 +818,13 @@ class printFileDict:
                     else:
                         # summary or analysis file
                         if hasattr(self, spl[-1]):
-                            l = [getattr(self, spl[-1])]
+                            lprev = getattr(self, spl[-1])
+                            if len(lprev)>0 and type(lprev) is str:
+                                l = [lprev]
+                            else:
+                                l = []
                             l.append(ffull)
+                            setattr(self, spl[-1], l)
                         else:
                             setattr(self, spl[-1], ffull)
                 elif ext=='.png':
@@ -937,6 +950,25 @@ class printFileDict:
             logging.info(f'Renamed {os.path.basename(file)} to {os.path.basename(newname)}')
             
         self.sort()
+        
+    def pxpmm(self):
+        '''get pixels per mm'''
+        if len(self.meta)==0:
+            meta = {}
+        else:
+            df = pd.read_csv(self.meta[0], header=0, names=['var', 'units', 'val'])
+            meta = dict(zip(df['var'], df['val']))
+        if 'camera_magnification' in meta:
+            cm = float(meta['camera_magnification'])
+        else:
+            cm = 1
+        d = {0.5:71, 1:139}
+        if cm in d:
+            pxpmm = d[cm]
+            return pxpmm
+        else:
+            raise ValueError(f'Unexpected camera magnification in {self.folder}: {cm}')
+        
 
     
 def checkFolders(topFolder:str) -> Tuple[list, list]:

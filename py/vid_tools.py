@@ -42,14 +42,15 @@ def streamInfo(stream) -> Tuple:
     return time, frame
 
 
+
+
+
 class vidData:
     '''holds metadata and tables about video'''
     
-    def __init__(self, folder:str, pxpmm:float=cfg.const.pxpmm):
+    def __init__(self, folder:str):
         self.folder = folder
-        
-        self.pv = printVals(folder) # object that holds metadata about folder
-        self.pfd = self.pv.pfd
+        self.pfd = fh.printFileDict(folder)
         if len(self.pfd.vid)>0:
             self.file = self.pfd.vid[0]    # video file
         else:
@@ -58,33 +59,9 @@ class vidData:
         self.measures = []
         self.measuresUnits = []
         self.streamOpen = False
-        self.getPxpmm()
+        self.pxpmm = self.pfd.pxpmm()
         self.getProgDims()
 
-    def getMeta(self):
-        if len(self.pfd.meta)==0:
-            self.meta = {}
-        else:
-            df = pd.read_csv(self.pfd.meta[0], header=0, names=['var', 'units', 'val'])
-            self.meta = dict(zip(df['var'], df['val']))
-        
-    def getPxpmm(self):
-        '''get pixels per mm'''
-        self.getMeta()
-        if 'camera_magnification' in self.meta:
-            cm = float(self.meta['camera_magnification'])
-            d = {0.5:71, 1:139}
-            if cm in d:
-                self.pxpmm = d[cm]
-            else:
-                self.pxpmm = cfg.const.pxpmm
-        else:
-            self.pxpmm = cfg.const.pxpmm
-                
-        
-    def findNozzle(self):
-        self.nozData = nozData(self.folder)
-        
     def getProgDims(self) -> int:
         '''get line starts and stops'''
         try:
@@ -155,14 +132,25 @@ class vidData:
             
     def exportStills(self, prefixes:list=[], overwrite:bool=False, **kwargs) -> None:
         '''export stills for all times in the progdims table'''
+        self.getProgDims()
         if not 'tpic' in self.prog:
             raise ValueError('No pic time noted')
-        prefix = fh.singleDisturbName(os.path.basename(self.folder))
+        if self.pfd.printType=='singleLine':
+            prefix = ''
+        elif self.pfd.printType=='singleDisturb':
+            prefix = fh.singleDisturbName(os.path.basename(self.folder))
+        elif self.pfd.printType=='tripleLine':
+            prefix = fh.tripleLineName(os.path.basename(self.folder))
+        else:
+            raise ValueError(f'Unknown print type in {self.folder}')
         if len(prefixes)>0 and not prefix in prefixes:
             return
         for i,row in self.prog.iterrows():
             name = row['name']
-            fn = self.pfd.newFileName(f'still_{prefix}_{name}', 'png')
+            if len(prefix)>0:
+                fn = self.pfd.newFileName(f'vstill_{prefix}_{name}', 'png')
+            else:
+                fn = self.pfd.newFileName(f'vstill_{name}', 'png')
             if not os.path.exists(fn) or overwrite:
                 frame = self.getFrameAtTime(row['tpic'])
                 cv.imwrite(fn, frame)

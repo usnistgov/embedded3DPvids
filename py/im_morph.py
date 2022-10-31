@@ -142,16 +142,19 @@ def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
         adjusted = normalize(adjusted)
     return adjusted
 
-def closeVerticalTop(thresh:np.array) -> np.array:
+def closeVerticalTop(thresh:np.array, cutoffTop:float=0.03, **kwargs) -> np.array:
     '''if the image is of a vertical line, close the top'''
     if thresh.shape[0]<thresh.shape[1]*2:
         return thresh
     
-    imtop = int(thresh.shape[0]*0.03)  
-    thresh[0:imtop, :] = np.ones(thresh[0:imtop, :].shape)*0
-    
+    # cut off top 3% of image
+    if cutoffTop>0:
+        imtop = int(thresh.shape[0]*cutoffTop)  
+        thresh[0:imtop, :] = np.ones(thresh[0:imtop, :].shape)*0
+
     # vertical line. close top to fix bubbles
     top = np.where(np.array([sum(x) for x in thresh])>0) 
+
     if len(top[0])==0:
         return thresh
 
@@ -244,7 +247,7 @@ def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthres
         thresh2 = threshes(img, gray, removeVert, 2)
         thresh = cv.bitwise_or(thresh0, thresh2)
         thresh = cv.medianBlur(thresh,3)
-    thresh = closeVerticalTop(thresh)
+    thresh = closeVerticalTop(thresh, **kwargs)
     return thresh
 
 def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, **kwargs) -> np.array:
@@ -280,10 +283,11 @@ def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:boo
             boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
             for i in list(boxes[boxes.area<100].index):
                 labels[labels==i] = 0
-            markers = markers[0], labels, markers[2], markers[3]
+            markers = markers[0], labels.copy(), markers[2], markers[3]
             labels[labels>0]=255
             labels = labels.astype(np.uint8)
         else:
+            labels = markers[1]
             attempt = attempt+1
         if diag>0:
             imshow(img, gray, thresh, labels)

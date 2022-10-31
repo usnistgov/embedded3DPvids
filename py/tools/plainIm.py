@@ -53,6 +53,8 @@ def splitUnits(df:pd.DataFrame) -> Tuple[pd.DataFrame,dict]:
         if '(' in c:
             spl = re.split('\(', c)
             name = spl[0]
+            if name[-1]==' ':
+                name = name[:-1]
             if len(c)>1:
                 u = spl[1][:-1]
         else:
