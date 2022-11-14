@@ -82,7 +82,20 @@ def componentCentroids(img:np.array) -> np.array:
     return centroids       
 
 def fillComponents(thresh:np.array)->np.array:
-    '''fill the connected components in the thresholded image, removing anything touching the border. https://www.programcreek.com/python/example/89425/cv2.floodFill'''
+    '''fill the connected components in the thresholded image https://www.programcreek.com/python/example/89425/cv2.floodFill'''
+    
+    # fill in objects
+    im_flood_fill = thresh.copy()
+    h, w = thresh.shape[:2]
+    mask = np.zeros((h + 2, w + 2), np.uint8)
+    im_flood_fill = im_flood_fill.astype("uint8")
+    cv.floodFill(im_flood_fill, mask, (0, 0), 255)
+    im_flood_fill_inv = cv.bitwise_not(im_flood_fill)
+    img_out = thresh | im_flood_fill_inv
+    return img_out
+
+def removeBorderAndFill(thresh:np.array) -> np.array:
+    '''remove the components touching the border and fill them in'''
     thresh2 = thresh.copy()
     # add 1 pixel white border all around
     pad = cv.copyMakeBorder(thresh2, 1,1,1,1, cv.BORDER_CONSTANT, value=255)
@@ -91,16 +104,7 @@ def fillComponents(thresh:np.array)->np.array:
     mask = np.zeros([h + 2, w + 2], np.uint8)
     img_floodfill = cv.floodFill(pad, mask, (0,0), 0, (5), (0), flags=8)[1] # floodfill outer white border with black
     thresh2 = img_floodfill[1:h-1, 1:w-1]  # remove border
-    
-    # fill in objects
-    im_flood_fill = thresh2.copy()
-    h, w = thresh.shape[:2]
-    mask = np.zeros((h + 2, w + 2), np.uint8)
-    im_flood_fill = im_flood_fill.astype("uint8")
-    cv.floodFill(im_flood_fill, mask, (0, 0), 255)
-    im_flood_fill_inv = cv.bitwise_not(im_flood_fill)
-    img_out = thresh2 | im_flood_fill_inv
-    return img_out
+    return fillComponents(thresh2)
 
 def onlyBorderComponents(thresh:np.array) -> np.array:
     '''only include the components that are touching the border'''
@@ -113,6 +117,10 @@ def imAve(im:np.array) -> float:
 def imMax(im:np.array) -> float:
     '''max value of image'''
     return im.max(axis=0).max(axis=0)
+
+def imMin(im:np.array) -> float:
+    '''min value of image'''
+    return im.min(axis=0).min(axis=0)
 
 def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
     '''remove borders from color image'''
@@ -142,7 +150,20 @@ def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
         adjusted = normalize(adjusted)
     return adjusted
 
-def closeVerticalTop(thresh:np.array, cutoffTop:float=0.03, **kwargs) -> np.array:
+
+def closeHorizLine(thresh:np.array, imtop:int) -> np.array:
+    '''draw a black line across the y position imtop between the first and last black point'''
+    marks = np.where(thresh[imtop]==255) 
+    if len(marks[0])==0:
+        return thresh
+    
+    first = marks[0][0] # first position in x in y row where black
+    last = marks[0][-1]
+    if last-first<thresh.shape[1]*0.2:
+        thresh[imtop:imtop+3, first:last] = 255*np.ones(thresh[imtop:imtop+3, first:last].shape)
+    return thresh
+
+def closeVerticalTop(thresh:np.array, cutoffTop:float=0.03, closeBottom:bool=False, **kwargs) -> np.array:
     '''if the image is of a vertical line, close the top'''
     if thresh.shape[0]<thresh.shape[1]*2:
         return thresh
@@ -159,14 +180,10 @@ def closeVerticalTop(thresh:np.array, cutoffTop:float=0.03, **kwargs) -> np.arra
         return thresh
 
     imtop = top[0][0] # first position in y where black
-    marks = np.where(thresh[imtop]==255) 
-    if len(marks[0])==0:
-        return thresh
-    
-    first = marks[0][0] # first position in x in y row where black
-    last = marks[0][-1]
-    if last-first<thresh.shape[1]*0.2:
-        thresh[imtop:imtop+3, first:last] = 255*np.ones(thresh[imtop:imtop+3, first:last].shape)
+    thresh = closeHorizLine(thresh, imtop)
+    if closeBottom:
+        imbot = top[0][-1]-3
+        thresh = closeHorizLine(thresh, imbot)
     return thresh
 
 def verticalFilter(gray:np.array) -> np.array:
@@ -184,7 +201,31 @@ def verticalFilter(gray:np.array) -> np.array:
     return vertthresh
 
 
+def removeBlack(im:np.array, threshold:int=70) -> np.array:
+    '''remove black portions such as bubbles from the image'''
+    if len(im.shape)==3:
+        gray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
+    else:
+        gray = im.copy()
+    _, thresh = cv.threshold(gray, threshold, 255, cv.THRESH_BINARY_INV)
+    thresh = dilate(thresh, 5)
+    white = imMax(im)
+    avim = np.ones(shape=im.shape, dtype=np.uint8)*np.uint8(white)
+    cover = cv.bitwise_and(avim, avim, mask=thresh)
+    im = cv.add(cover, im)
+    return im
 
+def imchannel(im:np.array, channel:int) -> np.array:
+    '''return a color image that is just the requested channel'''
+    red = np.zeros(shape=im.shape, dtype=np.uint8)
+    red[:,:,channel] = im[:,:,channel]
+    return red
+
+def removeChannel(im:np.array, channel:int) -> np.array:
+    '''remove the requested color channel'''
+    red = im
+    red[:,:,channel] = np.zeros(shape=(red[:,:,channel]).shape, dtype=np.uint8)
+    return red
 
 def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthresh:int=150, topthresh:int=200, whiteval:int=80, diag:int=0, **kwargs) -> np.array:
     '''threshold the grayscale image
@@ -250,7 +291,7 @@ def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthres
     thresh = closeVerticalTop(thresh, **kwargs)
     return thresh
 
-def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, **kwargs) -> np.array:
+def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, eraseMaskSpill:bool=False, **kwargs) -> np.array:
     '''from a color image, segment out the ink, and label each distinct fluid segment. 
     acrit is the minimum component size for an ink segment
     removeVert=True to remove vertical lines from the thresholded image
@@ -265,34 +306,55 @@ def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:boo
     while attempt<1:
         finalAt = attempt
         thresh = threshes(img, gray, removeVert, attempt, diag=diag, **kwargs)
+        if 'nozData' in kwargs and 'crops' in kwargs:
+            nd = kwargs['nozData']
+            thresh = nd.maskNozzle(thresh, ave=False, invert=False, crops=kwargs['crops'])   # add the nozzle back in for filling
+            h,w = thresh.shape
+            thresh[0, :] = 0   # clear out the top row
+            thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
+            thresh[:int(h/4),-1] = 0
+        
         if removeBorder:
-            filled = fillComponents(thresh)    
+            filled = removeBorderAndFill(thresh)    
         else:
-            filled = thresh.copy()
-        markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
-        if markers[0]>1:
-            # we collected points
-            boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
-            if max(boxes.loc[1:,'area'])<acrit:
-                # poor segmentation. redo with adaptive thresholding.
-                attempt=attempt+1
-            else:
-                # we're done. remove small points
-                attempt = 6
-            labels = markers[1]
-            boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
-            for i in list(boxes[boxes.area<100].index):
-                labels[labels==i] = 0
-            markers = markers[0], labels.copy(), markers[2], markers[3]
-            labels[labels>0]=255
-            labels = labels.astype(np.uint8)
+            filled = fillComponents(thresh)
+        if 'nozData' in kwargs:
+            filled = nd.maskNozzle(filled, ave=False, invert=True, crops=kwargs['crops'])  # remove the nozzle again
+            if eraseMaskSpill:
+                filled = nd.eraseSpillover(filled, crops=kwargs['crops'])
+        labels, markers, ret = filterMarkers(filled, acrit=acrit)
+        if ret==0:
+            attempt = 6
         else:
-            labels = markers[1]
             attempt = attempt+1
         if diag>0:
-            imshow(img, gray, thresh, labels)
+            imshow(img, gray, thresh, labels, maxwidth=13)
             plt.title(f'attempt:{attempt}')
+    finalAt = attempt
     return labels, markers, finalAt
+
+
+def filterMarkers(filled:np.array, acrit:float=2500) -> Tuple[np.array, Tuple]:
+    '''get connected components and filter by area, then create a new binary image without small components'''
+    markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
+    labels = markers[1]
+    if markers[0]==0:
+        # no components. redo segmentation
+        return labels, markers, 1
+    # we collected points
+    boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
+
+    if len(boxes)==1 or max(boxes.loc[1:,'area'])<acrit:
+        # poor segmentation. redo with adaptive thresholding.
+        return labels, markers, 1
+
+    boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
+    for i in list(boxes[boxes.area<acrit].index):
+        labels[labels==i] = 0
+    markers = markers[0], labels.copy(), markers[2], markers[3]
+    labels[labels>0]=255
+    labels = labels.astype(np.uint8)
+    return labels, markers, 0
 
 
 
@@ -322,3 +384,48 @@ def white_balance(img:np.array) -> np.array:
     result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
     result = cv.cvtColor(result, cv.COLOR_LAB2BGR)
     return result
+
+def reconstructMask(markers:Tuple, df:pd.DataFrame) -> np.array:
+    '''construct a binary mask with all components labeled in the dataframe'''
+    masks = [(markers[1] == i).astype("uint8") * 255 for i,row in df.iterrows()]
+    if len(masks)>0:
+        componentMask = masks[0]
+        if len(masks)>1:
+            for mask in masks[1:]:
+                componentMask = cv.add(componentMask, mask)
+        return componentMask
+    else:
+        return np.zeros(markers[1].shape).astype(np.uint8)
+
+def removeDust(im:np.array, acrit:int=1000, diag:int=0) -> np.array:
+    '''remove dust from the image'''
+    
+    # threshold darkest parts
+    gray = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+    blur = cv.GaussianBlur(gray,(5,5),0)
+    thresh = cv.adaptiveThreshold(blur, 255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY_INV, 21, 10)
+    
+    # label thresholded image
+    markers = cv.connectedComponentsWithStats(thresh, 8, cv.CV_32S)
+    df = markers2df(markers)
+    df = df[df.a<acrit]
+    if len(df)==0:
+        return im
+    
+    componentMask = reconstructMask(markers, df)
+    badParts = cv.bitwise_and(im,im,mask = dilate(componentMask, 3))
+    frameMasked = cv.add(im, badParts)
+    if diag>0:
+        imshow(im, badParts, frameMasked)
+    return frameMasked
+
+def blackenRed(im:np.array) -> np.array:
+    '''darken red segments'''
+    diff = cv.absdiff(im[:,:,2],im[:,:,1])
+    blur = cv.GaussianBlur(diff,(5,5),0)
+    _,thresh = cv.threshold(blur,30,255,cv.THRESH_BINARY_INV)
+    im2 = np.ones(im.shape, dtype=np.uint8)*255
+    badParts = cv.bitwise_not(im2,im2,mask = thresh)
+    frameMasked = cv.subtract(im, badParts)
+    return frameMasked
+    

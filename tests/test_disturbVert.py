@@ -19,7 +19,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.append(os.path.join(parentdir, 'py'))
 from file_handling import *
 import tools.logs as logs
-import metrics as me
+import metrics_disturb as me
 
 # logging
 logger = logging.getLogger(__name__)
@@ -35,20 +35,22 @@ LOGGERDEFINED = logs.openLog('test_disturbVert.py', False, level='DEBUG', export
 class TestDisturbVert(unittest.TestCase):
     '''test for correct print file labeling'''
     
-    def parameterize(self, folder:str='', file:str='', w:int=0, h:int=0, **kwargs):
+    def parameterize(self, folder:str='', file:str='', w:int=0, h:int=0, test:int=0, **kwargs):
         self.folder = folder
         self.file = file
         self.w = w
         self.h = h
+        self.test = test
 
     def setUp(self):
         self.me, self.units = me.vertDisturbMeasure(self.file)
         
     def test_w(self):
-        self.assertTrue(abs(self.me['w']-self.w)<10, 'test_w failed')
+        self.assertTrue('w' in self.me, f'Nothing measured in {self.file}: {self.test}')
+        self.assertTrue(abs(self.me['w']-self.w)<10, f'test_w failed in {self.file}: {self.test}')
         
     def test_h(self):
-        self.assertTrue(abs(self.me['h']-self.h)<10, 'test_h failed')
+        self.assertTrue(abs(self.me['h']-self.h)<10, f'test_h failed in {self.file}: {self.test}')
 
     def runTest(self):
         self.test_w()
@@ -71,6 +73,7 @@ def suite():
     for i,row in testlist.iterrows():
         row['folder'] = os.path.join(cfg.path.server, row['folder'])
         row['file'] = os.path.join(row['folder'], row['file'])
+        row['test'] = i
         s = dict(row)
         t = TestDisturbVert()
         t.parameterize(**s)
@@ -80,4 +83,6 @@ def suite():
     
 if __name__ == '__main__':
     runner = unittest.TextTestRunner()
-    runner.run(suite())
+    result = runner.run(suite())
+    failedFiles = [int(re.split(': ', str(s))[-1][:-4]) for s in result.failures]
+    print(failedFiles)

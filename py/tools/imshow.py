@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import cv2 as cv
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
+import numpy as np
 
 # local packages
 
@@ -20,28 +21,50 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 ####### DISPLAY TOOLS
 
-def imshow(*args, scale:float=8, axesVisible:bool=True, **kwargs) -> None:
+def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perRow:int=6, maxwidth:float=20, **kwargs) -> None:
     '''displays cv image(s) in jupyter notebook using matplotlib'''
     aspect = args[0].shape[0]/args[0].shape[1]
+    rows = int(np.ceil(len(args)/perRow))
+    cols = min(len(args), perRow)
+    
     if aspect>1:
-        f, axs = plt.subplots(1, len(args), figsize=(scale*len(args)/aspect, scale))
+        w = scale*cols/aspect
+        h = scale*rows
     else:
-        f, axs = plt.subplots(1, len(args), figsize=(scale*len(args), scale*aspect))
+        w = scale*cols
+        h = scale*aspect*rows
+    if w>maxwidth:
+        w = maxwidth
+        h = w*aspect*cols/rows
+    f, axarr = plt.subplots(rows, cols, figsize=(w,h))
+    f.subplots_adjust(wspace=0)
     if len(args)>1:
-        
-        
-        for ax in axs:
-            ax.get_xaxis().set_visible(axesVisible)
-            ax.get_yaxis().set_visible(axesVisible)
+        if rows==1:
+            axs = [axarr]
+            axlist = axarr
+        else:
+            axs = axarr
+            axlist = axarr.flatten()
+        for axrow in axs:
+            for ax in axrow:
+                ax.get_xaxis().set_visible(axesVisible)
+                ax.get_yaxis().set_visible(axesVisible)
+                ax.set_aspect(aspect)
         for i, im in enumerate(args):
-            if len(im.shape)>2:
-                # color
-                axs[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
+            if type(im) is str:
+                axlist[i].text(0,0,im)
             else:
-                # B&W
-                axs[i].imshow(im, cmap='Greys')
+                if len(im.shape)>2:
+                    # color
+                    axlist[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
+                else:
+                    # B&W
+                    axlist[i].imshow(im, cmap='Greys')
+                if numbers:
+                    axlist[i].text(0,0,str(i))
+            
     else:
-        ax = axs
+        ax = axarr
         ax.get_xaxis().set_visible(axesVisible)
         ax.get_yaxis().set_visible(axesVisible)
         im = args[0]

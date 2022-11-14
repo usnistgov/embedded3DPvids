@@ -810,6 +810,10 @@ class printFileDict:
                             self.progDims.append(ffull)
                         elif 'progPos' in fname:
                             self.progPos.append(ffull)
+                        elif 'nozDims' in fname:
+                            self.nozDims = ffull
+                        elif 'vidStats' in fname:
+                            self.vidStats = ffull
                         else:
                             self.csv_unknown.append(ffull)
                     elif spl[0] in singleLineSBPPicfiles():
@@ -828,7 +832,9 @@ class printFileDict:
                         else:
                             setattr(self, spl[-1], ffull)
                 elif ext=='.png':
-                    if isStill(f1):
+                    if 'background' in fname:
+                        self.background = ffull
+                    elif isStill(f1):
                         if 'Basler camera' in fname:
                             # raw still
                             if spl[0] in singleLineSBPPicfiles():

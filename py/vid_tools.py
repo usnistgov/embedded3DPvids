@@ -23,7 +23,6 @@ import im_morph as vm
 from config import cfg
 from tools.plainIm import *
 from file_handling import isSubFolder
-import metrics as me
 
 # logging
 logger = logging.getLogger(__name__)
@@ -85,18 +84,58 @@ class vidData:
             self.progDims.importTimeFile()
             self.maxT = self.progDims.ftable.time.max() # final time in programmed run
         return 0
+    
+    def vidStatsFN(self) -> str:
+        '''name of vidstats csv'''
+        return self.pfd.newFileName('vidStats','csv')
+    
+    def importVidStats(self) -> int:
+        '''import video stats from a csv file. return 0 if successful'''
+        fn = self.vidStatsFN()
+        if not os.path.exists(fn):
+            return 1
+        else:
+            d, _ = plainImDict(fn, unitCol=-1, valCol=1)
+            tlist = ['frames', 'fps', 'duration', 'dstart']
+            for st,val in d.items():
+                setattr(self, st, val)
+            if len(set(tlist)-set(d))>0:
+                return 1
+            else:
+                return 0
+                        
+    def exportVidStats(self, overwrite:bool=False) -> None:
+        '''export the video stats'''
+        fn = self.vidStatsFN()  # nozzle dimensions file name
+        if os.path.exists(fn) and not overwrite:
+            return
+        l = ['frames', 'fps', 'duration', 'dstart']
+        for st in l:
+            if not hasattr(self, st):
+                self.openStream()
+                return
+        plainExpDict(fn, dict([[li, getattr(self, li)] for li in l]))
+        
+    def getVidStats(self) -> None:
+        '''get the video stats from the stream'''
+        self.frames = int(self.stream.get(cv.CAP_PROP_FRAME_COUNT)) # total number of frames
+        self.fps = self.stream.get(cv.CAP_PROP_FPS)
+        self.duration = self.frames/self.fps
+        if self.pfd.date>220901:
+            if not hasattr(self, 'maxT'):
+                self.getProgDims()
+            # timing rate should be correct, but vid started earlier than timing
+            self.dstart = max(self.duration-self.maxT,0)+1.25
         
     def openStream(self) -> None:
         '''open the video stream and get metadata'''
         if not self.streamOpen:
             self.stream = cv.VideoCapture(self.file)
-            self.frames = int(self.stream.get(cv.CAP_PROP_FRAME_COUNT)) # total number of frames
-            self.fps = self.stream.get(cv.CAP_PROP_FPS)
-            self.duration = self.frames/self.fps
             self.streamOpen = True
-            if self.pfd.date>220901:
-                # timing rate should be correct, but vid started earlier than timing
-                self.dstart = max(self.duration-self.maxT,0)+1.25
+            result = self.importVidStats()
+            if result>0:
+                self.getVidStats()
+                self.exportVidStats()
             
         
     def setTime(self, t:float) -> None:

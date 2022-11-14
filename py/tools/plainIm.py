@@ -8,6 +8,7 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import logging
 import numpy as np
 import re
+import csv
 
 # local packages
 
@@ -77,4 +78,35 @@ def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True) -> None:
     data = np.array(data)
     df = pd.DataFrame(data, columns=col)       
     df.to_csv(fn, index=index)
+    logging.info(f'Exported {fn}')
+    
+    
+def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
+    '''import values from a csv into a dictionary'''
+    d = {}
+    u = {}
+    with open(fn, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in reader:
+            # save all rows as class attributes
+            if unitCol>0:
+                u[row[0]] = row[unitCol]
+            val = row[valCol]
+            try:
+                val = float(val)
+            except:
+                pass
+            d[row[0]]=val
+    return d,u
+
+def plainExpDict(fn:str, vals:dict, units:dict={}) -> None:
+    '''export the dictionary to file'''
+    with open(fn, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for st,val in vals.items():
+            if st in units:
+                row = [st, units, val]
+            else:
+                row = [st, val]
+            writer.writerow([st, val])
     logging.info(f'Exported {fn}')

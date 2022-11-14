@@ -10,6 +10,7 @@ import re
 import pandas as pd
 import numpy as np
 import csv
+import time
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -35,13 +36,21 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class printVals:
     '''class that holds info about the experiment'''
     
-    def __init__(self, folder:str):
+    def __init__(self, folder:str, fluidProperties:bool=True, **kwargs):
         '''get the ink and support names from the folder name. 
         vink and vsup are in mm/s. 
         di (inner nozzle diameter) and do (outer) are in mm'''
+        self.fluidProperties = fluidProperties
+        tic = time.perf_counter()
         self.printFolder = folder
-        self.levels = fh.labelLevels(self.printFolder)
-        self.pfd = fh.printFileDict(self.printFolder)
+        if 'levels' in kwargs:
+            self.levels = kwargs['levels']
+        else:
+            self.levels = fh.labelLevels(self.printFolder)
+        if 'pfd' in kwargs:
+            self.pfd = kwargs['pfd']
+        else:
+            self.pfd = fh.printFileDict(self.printFolder)
         self.bn = os.path.basename(self.levels.subFolder)
         if len(self.pfd.timeSeries)>0:
             self.fluFile = True
@@ -50,15 +59,14 @@ class printVals:
 
         self.constUnits = {}
         self.pxpmm = self.pfd.pxpmm()
-
     
         split = re.split('_', self.bn)
         inkShortName = split[1]
         supShortName = split[3]
         self.date = int(fh.fileDate(self.levels.subFolder))
         self.constUnits['date'] = 'yymmdd'
-        self.ink = fluidVals(inkShortName, 'ink')
-        self.sup = fluidVals(supShortName, 'sup')
+        self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties)
+        self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties)
         
         if self.pfd.printType in ['tripleLine', 'singleDisturb']:
             split = re.split('_', os.path.basename(self.levels.sbpFolder))
@@ -67,7 +75,6 @@ class printVals:
                 self.constUnits['spacing'] = '$d_i$'
             else:
                 return
-
         self.press = pressureVals(self.printFolder, pfd=self.pfd)
         self.geo = geometryVals(self.printFolder, pfd=self.pfd)
         self.tension()
@@ -78,49 +85,51 @@ class printVals:
   
     def const(self) -> None:
         '''define dimensionless numbers and critical values'''
-        
-        
-        # viscosity ratio
-        self.viscRatio = self.ink.visc0/self.sup.visc0 
-        self.constUnits['viscRatio'] = ''
-        # velocity ratio
         self.vRatio = self.ink.v/self.sup.v 
         self.constUnits['vRatio'] = ''
-            
-        # crit radius  
-        ddiff = self.ink.density-self.sup.density
-        if abs(ddiff)>0:
-            self.rGrav = 10**6*(self.sup.tau0)/((ddiff)*9.8) 
-        else:
-            self.rGrav = 0
-            # characteristic sagging radius in mm, missing scaling factor, see O'Brien MRS Bulletin 2017
-        self.constUnits['rGrav'] = 'mm'
         self.dEst = self.geo.di*np.sqrt(self.vRatio)
             # expected filament diameter in mm
         self.constUnits['dEst'] = 'mm'
-        self.ink.dnormInv = self.ink.dPR/self.dEst  # keep this inverted to avoid divide by 0 problems
-        self.sup.dnormInv = self.sup.dPR/self.dEst
+            
+        if self.fluidProperties:
+            # viscosity ratio
+            self.viscRatio = self.ink.visc0/self.sup.visc0 
+            self.constUnits['viscRatio'] = ''
+            # velocity ratio
+
+            # crit radius  
+            ddiff = self.ink.density-self.sup.density
+            if abs(ddiff)>0:
+                self.rGrav = 10**6*(self.sup.tau0)/((ddiff)*9.8) 
+            else:
+                self.rGrav = 0
+                # characteristic sagging radius in mm, missing scaling factor, see O'Brien MRS Bulletin 2017
+            self.constUnits['rGrav'] = 'mm'
         
-        # Reynolds number
-        self.int_Re = 10**-3*(self.ink.density*self.ink.v*self.geo.di)/(self.sup.visc0)
-        self.constUnits['int_Re'] = ''
-        self.ReRatio = self.ink.Re/self.sup.Re
-        self.constUnits['ReRatio'] = ''
         
-        # drag
-        l = self.geo.lBath
-        dn = 2*np.sqrt(self.geo.do*l/np.pi)
-        Kn = 1/3+2/3*np.sqrt(np.pi)/2
-        self.hDragP = 3*np.pi*self.sup.visc0*self.sup.v*(dn*Kn)/(self.geo.do*l)
-            # horizontal line stokes drag pressure
-        self.vDragP = 3*self.sup.visc0*self.sup.v*4/(self.geo.do)
-            # vertical line stokes drag pressure
-        self.constUnits['hDragP'] = 'Pa'
-        self.constUnits['vDragP'] = 'Pa'
-        
-        # capillary number    
-        self.int_CaInv = self.sigma/(self.sup.visc0*self.ink.v)
-        self.constUnits['int_CaInv'] = ''
+            self.ink.dnormInv = self.ink.dPR/self.dEst  # keep this inverted to avoid divide by 0 problems
+            self.sup.dnormInv = self.sup.dPR/self.dEst
+
+            # Reynolds number
+            self.int_Re = 10**-3*(self.ink.density*self.ink.v*self.geo.di)/(self.sup.visc0)
+            self.constUnits['int_Re'] = ''
+            self.ReRatio = self.ink.Re/self.sup.Re
+            self.constUnits['ReRatio'] = ''
+
+            # drag
+            l = self.geo.lBath
+            dn = 2*np.sqrt(self.geo.do*l/np.pi)
+            Kn = 1/3+2/3*np.sqrt(np.pi)/2
+            self.hDragP = 3*np.pi*self.sup.visc0*self.sup.v*(dn*Kn)/(self.geo.do*l)
+                # horizontal line stokes drag pressure
+            self.vDragP = 3*self.sup.visc0*self.sup.v*4/(self.geo.do)
+                # vertical line stokes drag pressure
+            self.constUnits['hDragP'] = 'Pa'
+            self.constUnits['vDragP'] = 'Pa'
+
+            # capillary number    
+            self.int_CaInv = self.sigma/(self.sup.visc0*self.ink.v)
+            self.constUnits['int_CaInv'] = ''
            
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''

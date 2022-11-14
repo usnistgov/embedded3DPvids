@@ -30,7 +30,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class fluidVals:
     '''class that holds info about fluid'''
     
-    def __init__(self, fluid:str, ftype:str):
+    def __init__(self, fluid:str, ftype:str, properties:bool=True):
         '''convert the shorthand sample name to info about the fluid. ftype is 'ink' or 'sup' '''
         self.shortname = fluid
         self.days = 1
@@ -82,8 +82,12 @@ class fluidVals:
             self.type = self.base + '_'+self.surfactant
         else:
             self.type = self.base
-        self.findRhe()
-        self.findDensity()
+        if properties:
+            self.properties = True
+            self.findRhe()
+            self.findDensity()
+        else:
+            self.properties = False
         
     def metarow(self, tag:s='') -> Tuple[dict,dict]:
         '''row containing metadata'''
@@ -92,10 +96,10 @@ class fluidVals:
         munits = [[f'{tag}{i}', ''] for i in mlist]            # metadata units
         
         rhelist = ['tau0', 'eta0']             
-        rhe = [[f'{tag}{i}',getattr(self,i)] for i in rhelist]        # rheology data
+        rhe = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in rhelist]        # rheology data
         rheunits = [[f'{tag}{i}', self.rheUnits[i]] for i in rhelist] # rheology units
         clist = self.constUnits.keys()
-        const = [[f'{tag}{i}',getattr(self,i)] for i in clist]           # constants data
+        const = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in clist]           # constants data
         constunits = [[f'{tag}{i}', self.constUnits[i]] for i in clist]  # constants units
         out = dict(meta+rhe+const)
         units = dict(munits+rheunits+constunits)
@@ -144,6 +148,10 @@ class fluidVals:
     
     def visc(self, gdot:float) -> float:
         '''get the viscosity of the fluid in Pa*s at shear rate gdot in Hz'''
+        if gdot<=0:
+            return -1
+        if not hasattr(self, 'k') or not hasattr(self, 'n') or not hasattr(self, 'tau0') or not hasattr(self, 'eta0'):
+            return -1
         try:
             mu = self.k*(abs(gdot)**(self.n-1)) + self.tau0/(abs(gdot))
             nu = min(mu, self.eta0)
@@ -157,11 +165,12 @@ class fluidVals:
         v is in mm/s, diam is in mm, sigma is in mJ/m^2'''
         self.v = v                                              # mm/s
         self.rate = v/diam                                      # 1/s
-        self.visc0 = self.visc(self.rate)                       # Pa*s
-        self.CaInv = sigma/(self.visc0*self.v)                  # capillary number ^-1
-        self.Re = 10**-3*(self.density*self.v*diam)/(self.visc0) # reynold's number
-        self.WeInv = 10**3*sigma/(self.density*self.v**2*diam)  # weber number ^-1
-        self.OhInv = np.sqrt(self.WeInv)*self.Re                # Ohnesorge number^-1
-        self.dPR = sigma/self.tau0                              # characteristic diameter for Plateau rayleigh instability in mm
-        self.Bm = self.tau0*diam/(self.visc0*self.v)            # Bingham number
+        if self.properties:
+            self.visc0 = self.visc(self.rate)                       # Pa*s
+            self.CaInv = sigma/(self.visc0*self.v)                  # capillary number ^-1
+            self.Re = 10**-3*(self.density*self.v*diam)/(self.visc0) # reynold's number
+            self.WeInv = 10**3*sigma/(self.density*self.v**2*diam)  # weber number ^-1
+            self.OhInv = np.sqrt(self.WeInv)*self.Re                # Ohnesorge number^-1
+            self.dPR = sigma/self.tau0                              # characteristic diameter for Plateau rayleigh instability in mm
+            self.Bm = self.tau0*diam/(self.visc0*self.v)            # Bingham number
         self.constUnits = {'density':'g/mL', 'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','dPR':'mm', 'dnormInv':'', 'Bm':''}
