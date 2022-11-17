@@ -105,8 +105,8 @@ def plainExpDict(fn:str, vals:dict, units:dict={}) -> None:
         writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
         for st,val in vals.items():
             if st in units:
-                row = [st, units, val]
+                row = [st, units[st], val]
             else:
                 row = [st, val]
-            writer.writerow([st, val])
+            writer.writerow(row)
     logging.info(f'Exported {fn}')

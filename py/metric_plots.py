@@ -24,7 +24,7 @@ import csv
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 import regression as rg
-import metrics as me
+from metrics_tools import metricSummary
 from config import cfg
 from figureLabels import *
 
@@ -250,7 +250,7 @@ def toGroups(ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, logx:bool, logy:bool
     return df2
 
 
-def setUpAxes(xvar:str, yvar:str, **kwargs):
+def setUpAxes(ms:metricSummary, xvar:str, yvar:str, **kwargs):
     '''get figure and axes. xvar and yvar are column names for x and y variables'''
     if 'fig' in kwargs:
         fig = kwargs['fig']
@@ -265,18 +265,18 @@ def setUpAxes(xvar:str, yvar:str, **kwargs):
     else:
         ax = fig.add_subplot(111)
         kwargs['ax'] = ax
-    axisLabels(xvar, yvar, **kwargs)
+    axisLabels(ms, xvar, yvar, **kwargs)
     return fig, ax, kwargs
 
-def axisLabels(xvar:str, yvar:str, axisSymbols:bool=True, set_xlabel:bool=True, set_ylabel:bool=True, **kwargs) -> None:
+def axisLabels(ms:metricSummary, xvar:str, yvar:str, axisSymbols:bool=True, set_xlabel:bool=True, set_ylabel:bool=True, **kwargs) -> None:
     '''get the labels for the x and y axis and label the axis
     xvar and yvar are variable names
     axisSymbols=True to use symbols for axis labels
     set_xlabel and set_ylabel true to label the axes
     '''
     if axisSymbols:
-        xlabel = me.varSymbol(xvar, **kwargs)
-        ylabel = me.varSymbol(yvar, **kwargs)
+        xlabel = ms.varSymbol(xvar, **kwargs)
+        ylabel = ms.varSymbol(yvar, **kwargs)
     else:
         xlabel = xvar
         ylabel = yvar
@@ -412,7 +412,7 @@ def idealLines(**kwargs) -> None:
             varargs['label']='ideal'
         kwargs['ax'].axhline(kwargs['yideal'], 0,1, **varargs)
         
-def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, lines:bool=False, **kwargs):
+def scatterSS(ms:metricSummary, ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False, logy:bool=False, gradColor:int=0, dx:float=0.1, dy:float=1, cmapname:str='coolwarm', fontsize=10, plotReg:bool=False, grid:bool=True, lines:bool=False, **kwargs):
     '''scatter plot of measured values. 
     xvar is the x variable name, yvar is the y variable name. 
     colorBy is the variable to color by. 
@@ -426,10 +426,9 @@ def scatterSS(ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str, logx:bool=False,
     '''
 
     plt.rc('font', size=fontsize) 
-    
     if not (xvar in ss and yvar in ss):
         raise NameError(f'Variable name {xvar} or {yvar} is not in table')
-    fig,ax,kwargs = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
+    fig,ax,kwargs = setUpAxes(ms, xvar, yvar, **kwargs)  # establish figure and axis
     setLog(ax, logx, logy)                    # set axes to log or not
                # get a colormap function
     ss1 = ss.copy()
@@ -506,12 +505,13 @@ def setSquare(ax):
     '''set the aspect ratio of the axis to square'''
     ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')
     
-def regressionSS(ss:pd.DataFrame, xvar:str, yvar:str, ax) -> None:
+def regressionSS(ms:metricSummary, xvar:str, yvar:str, ax) -> None:
     '''add a linear regression to the plot'''
+    ss = ms.ss
     if (not xvar in ss and xvar[-4:]=='_log'):
-        ss = me.addLogs(ss, [xvar[:-4]])
+        ss = ms.addLogs(ss, [xvar[:-4]])
     if (not yvar in ss and yvar[-4:]=='_log'):
-        ss = me.addLogs(ss, [yvar[:-4]])
+        ss = ms.addLogs(ss, [yvar[:-4]])
     ss2 = ss.copy()
     ss2.replace([np.inf, -np.inf], np.nan, inplace=True)  # remove infinite values
     ss2 = ss2.dropna(subset=[xvar,yvar])
@@ -593,12 +593,12 @@ def viscSweeps(ss:pd.DataFrame) -> pd.DataFrame:
     return ss[ss.sweepType.str.startswith('visc')|(ss.sweepType.str.startswith('$\\eta$ sweep'))|(ss.sweepType.str.startswith('$\\eta$, '))]
     
 
-def sweepTypeSS(ss:pd.DataFrame, xvar:str, yvar:str, cmapname:str='coolwarm', **kwargs):
+def sweepTypeSS(ms:metricSummary, xvar:str, yvar:str, cmapname:str='coolwarm', **kwargs):
     '''plot values based on sweep type'''
-    
+    ss = ms.ss
     ss.sort_values(by='sigma')
     cmap = cm.get_cmap(cmapname)
-    fig,ax,kwargs0 = setUpAxes(xvar, yvar, **kwargs)  # establish figure and axis
+    fig,ax,kwargs0 = setUpAxes(ms, xvar, yvar, **kwargs)  # establish figure and axis
     if len(ss.sigma.unique())==1:
         # all the same surface tension: make visc blue and speed red
         for i,ss0 in enumerate([speedSweeps(ss), viscSweeps(ss)]):
@@ -745,7 +745,7 @@ def regRow(ssi:pd.DataFrame, xcol:str, ycol:str) -> dict:
     reg = {**reg, **spear}
     return reg
 
-def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', package:str='pgfplot', **kwargs) -> List[pd.DataFrame]:
+def regressionTable(ms:metricSummary, yvar:str, logy:bool=True, printOut:bool=True, export:bool=False, exportFolder:str=os.path.join(cfg.path.fig, 'regressions'), tag:str='', package:str='pgfplot', **kwargs) -> List[pd.DataFrame]:
     '''get a table of linear regression and Spearman rank correlation values, for common scaling variables
     yvar is the dependent variable to measure
     logy to scale the yvar on a log scale
@@ -756,7 +756,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
     package='tabular' to use latex tabular formatting, 'pgfplot' to use csv formatting imported into latex using pgfplot
     
     '''
-    ss0 = ss.copy()
+    ss0 = ms.ss.copy()
     ss0.dropna(subset=[yvar], inplace=True)
     ss0 = ss0[ss0.ink_days==1]
     ss0 = ss0.sort_values(by='sigma')
@@ -777,7 +777,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
         else:
             # define y variables
             if logy:
-                ssi = me.addLogs(ssi, [yvar])
+                ssi = ms.addLogs(ssi, [yvar])
                 ycol = yvar+'_log'
             else:
                 ycol = yvar
@@ -790,10 +790,10 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
 
             # add logs and ratios
             for i,s1 in enumerate(['sup', 'ink']):
-                ssi = me.addLogs(ssi, [s1+'_'+v for v in varlist])
+                ssi = ms.addLogs(ssi, [s1+'_'+v for v in varlist])
             for i,s1 in enumerate(['Prod', 'Ratio']):
-                ssi = me.addRatios(ssi, varlist=varlist, operator=s1)
-                ssi = me.addLogs(ssi, [v+s1 for v in varlist])
+                ssi = ms.addRatios(ssi, varlist=varlist, operator=s1)
+                ssi = ms.addLogs(ssi, [v+s1 for v in varlist])
 
 
             # go through each variable and get sup, ink, product, ratio
@@ -807,7 +807,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                     s2i = s2
 
                 if s2=='Ca':
-                    ssi = me.addLogs(ssi, ['int_Ca'])
+                    ssi = ms.addLogs(ssi, ['int_Ca'])
                     reg = regRow(ssi, 'int_Ca_log', ycol)
                     reg['title'] = '$Ca$'
                     df.append(reg)
@@ -825,7 +825,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
                 for s1 in ['ink_', 'sup_']:
                     xcol = f'{s1}{s2}_log'
                     reg = regRow(ssi, xcol, ycol)
-                    reg['title'] = me.varSymbol(s1+s2, commas=False)
+                    reg['title'] = ms.varSymbol(s1+s2, commas=False)
 #                     if s2i[-4:]=='_{PR':
 #                         reg['title']='$'+s2i+' '+s1[:-1]+'}}$'
 #                     else:
@@ -844,7 +844,7 @@ def regressionTable(ss:pd.DataFrame, yvar:str, logy:bool=True, printOut:bool=Tru
 #                         s2ii = s2i+'_{'
 #                         close = ''
 #                     reg['title'] = '$'+s2ii+'ink}'+close+op+s2ii+'sup}'+close+'$'
-                    reg['title'] = me.varSymbol(s2+s1, commas=False)
+                    reg['title'] = ms.varSymbol(s2+s1, commas=False)
                     df.append(reg)
                 df = pd.DataFrame(df)
 

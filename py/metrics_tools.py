@@ -53,7 +53,13 @@ def lineName(file:str, tag:str) -> float:
             return float(st.replace(tag, ''))
     return -1
 
-
+def sem(l:list) -> float:
+    l = np.array(l)
+    l = l[~np.isnan(l)]
+    if len(l)==0:
+        return np.nan
+    return np.std(l)/np.sqrt(len(l))
+    
 
 def getRoughness(componentMask:np.array, diag:int=0) -> float:
     '''measure roughness as perimeter of object / perimeter of convex hull. 
@@ -98,11 +104,14 @@ def boundsInArray(arr:np.array) -> np.array:
     a2 = np.stack(np.where(arr)).transpose()
     idx = np.where(np.diff(a2[:,0])!=0)[0]+1
     a3 = np.split(a2,list(idx))
+    
     return np.array([[i[0,1],i[-1,1]] for i in a3])
     
 
 def widthsInArray(arr:np.array) -> list:
     '''get the distance between first and last nonzero value of each row'''
+    if arr.sum()==0:
+        return []
     a2 = np.stack(np.where(arr)).transpose()  # get positions of 255
     idx = np.where(np.diff(a2[:,0])!=0)[0]+1  # find changes in row
     a3 = np.split(a2,list(idx))               # split into rows
@@ -243,3 +252,100 @@ def closestIndex(val:float, l1:list) -> int:
     '''index of closest value in list l1 to value val'''
     l2 = [abs(x-val) for x in l1]
     return l2.index(min(l2))
+
+def addValue(results:dict, units:dict, name:str, value:Any, unit:str) -> None:
+    '''add the result to the results dict list and units dict'''
+    if name in results:
+        results[name].append(value)
+    else:
+        results[name] = [value]
+        units[name] = unit
+        
+def difference(do:pd.Series, wo:pd.Series, s:str) -> float:
+    '''get difference between values'''
+    if hasattr(do, s) and hasattr(wo, s) and not pd.isna(do[s]) and not pd.isna(wo[s]):
+        return do[s]-wo[s]
+    else:
+        raise ValueError('No value detected')
+        
+def convertValue(key:str, val:list, units_in:dict, pxpmm:float, units_out:dict, vals_out:dict) -> Tuple:
+    '''convert the values from px to mm'''
+    uke = units_in[key]
+    if uke=='px':
+        c = 1/pxpmm
+        u2 = 'mm'
+    elif uke=='px^2':
+        c = 1/pxpmm**2
+        u2 = 'mm^2'
+    elif uke=='px^3':
+        c = 1/pxpmm**3
+        u2 = 'mm^3'
+    else:
+        c = 1
+        u2 = uke
+    units_out[key] = u2
+    units_out[f'{key}_SE'] = u2
+    vals_out[key] = np.mean(val)*c
+    vals_out[f'{key}_SE'] = sem(val)*c
+    
+    
+class metricSummary:
+    '''holds data and functions for handling metric summary tables'''
+    
+    def __init__(self, file:str):
+        self.file = file
+        
+    def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
+        self.ss, self.u = plainIm(self.file)
+        
+        
+    def addRatios(self, ss:pd.DataFrame, startName:str, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
+        '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
+        k = ss.keys()
+        idx = int(np.argmax(k==startName))
+        for j, s2 in enumerate(varlist):
+            xvar =  f'{s2}{operator}'
+            if not xvar in ss:
+                if not f'ink_{s2}' in ss or not  'sup_{s2}' in ss:
+                    ss = flipInv(ss)
+                if operator=='Prod':
+                    ss.insert(idx, xvar, ss[f'ink_{s2}']*ss[f'sup_{s2}'])
+                elif operator=='Ratio':
+                    ss.insert(idx, xvar, ss[f'ink_{s2}']/ss[f'sup_{s2}'])
+                idx+=1
+        return ss
+
+    def addLogs(self, ss:pd.DataFrame, startName:str, varlist:List[str]) -> pd.DataFrame:
+        '''add log values for the list of variables to the dataframe'''
+        k = ss.keys()
+        idx = int(np.argmax(k==startName))
+        for j, s2 in enumerate(varlist):
+            xvar = f'{s2}_log'
+            if not xvar in s2:
+                ss.insert(idx, xvar, np.log10(ss[s2]))
+                idx+=1
+        return ss
+    
+    def printStillsKeys(self, ss:pd.DataFrame) -> None:
+        '''sort the keys into dependent and independent variables and print them out'''
+        k = ss.keys()
+        k = k[~(k.str.endswith('_SE'))]
+        k = k[~(k.str.endswith('_N'))]
+        idx = self.idx0(k)
+        controls = k[:idx]
+        deps = k[idx:]
+        print(f'Independents: {list(controls)}')
+        print()
+        print(f'Dependents: {list(deps)}')
+        
+    def idx(self, k:list, name:str) -> int:
+        if name in k:
+            return int(np.argmax(k==name))
+        else:
+            return 1
+        
+    def idx0(self, k:list) -> int:
+        '''get the index of the first dependent variable'''
+        return self.idx(k, self.firstDepCol())
+        
+    

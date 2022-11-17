@@ -215,13 +215,7 @@ class printVals:
     #--------------------------------------------------
     
     
-    def exportSummary(self, out:dict, outunits:dict) -> None:
-        '''export a summary file based on expected values'''
-        file = self.summaryFile()
-        with open(file, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            for k,v in out.items():
-                writer.writerow([k, outunits[k], str(v)])
+
                 
                 
                 
@@ -370,6 +364,14 @@ class pvSingle(printVals):
         outunits = {**metaunits, **xsunits, **vertunits, **horizunits, **vHorizEstUnits}
         self.exportSummary(out, outunits)
         return out, outunits
+    
+    def exportSummary(self, out:dict, outunits:dict) -> None:
+        '''export a summary file based on expected values'''
+        file = self.summaryFile()
+        with open(file, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for k,v in out.items():
+                writer.writerow([k, outunits[k], str(v)])
         
 
     

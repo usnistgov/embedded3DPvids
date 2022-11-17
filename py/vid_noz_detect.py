@@ -62,11 +62,16 @@ def lineIntersect(line1:pd.Series, line2:pd.Series) -> Tuple[float,float]:
 class nozData:
     '''holds metadata about the nozzle'''
     
-    def __init__(self, folder:str):
-        
-        self.levels = fh.labelLevels(folder)
+    def __init__(self, folder:str, **kwargs):
+        if 'levels' in kwargs:
+            self.levels = kwargs['levels']
+        else:
+            self.levels = fh.labelLevels(folder)
         self.printFolder = self.levels.printFolder()
-        self.pfd = fh.printFileDict(self.printFolder)
+        if 'pfd' in kwargs:
+            self.pfd = kwargs['pfd']
+        else:
+            self.pfd = fh.printFileDict(self.printFolder)
         if len(self.pfd.vid)>0:
             self.vidFile = self.pfd.vid[0]
         else:
@@ -584,10 +589,15 @@ class nozData:
             nozColors = 0
         if len(s)==2 and nozColors==0:
             # also erase any extra nozzle on left and right
-            while thresh[0:yB-20, xL-11:xL-10].mean(axis=0).mean(axis=0)>255/2:  # more than half of the points are segmented
-                thresh[0:yB, xL-11:xL-10] = 0  # white out
-                xL = xL-1  # check next one
-            thresh[0:yB, xL-11:xL-10] = 0
+            fseg = thresh[0:yB-20, xL-11:xL-10]
+            if fseg.sum()>0:
+                count = 0
+                while fseg.mean(axis=0).mean(axis=0)>255/2 and count<20:  # more than half of the points are segmented
+                    thresh[0:yB, xL-11:xL-10] = 0  # white out
+                    xL = xL-1  # check next one
+                    count = count+1
+                    fseg = thresh[0:yB-20, xL-11:xL-10]
+                thresh[0:yB, xL-11:xL-10] = 0
         return thresh
 
 

@@ -680,6 +680,22 @@ class printFileDict:
                     ii+=1
         return file
     
+    def deconstructFileName(self, file:str) -> str:
+        '''get the original string that went into the file name'''
+        if len(self.vid)>0:
+            spl2 = re.split('_', os.path.basename(self.vid[0]))
+        elif len(self.still)>0:
+            spl2 = re.split('_', os.path.basename(self.still[0]))
+        else:
+            return os.path.basename(os.path.splitext(file)[0])
+        if 'Basler camera' in spl2:
+            i = spl2.index('Basler camera')
+            ir = len(spl2)-i-1
+        else:
+            raise ValueError('Failed to find original value')
+        spl1 = re.split('_',os.path.basename(file))
+        return '_'.join(spl1[i:-ir])
+    
     def sbpName(self) -> str:
         '''gets the name of the shopbot file'''
         if self.levels.currentLevel=='sbpFolder':
@@ -810,12 +826,8 @@ class printFileDict:
                             self.progDims.append(ffull)
                         elif 'progPos' in fname:
                             self.progPos.append(ffull)
-                        elif 'nozDims' in fname:
-                            self.nozDims = ffull
-                        elif 'vidStats' in fname:
-                            self.vidStats = ffull
                         else:
-                            self.csv_unknown.append(ffull)
+                            setattr(self, self.deconstructFileName(ffull), ffull)
                     elif spl[0] in singleLineSBPPicfiles():
                         # extraneous fluigent or speed file from pic
                         self.csv_delete.append(ffull)

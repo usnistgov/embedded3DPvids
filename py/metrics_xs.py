@@ -253,3 +253,95 @@ def xsDisturbMeasures(folder:str, overwrite:bool=False, **kwargs) -> None:
     df = pd.DataFrame(out)
     
     plainExp(fn, df, units)
+
+#-----------------------------------------------------------------
+# summaries
+    
+def xsDisturbSummary(folder:str, overwrite:bool=False, **kwargs) -> None:
+    '''summarize xsical measurements in the folder and export table'''
+    if not 'disturbXS' in os.path.basename(folder):
+        return {},{}
+    pfd = fh.printFileDict(folder)
+    fn = pfd.newFileName('xsSummary', '.csv')
+    if os.path.exists(fn) and not overwrite:
+        out,u = plainImDict(fn, unitCol=1, valCol=2)
+        return out,u
+    if not hasattr(pfd, 'xsMeasure'):
+        xsDisturbMeasures(folder, **kwargs)
+    if not hasattr(pfd, 'xsMeasure'):
+        return {},{}
+    
+    df, du = plainIm(pfd.xsMeasure, ic=0)
+    pv = printVals(folder)
+    pxpmm = pv.pxpmm
+    mr, mu = pv.metarow()
+    
+    # find changes between observations
+    aves = {}
+    aveunits = {}
+    for num in range(4):
+        wodf = df[df.line.str.contains(f'l{num}wo')]
+        dodf = df[df.line.str.contains(f'l{num}do')]
+        if len(wodf)==1 and len(dodf)==1:
+            wo = wodf.iloc[0]
+            do = dodf.iloc[0]
+            for s in ['aspect', 'yshift', 'xshift']:
+                try:
+                    addValue(aves, aveunits, f'delta_{s}', difference(do, wo, s), du[s])
+                except ValueError:
+                    pass
+            for s in ['h', 'w']:
+                try:
+                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/wo[s], '')
+                except ValueError:
+                    pass
+            for s in ['xc']:
+                try:
+                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/pxpmm/pv.dEst, 'dEst')
+                except ValueError:
+                    pass
+
+                       
+    ucombine = aveunits 
+    out = {}
+    units = {}
+    lists = aves
+    for key,val in lists.items():
+        convertValue(key, val, ucombine, pxpmm, units, out)
+
+    out = {**mr, **out}
+    units = {**mu, **units}
+
+    plainExpDict(fn, out, units=units)
+    
+    return out,units
+
+
+def xsDisturbSummariesRecursive(topFolder:str, overwrite:bool=False, **kwargs) -> None:
+    '''recursively go through folders'''
+    out = []
+    units = {}
+    if not fh.isPrintFolder(topFolder):
+        for f in os.listdir(topFolder):
+            summaries, u = xsDisturbSummariesRecursive(os.path.join(topFolder, f), overwrite=overwrite, **kwargs)
+            if len(u)>len(units):
+                units = u
+            out = out + summaries
+        return out, units
+    try:
+        summary, units = xsDisturbSummary(topFolder, overwrite=overwrite, **kwargs)
+    except Exception as e:
+        print(f'Error in {topFolder}: {e}')
+    else:
+        if len(summary)>0:
+            return [summary], units
+        else:
+            return [], {}
+    
+
+def xsDisturbSummaries(folder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
+    '''measure all cross-sections in the folder and export table'''
+    out, units  = xsDisturbSummariesRecursive(folder, overwrite=overwrite, **kwargs)
+    df = pd.DataFrame(out)
+    fn = os.path.join(exportFolder, 'xsDisturbSummaries.csv')
+    plainExp(fn, df, units, index=False)

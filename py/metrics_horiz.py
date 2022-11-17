@@ -57,7 +57,6 @@ def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, s:float, n
     j is the line number
     maxPossibleLen is the longest length in mm that should have been extruded
     '''
-    tic = time.perf_counter()
     numlines = len(df)
     measures = []
     cmunits = {}
@@ -67,31 +66,38 @@ def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, s:float, n
             im2 = markHorizOnIm(im2, row)
 
     maxlen0 = df.w.max()
-    maxlen = maxlen0*s
-    totlen = df.w.sum()*s
-    maxarea = df.a.max()*s**2
-    totarea = df.a.sum()*s**2
+    totlen = df.w.sum()
+    maxarea = df.a.max()
+    totarea = df.a.sum()
+    xc = int(sum(df.a * df.xc)/sum(df.a))
+    yc = int(sum(df.a * df.yc)/sum(df.a))
     
     co = {'line':name, 'segments':len(df)
         , 'maxlen':maxlen0*s, 'totlen':df.w.sum()*s
         , 'maxarea':df.a.max()*s**2, 'totarea':int(df.a.sum())*s**2
+          , 'xc':xc*s, 'yc':yc*s
         }  
     counits = {'line':'', 'segments':''
         , 'maxlen':'px', 'totlen':'px'
         , 'maxarea':'px^2', 'totarea':'px^2'
+               , 'xc':'px', 'yc':'px'
         }  
     longest = df[df.w==maxlen0] # measurements of longest component
     longest = longest.iloc[0]
     componentMask = (labeled == longest.name).astype("uint8") * 255   # image with line in it
     componentMeasures, cmunits = measureComponent(componentMask, True, s, maxPossibleLen, reverse=(name==1), diag=max(0,diag-1))
     # component measures and co are pre-scaled
-    aspect = co['totlen']/componentMeasures['meanT'] # height/width
-    r = componentMeasures['meanT']/2
-    if co['totlen']>2*r:
-        h = co['totlen']
-        vest = (h - 2*r)*np.pi*(r)**2 + 4/3*np.pi*r**3 # cylinder + hemisphere endcaps
+    if 'totlen' in co and 'meanT' in componentMeasures:
+        aspect = co['totlen']/componentMeasures['meanT'] # height/width
+        r = componentMeasures['meanT']/2
+        if co['totlen']>2*r:
+            h = co['totlen']
+            vest = (h - 2*r)*np.pi*(r)**2 + 4/3*np.pi*r**3 # cylinder + hemisphere endcaps
+        else:
+            vest = 4/3*np.pi*r**3 # sphere
     else:
-        vest = 4/3*np.pi*r**3 # sphere
+        aspect = 0
+        vest = 0
     units = {'line':'', 'aspect':'h/w'} # where pixels are in original scale
     ret = {**{'line':name, 'aspect':aspect}, **co, **{'vest':vest}, **componentMeasures}
     units = {**units, **counits, **{'vest':'px^3'}, **cmunits}
@@ -253,14 +259,14 @@ def removeThreads(thresh:np.array, f:float=0.4, f2:float=0.3, diag:int=0) -> np.
 
 def horizDisturbMeasure(file:str, acrit:int=2500, diag:int=0, **kwargs) -> Tuple[dict,dict]:
     '''measure disturbed horizontal lines'''
-    tic = time.perf_counter()
+    
     errorRet = {},{}
     if not os.path.exists(file):
         raise ValueError(f'File {file} does not exist')
     spl = re.split('_', re.split('vstill_', os.path.basename(file))[1])
     name = f'{spl[0]}_{spl[1]}'        # e.g. V_l0do
     im = cv.imread(file)
-    nd = nozData(os.path.dirname(file))   # detect nozzle
+    nd = nozData(os.path.dirname(file), **kwargs)   # detect nozzle
     nd.importNozzleDims()
     pv = printVals(os.path.dirname(file), levels=nd.levels, pfd=nd.pfd, fluidProperties=False)
     if not nd.nozDetected:
@@ -346,10 +352,117 @@ def horizDisturbMeasures(folder:str, overwrite:bool=False, **kwargs) -> None:
     for i in range(4):
         for s in ['w', 'd']:
             for s2 in ['', 'o']:
-                m,u = horizDisturbMeasure(os.path.join(folder, files[f'l{i}{s}{s2}']), **kwargs)
+                m,u = horizDisturbMeasure(os.path.join(folder, files[f'l{i}{s}{s2}']), pfd=pfd, **kwargs)
                 if len(u)>len(units):
                     units = u
                 out.append(m)
     df = pd.DataFrame(out)
     
     plainExp(fn, df, units)
+    
+def horizDisturbSummary(folder:str, overwrite:bool=False, **kwargs) -> None:
+    '''summarize cross-section measurements in the folder and export table'''
+    if not 'disturbHoriz' in os.path.basename(folder):
+        return {},{}
+    pfd = fh.printFileDict(folder)
+    fn = pfd.newFileName('horizSummary', '.csv')
+    if os.path.exists(fn) and not overwrite:
+        out,u = plainImDict(fn, unitCol=1, valCol=2)
+        return out,u
+    if not hasattr(pfd, 'horizMeasure'):
+        horizDisturbMeasures(folder, **kwargs)
+    if not hasattr(pfd, 'horizMeasure'):
+        return {},{}
+    
+    df, du = plainIm(pfd.horizMeasure, ic=0)
+    pv = printVals(folder)
+    mr, mu = pv.metarow()
+    pxpmm = pv.pxpmm
+    
+    # find changes between observations
+    aves = {}
+    aveunits = {}
+    for num in range(4):
+        wodf = df[df.line==f'HOh_l{num}wo']
+        dodf = df[df.line==f'HOh_l{num}do']
+        if len(wodf)==1 and len(dodf)==1:
+            wo = wodf.iloc[0]
+            do = dodf.iloc[0]
+            for s in ['segments', 'roughness']:
+                try:
+                    addValue(aves, aveunits,f'delta_{s}', difference(do,wo,s), du[s])
+                except:
+                    pass
+            for s in ['totlen', 'meanT']:
+                try:
+                    addValue(aves, aveunits,f'delta_{s}_n', difference(do,wo,s)/wo[s], '')
+                except:
+                    pass
+            for s in ['yc']:
+                try:
+                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/pxpmm/pv.dEst, 'dEst')
+                except ValueError:
+                    pass
+                    
+    # find displacements
+    disps = {}
+    dispunits = {}
+    dlist = ['dy0l', 'dy0r', 'dy0lr', 'space_b']
+    for num in range(4):
+        wdf = df[df.line==f'HOh_l{num}w']
+        ddf = df[df.line==f'HOh_l{num}d']
+        for s in dlist:
+            for vdf in [wdf,ddf]:
+                if len(vdf)>0:
+                    v = vdf.iloc[0]
+                    if hasattr(v, s):
+                        sii = str(v.line)[-1]
+                        si = f'{sii}_{s}'
+                        if not si in ['w_dy0r', 'w_dy0lr', 'w_space_b']:
+                            val = v[s]/pxpmm/pv.dEst
+                            addValue(disps, dispunits, si, val, 'dEst')
+
+    ucombine = {**aveunits, **dispunits} 
+    out = {}
+    units = {}
+    lists = {**aves, **disps}
+    for key,val in lists.items():
+        convertValue(key, val, ucombine, pxpmm, units, out)
+
+    out = {**mr, **out}
+    units = {**mu, **units}
+
+    plainExpDict(fn, out, units=units)
+    
+    return out,units
+
+
+def horizDisturbSummariesRecursive(topFolder:str, overwrite:bool=False, **kwargs) -> None:
+    '''recursively go through folders'''
+    out = []
+    units = {}
+    if not fh.isPrintFolder(topFolder):
+        for f in os.listdir(topFolder):
+            summaries, u = horizDisturbSummariesRecursive(os.path.join(topFolder, f), overwrite=overwrite, **kwargs)
+            if len(u)>len(units):
+                units = u
+            out = out + summaries
+        return out, units
+    try:
+        summary, units = horizDisturbSummary(topFolder, overwrite=overwrite, **kwargs)
+    except Exception as e:
+        print(f'Error in {topFolder}: {e}')
+    else:
+        if len(summary)>0:
+            return [summary], units
+        else:
+            return [], {}
+    
+
+def horizDisturbSummaries(folder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
+    '''measure all cross-sections in the folder and export table'''
+    out, units  = horizDisturbSummariesRecursive(folder, overwrite=overwrite, **kwargs)
+    df = pd.DataFrame(out)
+    fn = os.path.join(exportFolder, 'horizDisturbSummaries.csv')
+    plainExp(fn, df, units, index=False)
+    

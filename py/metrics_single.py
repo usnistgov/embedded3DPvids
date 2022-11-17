@@ -392,29 +392,9 @@ def stillsSummary(topfolder:str, exportFolder:str, newfolders:list=[], filename:
         plainExp(outfn, ss, units)
     return ss,units
 
-def idx0(k:list) -> int:
-    '''get the index of the first dependent variable'''
-    if 'xs_aspect' in k:
-        idx = int(np.argmax(k=='xs_aspect'))
-    elif 'projectionN' in k:
-        idx = int(np.argmax(k=='projectionN'))
-    elif 'horiz_segments' in k:
-        idx = int(np.argmax(k=='horiz_segments'))
-    else:
-        idx = 1
-    return idx
 
-def printStillsKeys(ss:pd.DataFrame) -> None:
-    '''sort the keys into dependent and independent variables and print them out'''
-    k = ss.keys()
-    k = k[~(k.str.endswith('_SE'))]
-    k = k[~(k.str.endswith('_N'))]
-    idx = idx0(k)
-    controls = k[:idx]
-    deps = k[idx:]
-    print(f'Independents: {list(controls)}')
-    print()
-    print(f'Dependents: {list(deps)}')
+
+
     
 def fluidAbbrev(row:pd.Series) -> str:
     '''get a short abbreviation to represent fluid name'''
@@ -458,108 +438,9 @@ def indVarSymbol(var:str, fluid:str, commas:bool=True) -> str:
             varsymbol = var
         return '$'+varsymbol+'_{'+fluid+'}$'
     
-def varSymbol(s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
-    '''get a symbolic representation of the variable
-    lineType=True to include the name of the line type in the symbol
-    commas = True to use commas, otherwise use periods'''
-    if s.startswith('xs_'):
-        varlist = {'xs_aspect':'XS height/width'
-                   , 'xs_xshift':'XS horiz shift/width'
-                   , 'xs_yshift':'XS vertical shift/height'
-                   , 'xs_area':'XS area'
-                   , 'xs_areaN':'XS area/intended'
-                   , 'xs_wN':'XS width/intended'
-                   , 'xs_hN':'XS height/intended'
-                   , 'xs_roughness':'XS roughness'}
-    elif s.startswith('vert_'):
-        varlist = {'vert_wN':'vert bounding box width/intended'
-                , 'vert_hN':'vert length/intended'
-                   , 'vert_vN':'vert bounding box volume/intended'
-               , 'vert_vintegral':'vert integrated volume'
-               , 'vert_viN':'vert integrated volume/intended'
-               , 'vert_vleak':'vert leak volume'
-               , 'vert_vleakN':'vert leak volume/line volume'
-               , 'vert_roughness':'vert roughness'
-               , 'vert_meanTN':'vert diameter/intended'
-                   , 'vert_stdevTN':'vert stdev(diameter)/diameter'
-               , 'vert_minmaxTN':'vert diameter variation/diameter'}
-    elif s.startswith('horiz_') or s=='vHorizEst':
-        varlist = {'horiz_segments':'horiz segments'
-               , 'horiz_segments_manual':'horiz segments'
-               , 'horiz_maxlenN':'horiz droplet length/intended'
-               , 'horiz_totlenN':'horiz total length/intended'
-               , 'horiz_vN':'horiz volume/intended'
-               , 'horiz_roughness':'horiz roughness'
-               , 'horiz_meanTN':'horiz height/intended'
-               , 'horiz_stdevTN':'horiz stdev(height)/intended'
-               , 'horiz_minmaxTN':'horiz height variation/diameter'
-               , 'vHorizEst':'horiz volume'}
-    elif s.startswith('proj'):
-        varlist = {'projectionN':'projection into bath/intended'
-                   , 'projShiftN':'$x$ shift of lowest point/$d_{est}$'}
-    elif s.startswith('vertDisp'):
-        varlist = {'vertDispBotN':'downstream $z_{bottom}/d_{est}$'
-                  ,'vertDispBotN':'downstream $z_{middle}/d_{est}$'
-                  ,'vertDispBotN':'downstream $z_{top}/d_{est}$'}
-    elif s.endswith('Ratio') or s.endswith('Prod'):
-        if s.endswith('Ratio'):
-            symb = '/'
-            var1 = s[:-5]
-        else:
-            symb = r'\times '
-            var1 = s[:-4]
-        return indVarSymbol(var1, 'ink', commas=commas)[:-1]+symb+indVarSymbol(var1, 'sup', commas=commas)[1:]
-    elif s=='int_Ca':
-        return r'$Ca=v_{ink}\eta_{sup}/\sigma$'
-    elif s.startswith('ink_') or s.startswith('sup_'):
-        fluid = s[:3]
-        var = s[4:]
-        return indVarSymbol(var, fluid, commas=commas)
-    else:
-        if s=='pressureCh0':
-            return 'Extrusion pressure (Pa)'
-        else:
-            return s
-    
-    if lineType:
-        return varlist[s]
-    else:
-        s1 = varlist[s]
-        typ = re.split('_', s)[0]
-        s1 = s1[len(typ)+1:]
-        return s1
 
-def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.DataFrame:
-    '''import the stills summary and convert sweep types, capillary numbers'''
-    ss,u = plainIm(os.path.join(cfg.path.fig, file), ic=0)
-    
-    ss = ss[ss.date>210500]       # no good data before that date
-    ss = ss[ss.ink_days==1]       # remove 3 day data
-    ss.date = ss.date.replace(210728, 210727)   # put these dates together for sweep labeling
-    k = ss.keys()
-    k = k[~(k.str.contains('_SE'))]
-    k = k[~(k.str.endswith('_N'))]
-    idx = idx0(k)
-    controls = k[:idx]
-    deps = k[idx:]
-    ss = flipInv(ss)
-    ss.insert(idx+2, 'sweepType', ['visc_'+fluidAbbrev(row) for j,row in ss.iterrows()])
-    ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_W_high_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_W_low_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_3.00_S_3.00_VI'),'sweepType'] = 'speed_W_int_visc_ratio'
-    ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_W_high_v_ratio'
-    ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_M_low_visc_ratio'
-    ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_M_high_visc_ratio'
-#     ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
-    
-    # remove vertical data for speed sweeps with inaccurate vertical speeds
-    
-    for key in k[k.str.startswith('vert_')]:
-        ss.loc[(ss.sweepType.str.startswith('speed'))&(ss.date<211000), key] = np.nan
-    
-    if diag:
-        printStillsKeys(ss)
-    return ss,u
+
+
 
 def plainTypes(sslap:pd.DataFrame, incSweep:int=1, abbrev:bool=True) -> pd.DataFrame:
     '''convert types to cleaner form for plot legends
@@ -628,32 +509,7 @@ def flipInv(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd
         ss.insert(idx, 'int_Ca', 1/ss['int_CaInv'])
     return ss
 
-def addRatios(ss:pd.DataFrame, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
-    '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
-    k = ss.keys()
-    idx = int(np.argmax(k=='xs_aspect'))
-    for j, s2 in enumerate(varlist):
-        xvar =  f'{s2}{operator}'
-        if not xvar in ss:
-            if not f'ink_{s2}' in ss or not  'sup_{s2}' in ss:
-                ss = flipInv(ss)
-            if operator=='Prod':
-                ss.insert(idx, xvar, ss[f'ink_{s2}']*ss[f'sup_{s2}'])
-            elif operator=='Ratio':
-                ss.insert(idx, xvar, ss[f'ink_{s2}']/ss[f'sup_{s2}'])
-            idx+=1
-    return ss
 
-def addLogs(ss:pd.DataFrame, varlist:List[str]) -> pd.DataFrame:
-    '''add log values for the list of variables to the dataframe'''
-    k = ss.keys()
-    idx = int(np.argmax(k=='xs_aspect'))
-    for j, s2 in enumerate(varlist):
-        xvar = f'{s2}_log'
-        if not xvar in s2:
-            ss.insert(idx, xvar, np.log10(ss[s2]))
-            idx+=1
-    return ss
     
 
 def speedTableRecursive(topfolder:str) -> pd.DataFrame:
@@ -690,6 +546,143 @@ def speedTable(topfolder:str, exportFolder:str, filename:str) -> pd.DataFrame:
     return tt,units
 
 
+
+
+class metricSingleSummary(metricSummary):
+    '''holds data and functions for handling metric summary tables for single lines'''
+    
+    def __init__(self, file:str):
+        super().__init__(self, file)
+        
+    def importStillsSummary(file:str='stillsSummary.csv', diag:bool=False) -> pd.DataFrame:
+        '''import the stills summary and convert sweep types, capillary numbers'''
+        self.file = os.path.join(cfg.path.fig, file)
+        ss,u = plainIm(self.file, ic=0)
+
+        ss = ss[ss.date>210500]       # no good data before that date
+        ss = ss[ss.ink_days==1]       # remove 3 day data
+        ss.date = ss.date.replace(210728, 210727)   # put these dates together for sweep labeling
+        k = ss.keys()
+        k = k[~(k.str.contains('_SE'))]
+        k = k[~(k.str.endswith('_N'))]
+        idx = self.idx0(k)
+        controls = k[:idx]
+        deps = k[idx:]
+        ss = flipInv(ss)
+        ss.insert(idx+2, 'sweepType', ['visc_'+fluidAbbrev(row) for j,row in ss.iterrows()])
+        ss.loc[ss.bn.str.contains('I_3.50_S_2.50_VI'),'sweepType'] = 'speed_W_high_visc_ratio'
+        ss.loc[ss.bn.str.contains('I_2.75_S_2.75_VI'),'sweepType'] = 'speed_W_low_visc_ratio'
+        ss.loc[ss.bn.str.contains('I_3.00_S_3.00_VI'),'sweepType'] = 'speed_W_int_visc_ratio'
+        ss.loc[ss.bn.str.contains('VI_10_VS_5_210921'), 'sweepType'] = 'visc_W_high_v_ratio'
+        ss.loc[ss.bn.str.contains('I_M5_S_3.00_VI'), 'sweepType'] = 'speed_M_low_visc_ratio'
+        ss.loc[ss.bn.str.contains('I_M6_S_3.00_VI'), 'sweepType'] = 'speed_M_high_visc_ratio'
+    #     ss.loc[ss.ink_type=='PEGDA_40', 'sweepType'] = 'visc_PEG'
+
+        # remove vertical data for speed sweeps with inaccurate vertical speeds
+
+        for key in k[k.str.startswith('vert_')]:
+            ss.loc[(ss.sweepType.str.startswith('speed'))&(ss.date<211000), key] = np.nan
+
+        if diag:
+            printStillsKeys(ss)
+        self.ss = ss
+        self.u = u
+        return ss,u
+
+    def firstDepCol(self) -> str:
+        '''get the name of the first dependent column'''
+        k = self.ss.columns
+        if 'xs_aspect' in k:
+            return 'xs_aspect'
+        elif 'projectionN' in k:
+            return 'projectionN'
+        elif 'horiz_segments' in k:
+            'horiz_segments'
+        else:
+            return ''
+    
+    
+    def addRatios() -> pd.DataFrame:
+    '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
+        return super().addRatios('xs_aspect')
+
+    def addLogs(ss:pd.DataFrame, varlist:List[str]) -> pd.DataFrame:
+        '''add log values for the list of variables to the dataframe'''
+        return super().addLogs('xs_aspect')
+    
+    def varSymbol(s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
+        '''get a symbolic representation of the variable
+        lineType=True to include the name of the line type in the symbol
+        commas = True to use commas, otherwise use periods'''
+        if s.startswith('xs_'):
+            varlist = {'xs_aspect':'XS height/width'
+                       , 'xs_xshift':'XS horiz shift/width'
+                       , 'xs_yshift':'XS vertical shift/height'
+                       , 'xs_area':'XS area'
+                       , 'xs_areaN':'XS area/intended'
+                       , 'xs_wN':'XS width/intended'
+                       , 'xs_hN':'XS height/intended'
+                       , 'xs_roughness':'XS roughness'}
+        elif s.startswith('vert_'):
+            varlist = {'vert_wN':'vert bounding box width/intended'
+                    , 'vert_hN':'vert length/intended'
+                       , 'vert_vN':'vert bounding box volume/intended'
+                   , 'vert_vintegral':'vert integrated volume'
+                   , 'vert_viN':'vert integrated volume/intended'
+                   , 'vert_vleak':'vert leak volume'
+                   , 'vert_vleakN':'vert leak volume/line volume'
+                   , 'vert_roughness':'vert roughness'
+                   , 'vert_meanTN':'vert diameter/intended'
+                       , 'vert_stdevTN':'vert stdev(diameter)/diameter'
+                   , 'vert_minmaxTN':'vert diameter variation/diameter'}
+        elif s.startswith('horiz_') or s=='vHorizEst':
+            varlist = {'horiz_segments':'horiz segments'
+                   , 'horiz_segments_manual':'horiz segments'
+                   , 'horiz_maxlenN':'horiz droplet length/intended'
+                   , 'horiz_totlenN':'horiz total length/intended'
+                   , 'horiz_vN':'horiz volume/intended'
+                   , 'horiz_roughness':'horiz roughness'
+                   , 'horiz_meanTN':'horiz height/intended'
+                   , 'horiz_stdevTN':'horiz stdev(height)/intended'
+                   , 'horiz_minmaxTN':'horiz height variation/diameter'
+                   , 'vHorizEst':'horiz volume'}
+        elif s.startswith('proj'):
+            varlist = {'projectionN':'projection into bath/intended'
+                       , 'projShiftN':'$x$ shift of lowest point/$d_{est}$'}
+        elif s.startswith('vertDisp'):
+            varlist = {'vertDispBotN':'downstream $z_{bottom}/d_{est}$'
+                      ,'vertDispBotN':'downstream $z_{middle}/d_{est}$'
+                      ,'vertDispBotN':'downstream $z_{top}/d_{est}$'}
+        elif s.endswith('Ratio') or s.endswith('Prod'):
+            if s.endswith('Ratio'):
+                symb = '/'
+                var1 = s[:-5]
+            else:
+                symb = r'\times '
+                var1 = s[:-4]
+            return indVarSymbol(var1, 'ink', commas=commas)[:-1]+symb+indVarSymbol(var1, 'sup', commas=commas)[1:]
+        elif s=='int_Ca':
+            return r'$Ca=v_{ink}\eta_{sup}/\sigma$'
+        elif s.startswith('ink_') or s.startswith('sup_'):
+            fluid = s[:3]
+            var = s[4:]
+            return indVarSymbol(var, fluid, commas=commas)
+        else:
+            if s=='pressureCh0':
+                return 'Extrusion pressure (Pa)'
+            else:
+                return s
+
+        if lineType:
+            return varlist[s]
+        else:
+            s1 = varlist[s]
+            typ = re.split('_', s)[0]
+            s1 = s1[len(typ)+1:]
+            return s1
+        
+        
+    
 
                 
     
