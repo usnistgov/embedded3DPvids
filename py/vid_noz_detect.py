@@ -121,7 +121,7 @@ class nozData:
             setattr(self, st, int(val))
         if len(set(tlist)-set(d))==0:
             # we have all values
-#             self.xM = (self.xL+self.xR)/2
+            self.xM = (self.xL+self.xR)/2
 #             self.initLineImage()
             self.nozDetected = True
             return
@@ -139,27 +139,29 @@ class nozData:
         self.xLmax = 500
         self.xRmin = 300
         self.xRmax = 600
-        self.yBmin = 250
+        self.yBmin = 200
         self.yBmax = 430
         
         # bounds of size of nozzle in mm. for 20 gauge nozzle, diam should be 0.908 mm
         self.nozwidthMin = 0.75 # mm
         self.nozWidthMax = 1.05 # mm
+        
+    def randTime(self, row:pd.Series) -> float:
+        '''get a random time between these two times'''
+        f = np.random.random(1)[0]
+        return row['t0']*f + row['tf']*(1-f)
     
-    def nozzleFrame(self, mode:int=0, diag:int=0) -> np.array:
+    def nozzleFrame(self, mode:int=0, diag:int=0, numpics:int=6, ymin:int=5, ymax:int=70, zmin:int=-20, **kwargs) -> np.array:
         '''get an averaged frame from several points in the stream to blur out all fluid and leave just the nozzle. 
         mode=0 to use median frame, mode=1 to use mean frame, mode=2 to use lightest frame'''
         if not hasattr(self, 'frames'):
             if len(self.pfd.progPos)>0:
                 prog,units = plainIm(self.pfd.progPos[0], ic=0)
-                prog = prog[(prog.l==0)&(prog.zt<0)]        # select moves with no extrusion
+                prog = prog[(prog.l==0)&(prog.zt<0)&(prog.yt>ymin)&(prog.yt<ymax)&(prog.zt>zmin)]        # select moves with no extrusion that aren't close to the edge
                 prog.reset_index(inplace=True, drop=True)
-#                 prog = prog.loc[0:len(prog):int(len(prog)/8)]
                 tlist = list((prog['tf']+prog['t0'])/2)
-                indices = np.random.randint(len(tlist), size=6)
-#                 indices = range(len(tlist))
-#                 indices = [2, 7, 15]
-                tlist = [tlist[i] for i in indices]
+                indices = np.random.randint(len(prog), size=numpics)
+                tlist = [self.randTime(prog.loc[i]) for i in indices]
             else:
                 if len(self.pfd.progDims)>0:
                     self.prog, units = plainIm(self.pfd.progDims[0], ic=0)
@@ -212,11 +214,11 @@ class nozData:
         self.background = cv.imread(fn)
         return
             
-    def exportBackground(self, overwrite:bool=False, diag:int=0) -> None:
+    def exportBackground(self, overwrite:bool=False, diag:int=0, **kwargs) -> None:
         '''create a background file'''
         fn = self.pfd.newFileName('background', 'png')
         if not os.path.exists(fn) or overwrite:
-            self.background = self.nozzleFrame(mode=2, diag=diag-1)
+            self.background = self.nozzleFrame(mode=2, diag=diag-1, **kwargs)
             self.background = cv.medianBlur(self.background, 5)
             cv.imwrite(fn, self.background)
             logging.info(f'Exported {fn}')
@@ -301,8 +303,8 @@ class nozData:
         
         frames = [vm.white_balance(self.getFrameAtTime(t)[crop['y0']:crop['yf'],crop['x0']:crop['xf']]) for t in tlist]  # apply white balance to each frame
         
-        h = frames[0].shape[0]    # size of the images
-        w = frames[0].shape[1]
+        self.h = frames[0].shape[0]    # size of the images
+        self.w = frames[0].shape[1]
         fig,axs = plt.subplots(1,n, figsize=(figw, figw*h/w))  # create one subplot for each time
         if n==1:
             axs = [axs]
@@ -506,19 +508,21 @@ class nozData:
             return 0
         
         # no existing file: detect nozzle
-        for mode in [0,1,2]: # min, then median, then mean
-            try:
-                self.detectNozzle0(diag=diag, suppressSuccess=suppressSuccess, mode=mode, overwrite=overwrite)
-            except ValueError:
-                if diag>1:
-                    traceback.print_exc()
-                pass
-            else:
-                return 0
+        for i in range(3):
+            for mode in [0,1,2]: # min, then median, then mean
+                try:
+                    self.detectNozzle0(diag=diag, suppressSuccess=suppressSuccess, mode=mode, overwrite=overwrite)
+                except ValueError:
+                    if diag>1:
+                        traceback.print_exc()
+                        print('Looping to next mode')
+                    pass
+                else:
+                    return 0
             
         # if all modes failed:
         self.drawDiagnostics(diag) # show diagnostics
-        raise ValueError('Failed to detect nozzle after 3 iterations')
+        raise ValueError('Failed to detect nozzle after 9 iterations')
         
     #------------------------------------------------------------------------------------
         
@@ -537,7 +541,7 @@ class nozData:
             nm = self.nozMask
         frameMasked = cv.bitwise_and(frame,frame,mask = vm.erode(nm, dilate))   # nozzle removed
         
-        if 'crops' in kwargs:
+        if 'crops' in kwargs and 'y0' in kwargs['crops'] and 'x0' in kwargs['crops']:
             yB = int(self.yB-crops['y0'])
             xL = int(self.xL-crops['x0'])
             xR = int(self.xR-crops['x0'])
@@ -599,6 +603,22 @@ class nozData:
                     fseg = thresh[0:yB-20, xL-11:xL-10]
                 thresh[0:yB, xL-11:xL-10] = 0
         return thresh
+    
+    def absoluteCoords(self, d:dict) -> dict:
+        '''convert the relative coordinates in mm to absolute coordinates on the image in px. y is from the bottom, x is from the left'''
+        if not hasattr(self, 'yB') or not hasattr(self, 'xM') or not hasattr(self, 'pxpmm'):
+            self.importNozzleDims()
+        nc = [self.xM, 590-self.yB]    # convert y to from the bottom
+        out = {'x':nc[0]+d['dx']*self.pxpmm, 'y':nc[1]+d['dy']*self.pxpmm}
+        return out
+    
+    def relativeCoords(self, x:float, y:float) -> dict:
+        '''convert the absolute coordinates in px to relative coordinates in px, where y is from the top and x is from the left'''
+        if not hasattr(self, 'yB') or not hasattr(self, 'xM') or not hasattr(self, 'pxpmm'):
+            self.importNozzleDims()
+        nx = self.xM
+        ny = self.yB
+        return (x-nx)/self.pxpmm, (ny-y)/self.pxpmm
 
 
     
@@ -621,6 +641,10 @@ def exportNozDims(folder:str, overwrite:bool=False) -> list:
         nv.detectNozzle(diag=0, overwrite=overwrite)
         nv.exportBackground(overwrite=overwrite)
     except ValueError as e:
+        errorList.append(folder)
+        print(f'{folder}:{e}')
+        return errorList
+    except AttributeError as e:
         errorList.append(folder)
         print(f'{folder}:{e}')
         return errorList

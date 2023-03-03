@@ -498,7 +498,7 @@ def scatterSS(ms:metricSummary, ss:pd.DataFrame, xvar:str, yvar:str, colorBy:str
             xvar = xvar+'_log'
         if logy:
             yvar = yvar+'_log'
-        regressionSS(ss, xvar, yvar, ax)
+        regressionSS(ms, xvar, yvar, ax)
     return fig,ax
 
 def setSquare(ax):

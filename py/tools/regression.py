@@ -69,7 +69,7 @@ def lr(X:np.array, y:np.array, intercept:Union[float,str]) -> dict:
         out['b'] = b[0]
     else:
         for i,bi in enumerate(b):
-            out['b'+str(i)] = bi
+            out[f'b{i}'] = bi
     return out
 
 def linearReg(x:list, y:list, intercept:Union[float, str]='') -> dict:

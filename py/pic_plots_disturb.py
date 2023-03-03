@@ -33,39 +33,11 @@ matplotlib.rc('font', size='10.0')
 
 #-----------------------------------------------
 
-class multiPlots:
+class multiPlotsSingleDisturb(multiPlots):
     '''given a sample type folder, plot values'''
     
     def __init__(self, folder:str, exportFolder:str, dates:List[str], **kwargs):
-        self.folder = folder
-        self.exportFolder = exportFolder
-        self.dates = dates
-        self.kwargs = kwargs
-        self.inkvList = []
-        self.supvList = []
-        self.inkList = []
-        self.supList = []
-        self.spacingList = ['0.500', '0.625', '0.750', '0.875', '1.000', '1.250']
-        for subfolder in os.listdir(self.folder):
-            spl = re.split('_', subfolder)
-            for i,s in enumerate(spl):
-                if s=='I' and not spl[i+1] in self.inkList:
-                    self.inkList.append(spl[i+1])
-                elif s=='S' and not spl[i+1] in self.supList:
-                    self.supList.append(spl[i+1])
-                elif s=='VI' and not spl[i+1] in self.inkvList:
-                    self.inkvList.append(spl[i+1])
-                elif s=='VS' and not spl[i+1] in self.supvList:
-                    self.supvList.append(spl[i+1])
-                    
-        # determine how many variables must be defined for a 2d plot
-        self.freevars = 1
-        self.freevarList = ['spacing']
-        for s in ['ink', 'sup', 'inkv', 'supv']:
-            l = getattr(self, f'{s}List')
-            if len(l)>1:
-                self.freevars+=1
-                self.freevarList.append(s)
+        super().__init__(self, folder, exportFolder, dates, **kwargs)
 
         if 'visc' in os.path.basename(folder):
             self.xvar = 'ink.var'
@@ -79,12 +51,7 @@ class multiPlots:
         for s in ['HIx', 'HOx', 'HOh', 'V']:
             self.plot(s, spacing=0.875, **kwargs)
             self.plot(s, ink=self.inkList[-1], **kwargs)     
-            
-        
-    def spacingPlots(self, name:str, showFig:bool=False, export:bool=True):
-        '''run all plots for object name (e.g. HOB, HIPxs)'''
-        for spacing in self.spacingList:
-            self.plot(spacing=spacing, showFig=showFig, export=export)
+  
             
     def plot(self, name:str, showFig:bool=False, export:bool=True,  **kwargs):
         '''plot the values for name (e.g. horiz, xs_+y, xs_+z, or vert)'''
@@ -155,10 +122,15 @@ class multiPlots:
             exportFolder =  os.path.join(self.exportFolder, name)
             if not os.path.exists(exportFolder):
                 os.mkdir(exportFolder)
+                
+            if name in ['HIx', 'V']:
+                shiftdir = 'x'
+            else:
+                shiftdir = 'y'
 
             fig = picPlots0(self.folder, exportFolder
                             , allIn, dates, tag, showFig=showFig, export=export
-                            , overlay={'shape':'2circles', 'dx':-0.8, 'dy':-0.8}
+                            , overlay={'shape':'2circles', 'dx':-0.8, 'dy':-0.8, 'shiftdir':shiftdir}
                             , xvar=xvar, yvar=yvar, concat=concat
                             , **kwargs2)
    

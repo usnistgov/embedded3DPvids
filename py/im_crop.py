@@ -30,24 +30,49 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 ####### CROPPING TOOLS
 
-def imcrop(img:np.array, bounds:Union[Dict, int]) -> np.array:
-    '''crop an image to the bounds, defined by x0,xf,y0,yf'''
-    if type(bounds) is int:
-        s = img.shape
-        h = s[0]
-        w = s[1]
-        d = bounds
-        crop = img[d:h-d, d:w-d]
-    elif len(bounds)==2:
-        s = img.shape
-        h = s[0]
-        w = s[1]
-        dx = bounds['dx']
-        dy = bounds['dy']
-        crop = img[dy:h-dy, dx:w-dx]
+def convertCrop(im:np.array, crops:Union[Dict, int]) -> dict:
+    '''convert the given crop dimensions to coordinates that will definitely fit in the '''
+    if len(im)>0:
+        h,w = im.shape[0:2]
     else:
-        crop = img[bounds['y0']:bounds['yf'], bounds['x0']:bounds['xf']]
-    return crop
+        return {}
+
+    if type(crops) is int:
+        return {'x0':d, 'xf':w-d, 'y0':d, 'yf':h-d}
+    elif 'dx' in crops and 'dy' in crops:
+        dx = crops['dx']
+        dy = crops['dy']
+        return {'x0':dx, 'xf':w-dx, 'y0':dy, 'yf':h-dy}
+    else:
+        out = {'x0':0, 'xf':w, 'y0':0, 'yf':h}
+        if 'x0' in crops:
+            out['x0'] = max(0, min(w, crops['x0']))
+        if 'y0' in crops:
+            out['y0'] = max(0, min(h, crops['y0']))
+        if 'xf' in crops:
+            if crops['xf']<0:
+                out['xf'] = min(w, max(out['x0'], w+crops['xf']))
+            else:
+                out['xf'] = min(w, max(out['x0'], crops['xf']))
+        if 'yf' in crops:
+            if crops['yf']<0:
+                out['yf'] = min(h, max(out['y0'], h+crops['yf']))
+            else:
+                out['yf'] = min(h, max(out['y0'], crops['yf']))
+        return out
+    
+def imcropDict(im:np.array, crop:dict):
+    '''crop an image to the bounds, defined by x0,xf,y0,yf, where y is from top and x is from left'''
+    h = im.shape[0]
+    return im[int(crop['y0']):int(crop['yf']), int(crop['x0']):int(crop['xf'])]
+
+def imcrop(im:np.array, bounds:Union[Dict, int]) -> np.array:
+    '''crop an image to the bounds, defined by single number, dx and dy, or x0,xf,y0,yf, where y is from top and x is from left'''
+    crop = convertCrop(im, bounds)
+    if len(crop)==0:
+        return im
+    else:
+        return imcropDict(im, crop)
 
 
 def findCenterXY(x:int, w:int, imw:int, radius:int) -> int:

@@ -52,7 +52,7 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
                 ax.set_aspect(aspect)
         for i, im in enumerate(args):
             if type(im) is str:
-                axlist[i].text(0,0,im)
+                axlist[i].text(0.1,0.1,im, family='Monospace', linespacing=2)
             else:
                 if len(im.shape)>2:
                     # color

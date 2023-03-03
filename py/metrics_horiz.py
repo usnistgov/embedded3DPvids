@@ -27,6 +27,7 @@ from tools.plainIm import *
 from val_print import *
 from vid_noz_detect import nozData
 from metrics_tools import *
+from im_segment import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -40,429 +41,386 @@ pd.set_option("display.precision", 2)
 
 #----------------------------------------------
 
-#-------------------------------------------------
-
-def markHorizOnIm(im2:np.array, row:pd.Series) -> np.array:
-    '''mark horizontal element on the image'''
-    im2 = cv.rectangle(im2, (int(row['x0']),int(row['y0'])), (int(row['x0']+row['w']),int(row['y0']+row['h'])), (0,0,255), 2)
-    im2 = cv.circle(im2, (int(row['xc']), int(row['yc'])), 3, (0,0,255), 3)
-    return im2
+class horizSegment(metricSegment):
+    '''collects data about horizontal segments in a single horizontal line'''
+    
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
     
 
-def horizLineMeasure(df:pd.DataFrame, labeled:np.array, im2:np.array, s:float, name:Union[int, str], maxPossibleLen:float, diag:bool=0, distancemm:float=0.603, **kwargs) -> Tuple[dict, dict]:
-    '''measure one horizontal line. 
-    labeled is an image from connected component labeling
-    im2 is the original image
-    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
-    j is the line number
-    maxPossibleLen is the longest length in mm that should have been extruded
-    '''
-    numlines = len(df)
-    measures = []
-    cmunits = {}
+    def markHorizOnIm(self, row:pd.Series) -> np.array:
+        '''mark horizontal element on the image'''
+        self.annotated = cv.rectangle(self.annotated, (int(row['x0']),int(row['y0'])), (int(row['x0']+row['w']),int(row['y0']+row['h'])), (0,0,255), 2)
+        self.annotated = cv.circle(self.annotated, (int(row['xc']), int(row['yc'])), 3, (0,0,255), 3)
     
-    if diag:
-        for i,row in df.iterrows():
-            im2 = markHorizOnIm(im2, row)
+    def display(self) -> None:
+        self.annotated = self.segmenter.labelsBW.copy()
+        self.annotated = cv.cvtColor(self.annotated,cv.COLOR_GRAY2RGB)
+        if self.diag==0:
+            return
+        for i,row in self.segmenter.df.iterrows():
+            self.markHorizOnIm(row)
+        imshow(self.im, self.annotated, self.statText(cols=2))
+        
+    def selectLine(self, df:pd.DataFrame, maxlen:float, j:int) -> None:
+        '''narrow down the selection to just the segments in the dataframe'''
+        self.segmenter.selectComponents(df.w==df.w)
+        self.maxlen = maxlen
+        self.name = j
+        self.title = f'{os.path.basename(self.file)}: horiz{j}'
+        self.dims()
+        self.display()
 
-    maxlen0 = df.w.max()
-    totlen = df.w.sum()
-    maxarea = df.a.max()
-    totarea = df.a.sum()
-    xc = int(sum(df.a * df.xc)/sum(df.a))
-    yc = int(sum(df.a * df.yc)/sum(df.a))
-    
-    co = {'line':name, 'segments':len(df)
-        , 'maxlen':maxlen0*s, 'totlen':df.w.sum()*s
-        , 'maxarea':df.a.max()*s**2, 'totarea':int(df.a.sum())*s**2
-          , 'xc':xc*s, 'yc':yc*s
-        }  
-    counits = {'line':'', 'segments':''
-        , 'maxlen':'px', 'totlen':'px'
-        , 'maxarea':'px^2', 'totarea':'px^2'
-               , 'xc':'px', 'yc':'px'
-        }  
-    longest = df[df.w==maxlen0] # measurements of longest component
-    longest = longest.iloc[0]
-    componentMask = (labeled == longest.name).astype("uint8") * 255   # image with line in it
-    componentMeasures, cmunits = measureComponent(componentMask, True, s, maxPossibleLen, reverse=(name==1), diag=max(0,diag-1))
-    # component measures and co are pre-scaled
-    if 'totlen' in co and 'meanT' in componentMeasures:
-        aspect = co['totlen']/componentMeasures['meanT'] # height/width
-        r = componentMeasures['meanT']/2
-        if co['totlen']>2*r:
+    def dims(self) -> None:
+        '''measure one horizontal line. df has been filtered down from the full dataframe to only include one row 
+        labeled is an image from connected component labeling
+        im2 is the original image
+        s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
+        j is the line number
+        maxPossibleLen is the longest length in mm that should have been extruded
+        '''
+        
+        df = self.segmenter.df
+        maxlen0 = df.w.max()   # length of the longest segment
+        totlen = df.w.sum()    # total length of all segments
+        maxarea = df.a.max()   # area of largest segment
+        totarea = df.a.sum()   # total area of all segments
+        xc = int(sum(df.a * df.xc)/sum(df.a))   # weighted center of mass
+        yc = int(sum(df.a * df.yc)/sum(df.a))
+
+        co = {'line':self.name, 'segments':len(df)
+            , 'maxlen':maxlen0*self.scale, 'totlen':df.w.sum()*self.scale
+            , 'maxarea':df.a.max()*self.scale**2, 'totarea':int(df.a.sum())*self.scale**2
+              , 'xc':xc*self.scale, 'yc':yc*self.scale
+            }  
+        counits = {'line':'', 'segments':''
+            , 'maxlen':'px', 'totlen':'px'
+            , 'maxarea':'px^2', 'totarea':'px^2'
+                   , 'xc':'px', 'yc':'px'
+            }  
+        longest = df[df.w==maxlen0] # measurements of longest component
+        self.componentMask = self.segmenter.reconstructMask(longest)   # get the image of just this component
+        componentMeasures, cmunits = self.measureComponent(True, reverse=(self.name==1), diag=max(0,self.diag-1))
+        # component measures and co are pre-scaled
+        if 'totlen' in co and 'meanT' in componentMeasures:
+            r = componentMeasures['meanT']/2
             h = co['totlen']
-            vest = (h - 2*r)*np.pi*(r)**2 + 4/3*np.pi*r**3 # cylinder + hemisphere endcaps
+            aspect = h/(2*r) # height/width
+            vest = calcVest(h,r)
         else:
-            vest = 4/3*np.pi*r**3 # sphere
-    else:
-        aspect = 0
-        vest = 0
-    units = {'line':'', 'aspect':'h/w'} # where pixels are in original scale
-    ret = {**{'line':name, 'aspect':aspect}, **co, **{'vest':vest}, **componentMeasures}
-    units = {**units, **counits, **{'vest':'px^3'}, **cmunits}
-    if 'nozData' in kwargs and not name[-1]=='o':
+            aspect = 0
+            vest = 0
+        units = {'line':'', 'aspect':'h/w'} # where pixels are in original scale
+        ret = {**{'line':self.name, 'aspect':aspect}, **co, **{'vest':vest}, **componentMeasures}
+        units = {**units, **counits, **{'vest':'px^3'}, **cmunits}
+        self.stats = {**self.stats, **ret}
+        self.units = {**self.units, **units}
+        
+    def gaps(self, distancemm:float) -> None:
+        if not hasattr(self, 'nd') or not hasattr(self, 'crop') or 'o' in self.name:
+            return
         # get displacements
-        disps = displacement(componentMask, kwargs['nozData'], 'y', kwargs['crop'], distancemm*kwargs['nozData'].pxpmm, diag=diag-1)
+        disps = self.displacement('y', distancemm*self.nd.pxpmm, diag=self.diag-1)
         dispunits = dict([[ii, 'px'] for ii in disps])
-        ret = {**ret, **disps}
-        units = {**units, **dispunits}
-    if diag:
-        imshow(im2, labeled, '\n'.join([key+'    '+(val if type(val) is str else "{:.2f}".format(val)) for key,val in ret.items()]))
-    return ret, units
+        self.stats = {**self.stats, **disps}
+        self.units = {**self.units, **dispunits}
+
 
 #----------------------------
 # single line
 
-def splitLines(df0:pd.DataFrame, diag:int=0, margin:float=80, **kwargs) -> list:
-    '''split the table of segments into the three horizontal lines. 
-    margin is the max allowable vertical distance in px from the line location to be considered part of the line'''
+class horizSingleMeasures:
+    '''for measuring all 3 lines from a stitched singleLine image'''
     
-    linelocs = [275, 514, 756] # expected positions of lines
-    ylocs = [-1000,-1000,-1000] # actual positions of lines
-    
-    # get position of largest segment
-    if len(df0)==0:
-        return df0
-    largesty = float(df0[df0.a==df0.a.max()]['yc'])
-    
-    # take segments that are far away
-    df = df0[(df0.yc<largesty-100)|(df0.yc>largesty+100)]
-    if len(df)>0:
-        secondy = float(df[df.a==df.a.max()]['yc'])
-        df = df[(df.yc<secondy-100)|(df.yc>secondy+100)]
+    def __init__(self, file:str, diag:int=0, acrit:int=1000, overwrite:bool=False, **kwargs):
+        self.segmentOrig = horizSegment(file, diag=diag, acrit=acrit, **kwargs)
+        self.overwrite = overwrite
+        self.folder = os.path.dirname(file)
+        self.pfd = fh.printFileDict(self.folder)
+        self.progDims = getProgDims(self.folder)
+
+    def splitLines(self, margin:float=80, **kwargs) -> list:
+        '''split the table of segments into the three horizontal lines. 
+        margin is the max allowable vertical distance in px from the line location to be considered part of the line'''
+
+        linelocs = [275, 514, 756] # expected positions of lines
+        ylocs = [-1000,-1000,-1000] # actual positions of lines
+        df0 = self.segmented.df
+        # get position of largest segment
+        if len(df0)==0:
+            return df0
+        largesty = float(df0[df0.a==df0.a.max()]['yc'])
+
+        # take segments that are far away
+        df = df0[(df0.yc<largesty-100)|(df0.yc>largesty+100)]
         if len(df)>0:
-            thirdy = float(df[df.a==df.a.max()]['yc'])
-            ylocs = ([largesty, secondy, thirdy])
-            ylocs.sort()
+            secondy = float(df[df.a==df.a.max()]['yc'])
+            df = df[(df.yc<secondy-100)|(df.yc>secondy+100)]
+            if len(df)>0:
+                thirdy = float(df[df.a==df.a.max()]['yc'])
+                ylocs = ([largesty, secondy, thirdy])
+                ylocs.sort()
+            else:
+                # only 2 lines
+                largestI = closestIndex(largesty, linelocs)
+                secondI = closestIndex(secondy, linelocs)
+                if secondI==largestI:
+                    if secondI==2:
+                        if secondy>largesty:
+                            largestI = largestI-1
+                        else:
+                            secondI = secondI-1
+                    elif secondI==0:
+                        if secondy>largesty:
+                            secondI = secondI+1
+                        else:
+                            largestI = largestI+1
+                    else:
+                        if secondy>largesty:
+                            secondI = secondI+1
+                        else:
+                            secondI = secondI-1
+                ylocs[largestI] = largesty
+                ylocs[secondI] = secondy
         else:
-            # only 2 lines
+            # everything is in this line
             largestI = closestIndex(largesty, linelocs)
-            secondI = closestIndex(secondy, linelocs)
-            if secondI==largestI:
-                if secondI==2:
-                    if secondy>largesty:
-                        largestI = largestI-1
-                    else:
-                        secondI = secondI-1
-                elif secondI==0:
-                    if secondy>largesty:
-                        secondI = secondI+1
-                    else:
-                        largestI = largestI+1
-                else:
-                    if secondy>largesty:
-                        secondI = secondI+1
-                    else:
-                        secondI = secondI-1
             ylocs[largestI] = largesty
-            ylocs[secondI] = secondy
-    else:
-        # everything is in this line
-        largestI = closestIndex(largesty, linelocs)
-        ylocs[largestI] = largesty
-        
-    if diag>1:
-        logging.info(f'ylocs: {ylocs}')
-    dflist = [df0[(df0.yc>yloc-margin)&(df0.yc<yloc+margin)] for yloc in ylocs]
-    return dflist
+
+        if diag>1:
+            logging.info(f'ylocs: {ylocs}')
+        self.dflist = [df0[(df0.yc>yloc-margin)&(df0.yc<yloc+margin)] for yloc in ylocs]
 
 
-def horizSegment(im0:np.array, progDims:pd.DataFrame, s:float, acrit:float=1000, satelliteCrit:float=0.2, diag:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
-    '''segment the image and take measurements
-    progDims holds timing info about the lines
-    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
-    acrit is the minimum segment size in px to be considered part of a line
-    satelliteCrit is the min size of segment, as a fraction of the largest segment, to be considered part of a line
-    '''
-    im2, markers, attempt = vm.segmentInterfaces(im0, diag=max(0,diag-1), removeVert=True, acrit=acrit, **kwargs)
-    if len(markers)==0 or markers[0]==1:
-        return [], {}, attempt, im2
-    labeled = markers[1]
-    df = vm.markers2df(markers)
-    df = df[df.a>acrit]
-    df = df[(df.a>satelliteCrit*df.a.max())]  # eliminate tiny satellite droplets
-    if diag:
-        im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
-    ret = []
-    cmunits = {}
-    if len(df)==0:
-        return [],{},attempt,im2
-    dfsplit = splitLines(df, diag=diag) # split segments into lines
-    for j,df in enumerate(dfsplit):
-        if len(df)>0:
-            maxlen = progDims[progDims.name==f'horiz{j}'].iloc[0]['l']  # length of programmed line
-            r,cmu = horizLineMeasure(df, labeled, im2, s, j, maxlen, diag=diag)
-            if len(r)>0:
-                ret.append(r)
-                cmunits = cmu
-    return ret, cmunits, attempt, im2
-    
+    def measure(self) -> None:
+        '''segment the image and take measurements
+        progDims holds timing info about the lines
+        s is is the scaling of the stitched image compared to the raw images, e.g. 0.33
+        acrit is the minimum segment size in px to be considered part of a line
+        satelliteCrit is the min size of segment, as a fraction of the largest segment, to be considered part of a line
+        '''
+        self.fn = self.pfd.newFileName(f'horizSummary', '.csv')
+        if os.path.exists(self.fn) and not self.overwrite:
+            return
+        self.segmentOrig.im = vm.removeBorders(self.segmentOrig.im)
+        self.segmenter = segmenterSingle(self.im, acrit=self.acrit, diag=max(0, self.diag-1), removeVert=True)
+        self.segmenter.eraseSmallestComponents(**self.kwargs)
+        self.splitLines(**kwargs)
+        self.units = {}
+        self.out = []
+        for j,df in enumerate(self.dflist):
+            if len(df)>0:
+                maxlen = self.progDims[self.progDims.name==f'horiz{j}'].iloc[0]['l']  # length of programmed line
+                segment = copy.deepcopy(self.segmentOrig)
+                segment.selectLine(df, maxlen, j)
+                r,cmu = segment.values()
+                self.out.append(r)
+                if len(cmu)>len(self.units):
+                    self.units = cmu
+        self.df = pd.DataFrame(self.out)
+        plainExp(self.fn, self.df, self.units)
 
-def horizMeasure(file:str, progDims:pd.DataFrame, diag:int=0, **kwargs) -> Tuple[pd.DataFrame, dict]:
-    '''measure horizontal lines. 
-    progDims holds timing info about the lines
-    diag=1 to print diagnostics for this function, diag=2 to print this function and the functions it calls'''
-    s = 1/fileScale(file)
-    im = cv.imread(file)
-    im0 = im
-    im0 = vm.removeBorders(im0)
-    ret, cmunits, attempt, im2 = horizSegment(im0, progDims, s, diag=diag, **kwargs)
-    
-    if len(ret)==0:
-        return [], {}
-    if diag:
-        imshow(im, im2)
-        plt.title(os.path.basename(file))
-    units = {'line':'', 'segments':'', 'maxlen':'px', 'totlen':'px', 'maxarea':'px', 'totarea':'px', 'roughness':cmunits['roughness'], 'meanT':cmunits['meanT'], 'stdevT':cmunits['stdevT'], 'minmaxT':cmunits['minmaxT'], 'vest':'px^3'}
-    if diag>=2:
-        display(pd.DataFrame(ret))
-    return pd.DataFrame(ret), units
 
 
 #----------------------------
 # disturb
 
-def removeThreads(thresh:np.array, f:float=0.4, f2:float=0.3, diag:int=0) -> np.array:
-    '''remove zigzag threads from bottom left and top right part of binary image'''
-    if diag>0:
-        thresh0 = thresh.copy()
-        thresh0 = cv.cvtColor(thresh0, cv.COLOR_GRAY2BGR)
-    h,w0 = thresh.shape
-    left = thresh[:, :int(w0*f)]
-    right0 = int(w0*(1-f))
-    right = thresh[:, right0:]
-    for i,im in enumerate([left, right]):
-        contours = cv.findContours(im, 1, 2)
-        if int(cv.__version__[0])>=4:
-            contours = contours[0]
-        else:
-            contours = contours[1]
-        contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
-        if len(contours)>0:
-            x,y,w,h = cv.boundingRect(contours[0])
-            if i==0:
-                # mask the top if the right edge is tall
-                if thresh[:y, int(w0*(1-f2)):].sum(axis=0).sum(axis=0)>0:
-                    thresh[:y-10, :] = 0
-            else:
-                # mask the bottom on the left side if the left edge is tall
-                if thresh[:y, :int(w0*f2)].sum(axis=0).sum(axis=0)>0:
-                    thresh[h+y+10:, :int(w0*f)] = 0
-            if diag>0:
-                if i==1:
-                    x = x+right0
-                thresh0 = cv.rectangle(thresh0, (x,y), (x+w,y+h), (0,0,255), 2)
-    if diag>0:
-        imshow(thresh0, thresh)
-    return thresh
-
-def horizDisturbMeasure(file:str, acrit:int=2500, diag:int=0, **kwargs) -> Tuple[dict,dict]:
-    '''measure disturbed horizontal lines'''
+class horizSegmentDisturb(horizSegment, segmentDisturb):
+    '''for disturbed horizontal lines'''
     
-    errorRet = {},{}
-    if not os.path.exists(file):
-        raise ValueError(f'File {file} does not exist')
-    spl = re.split('_', re.split('vstill_', os.path.basename(file))[1])
-    name = f'{spl[0]}_{spl[1]}'        # e.g. V_l0do
-    im = cv.imread(file)
-    nd = nozData(os.path.dirname(file), **kwargs)   # detect nozzle
-    nd.importNozzleDims()
-    pv = printVals(os.path.dirname(file), levels=nd.levels, pfd=nd.pfd, fluidProperties=False)
-    if not nd.nozDetected:
-        raise ValueError(f'No nozzle dimensions in {nd.printFolder}')
-
-    if 'water' in pv.ink.base:
-        im = nd.subtractBackground(im, diag=diag-2)  # remove background and nozzle
-        im = vm.removeBlack(im)   # remove bubbles and dirt from the image
-        im = vm.removeChannel(im,0) # remove the blue channel
-    if pv.ink.dye=='red':
-        im = nd.maskNozzle(im)
-        im = vm.removeChannel(im, 2)   # remove the red channel
-    
-    h,w,_ = im.shape
-    s = 1
-    title = os.path.basename(file)
-
-    # segment components
-    hc = 0
-    if name[-1]=='o':
-        # observing
-        crop = {'y0':int(h/2), 'yf':int(h*6/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}   # crop the left and right edge to remove zigs
-    else:
-        # writing
-        crop = {'y0':int(h/6), 'yf':int(h*5/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}
-    im = vc.imcrop(im, crop)
-#     im = vm.removeDust(im)
-    im = vm.normalize(im)
-    
-    if 'water' in pv.ink.base:
-        bt = 190
-    else:
-        bt = 80
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, f:float=0.4, f2:float=0.3, **kwargs):
+        self.f = f
+        self.f2 = f2
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
-    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1), cutoffTop=0, botthresh=bt, topthresh=bt, removeBorder=False, nozData=nd, crops=crop, eraseMaskSpill=True)
-    if attempt<6:
-        return errorRet
 
-    if len(markers)==0 or markers[0]==1:
-        return errorRet # nothing to measure here
-    df = vm.markers2df(markers)
-    df = df[(df.a>acrit)]   # remove small segments
-    df = df[df.w<crop['xf']-crop['x0']]  # remove segments that are the width of the whole image
-    df = df[(df.y0>0)&(df.y0+df.h<(crop['yf']-crop['y0']))]  # remove segments that are on top and bottom border
-    im2 = vm.reconstructMask(markers, df)
+    def removeThreads(self, diag:int=0) -> np.array:
+        '''remove zigzag threads from bottom left and top right part of binary image'''
+        f = self.f
+        f2 = self.f2
+        thresh = self.segmenter.labelsBW.copy()
+        if diag>0:
+            thresh0 = thresh.copy()
+            thresh0 = cv.cvtColor(thresh0, cv.COLOR_GRAY2BGR)
+        h0,w0 = thresh.shape
+        left = thresh[:, :int(w0*f)]
+        right0 = int(w0*(1-f))
+        right = thresh[:, right0:]
+        for i,im in enumerate([left, right]):
+            contours = cv.findContours(im, 1, 2)
+            if int(cv.__version__[0])>=4:
+                contours = contours[0]
+            else:
+                contours = contours[1]
+            contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
+            if len(contours)>0:
+                x,y,w,h = cv.boundingRect(contours[0])
+                if i==0:
+                    # mask the top if the right edge is tall
+                    if thresh[:y, int(w0*(1-f2)):].sum(axis=0).sum(axis=0)>0:
+                        thresh[:y-10, :] = 0
+                        if diag>0:
+                            thresh0 = cv.rectangle(thresh0, (0,0), (w0,y-10), (255,0,0), 2)
+                            thresh0 = cv.rectangle(thresh0, (x,y), (x+w,y+h), (255,0,0), 2)
+                else:
+                    # mask the bottom on the left side if the left edge is tall
+                    if thresh[h+y+10:, :int(w0*f2)].sum(axis=0).sum(axis=0)>0:
+                        thresh[h+y+10:, :int(w0*f2)] = 0
+                        if diag>0:
+                            x = x+right0
+                            thresh0 = cv.rectangle(thresh0, (0,h+y+10), (int(w0*f2),h0), (0,0,255), 2)
+                            thresh0 = cv.rectangle(thresh0, (x,y), (x+w,y+h), (0,0,255), 2)                    
+        if diag>0:
+            imshow(thresh0, thresh)
+        self.segmenter.filled = thresh
+        self.segmenter.getConnectedComponents()
+        
+    def prepareImage(self):
+        '''clean and crop the image'''
+        if self.pv.ink.dye=='blue':
+            self.im = self.nd.subtractBackground(self.im, diag=self.diag-2)  # remove background and nozzle
+            self.im = vm.removeBlack(self.im)   # remove bubbles and dirt from the image
+            self.im = vm.removeChannel(self.im,0) # remove the blue channel
+        elif self.pv.ink.dye=='red':
+            self.im = self.nd.maskNozzle(self.im)
+            self.im = vm.removeChannel(self.im, 2)   # remove the red channel
 
-    im2 = removeThreads(im2, diag=diag-1)       # trim off end threads from zigzags
-    im2, markers, _ = vm.filterMarkers(im2, acrit=acrit)  # relabel connected components
+        h,w,_ = self.im.shape
+        self.scale = 1
+        self.maxlen = w
 
-    if len(markers)==0 or markers[0]==1:
-        return errorRet # nothing to measure here
-    df = vm.markers2df(markers)
-    df = df[(df.y0>1)&(df.y0+df.h<(crop['yf']-crop['y0']))]  # remove segments that are on top and bottom border
-   
-    if len(df)==0:
-        return errorRet
-    retval, units = horizLineMeasure(df, markers[1], im, s, name, w, diag=diag, nozData=nd, crop=crop, distancemm=pv.dEst)
-    for s in ['x0', 'xc']:
-        if s in retval:
-            retval[s] = retval[s]+crop['x0']
-    for s in ['y0', 'yc']:
-        if s in retval:
-            retval[s] = retval[s] + hc
-
-    return retval, units
+        # segment components
+        hc = 0
+        if self.name[-1]=='o':
+            # observing
+            self.crop = {'y0':int(h/2), 'yf':int(h*6/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}   # crop the left and right edge to remove zigs
+        else:
+            # writing
+            self.crop = {'y0':int(h/6), 'yf':int(h*5/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}
+        self.im = vc.imcrop(self.im, self.crop)
+    #     im = vm.removeDust(im)
+        self.im = vm.normalize(self.im)
 
 
-def horizDisturbMeasures(folder:str, overwrite:bool=False, **kwargs) -> None:
-    '''measure all cross-sections in the folder and export table'''
-    if not 'disturbHoriz' in os.path.basename(folder):
-        return
-    pfd = fh.printFileDict(folder)
-    fn = pfd.newFileName('horizMeasure', '.csv')
-    if os.path.exists(fn) and not overwrite:
-        return
-    files = {}
-    for f in os.listdir(folder):
-        if 'vstill' in f:
-            files[re.split('_', re.split('vstill_', f)[1])[1]] = f
+    def measure(self) -> None:
+        '''measure disturbed horizontal lines'''
+        self.nd.importNozzleDims()
+        if not self.nd.nozDetected:
+            raise ValueError(f'No nozzle dimensions in {self.nd.printFolder}')
+
+        self.prepareImage()
+        if 'water' in self.pv.ink.base:
+            bt = 200
+        else:
+            bt = 90
+            
+        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0,self.diag-1), cutoffTop=0, topthresh=bt, removeBorder=False, nozData=self.nd, crops=self.crop, eraseMaskSpill=True)
+        if not self.segmenter.success:
+            return
+        self.segmenter.eraseFullWidthComponents()
+        self.segmenter.eraseTopBottomBorder()
+        self.removeThreads(diag=self.diag-1)
+        if self.diag>1:
+            self.segmenter.display()
+        self.dims()
+        self.adjustForCrop(self.crop)
+        self.gaps(self.pv.dEst)
+        self.display()
+        
+def horizDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    return horizSegmentDisturb(file, **kwargs).values()
+
+
+
+class horizDisturbMeasures(disturbMeasures):
+    '''for a horizDisturb folder, measure the disturbed lines'''
     
-    units = {}
-    out = []
-    for i in range(4):
-        for s in ['w', 'd']:
-            for s2 in ['', 'o']:
-                m,u = horizDisturbMeasure(os.path.join(folder, files[f'l{i}{s}{s2}']), pfd=pfd, **kwargs)
-                if len(u)>len(units):
-                    units = u
-                out.append(m)
-    df = pd.DataFrame(out)
+    def __init__(self, folder:str, overwrite:bool=False, **kwargs) -> None:
+        super().__init__(folder, overwrite=overwrite, **kwargs)
     
-    plainExp(fn, df, units)
-    
-def horizDisturbSummary(folder:str, overwrite:bool=False, **kwargs) -> None:
-    '''summarize cross-section measurements in the folder and export table'''
-    if not 'disturbHoriz' in os.path.basename(folder):
-        return {},{}
-    pfd = fh.printFileDict(folder)
-    fn = pfd.newFileName('horizSummary', '.csv')
-    if os.path.exists(fn) and not overwrite:
-        out,u = plainImDict(fn, unitCol=1, valCol=2)
-        return out,u
-    if not hasattr(pfd, 'horizMeasure'):
-        horizDisturbMeasures(folder, **kwargs)
-    if not hasattr(pfd, 'horizMeasure'):
-        return {},{}
-    
-    df, du = plainIm(pfd.horizMeasure, ic=0)
-    pv = printVals(folder)
-    mr, mu = pv.metarow()
-    pxpmm = pv.pxpmm
-    
-    # find changes between observations
-    aves = {}
-    aveunits = {}
-    for num in range(4):
-        wodf = df[df.line==f'HOh_l{num}wo']
-        dodf = df[df.line==f'HOh_l{num}do']
-        if len(wodf)==1 and len(dodf)==1:
-            wo = wodf.iloc[0]
-            do = dodf.iloc[0]
-            for s in ['segments', 'roughness']:
-                try:
-                    addValue(aves, aveunits,f'delta_{s}', difference(do,wo,s), du[s])
-                except:
-                    pass
-            for s in ['totlen', 'meanT']:
-                try:
-                    addValue(aves, aveunits,f'delta_{s}_n', difference(do,wo,s)/wo[s], '')
-                except:
-                    pass
-            for s in ['yc']:
-                try:
-                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/pxpmm/pv.dEst, 'dEst')
-                except ValueError:
-                    pass
-                    
-    # find displacements
-    disps = {}
-    dispunits = {}
-    dlist = ['dy0l', 'dy0r', 'dy0lr', 'space_b']
-    for num in range(4):
-        wdf = df[df.line==f'HOh_l{num}w']
-        ddf = df[df.line==f'HOh_l{num}d']
-        for s in dlist:
-            for vdf in [wdf,ddf]:
-                if len(vdf)>0:
-                    v = vdf.iloc[0]
-                    if hasattr(v, s):
-                        sii = str(v.line)[-1]
-                        si = f'{sii}_{s}'
-                        if not si in ['w_dy0r', 'w_dy0lr', 'w_space_b']:
-                            val = v[s]/pxpmm/pv.dEst
-                            addValue(disps, dispunits, si, val, 'dEst')
+    def measureFolder(self) -> None:
+        '''measure all cross-sections in the folder and export table'''
+        if not 'disturbHoriz' in os.path.basename(self.folder):
+            return 1
+        self.fn = self.pfd.newFileName('horizMeasure', '.csv')
 
-    ucombine = {**aveunits, **dispunits} 
-    out = {}
-    units = {}
-    lists = {**aves, **disps}
-    for key,val in lists.items():
-        convertValue(key, val, ucombine, pxpmm, units, out)
+        if 'lines' in self.kwargs:
+            lines = self.kwargs['lines']
+        else:
+            lines = [f'l{i}{s}{s2}' for i in range(4) for s in ['w', 'd'] for s2 in ['', 'o']]
+        self.measure(lines, horizDisturbMeasure)
 
-    out = {**mr, **out}
-    units = {**mu, **units}
-
-    plainExpDict(fn, out, units=units)
     
-    return out,units
+    def summarize(self) -> Tuple[dict,dict]:
+        '''summarize measurements in the folder and export table'''
+        errorRet = {},{}
+        if not 'disturbHoriz' in os.path.basename(self.folder):
+            return errorRet
+        
+        r = self.summaryHeader('horiz')
+        if r==0:
+            return self.summary, self.summaryUnits
+        elif r==2:
+            return errorRet
 
+        # find changes between observations
+        aves = {}
+        aveunits = {}
+        for num in range(4):
+            wodf = self.df[self.df.line==f'HOh_l{num}wo']
+            dodf = self.df[self.df.line==f'HOh_l{num}do']
+            if len(wodf)==1 and len(dodf)==1:
+                wo = wodf.iloc[0]
+                do = dodf.iloc[0]
+                for s in ['segments', 'roughness']:
+                    try:
+                        addValue(aves, aveunits,f'delta_{s}', difference(do,wo,s), self.du[s])
+                    except:
+                        pass
+                for s in ['totlen', 'meanT']:
+                    try:
+                        addValue(aves, aveunits,f'delta_{s}_n', difference(do,wo,s)/wo[s], '')
+                    except:
+                        pass
+                for s in ['yc']:
+                    try:
+                        addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/self.pxpmm/self.pv.dEst, 'dEst')
+                    except ValueError:
+                        pass
+
+        # find displacements
+        disps = {}
+        dispunits = {}
+        dlist = ['dy0l', 'dy0r', 'dy0lr', 'space_b']
+        for num in range(4):
+            wdf = self.df[self.df.line==f'HOh_l{num}w']
+            ddf = self.df[self.df.line==f'HOh_l{num}d']
+            for s in dlist:
+                for vdf in [wdf,ddf]:
+                    if len(vdf)>0:
+                        v = vdf.iloc[0]
+                        if hasattr(v, s):
+                            sii = str(v.line)[-1]
+                            si = f'{sii}_{s}'
+                            if not si in ['w_dy0r', 'w_dy0lr', 'w_space_b']:
+                                val = v[s]/self.pxpmm/self.pv.dEst
+                                addValue(disps, dispunits, si, val, 'dEst')
+
+        ucombine = {**aveunits, **dispunits} 
+        lists = {**aves, **disps}
+        self.convertValuesAndExport(ucombine, lists)
+        return self.summary, self.summaryUnits
+    
+def horizDisturbMeasureSummarize(topFolder:str, overwrite:bool=False, **kwargs) -> Tuple[dict, dict]:
+    return horizDisturbMeasures(topFolder, overwrite=overwrite, **kwargs).summarize()
 
 def horizDisturbSummariesRecursive(topFolder:str, overwrite:bool=False, **kwargs) -> None:
     '''recursively go through folders'''
-    out = []
-    units = {}
-    if not fh.isPrintFolder(topFolder):
-        for f in os.listdir(topFolder):
-            summaries, u = horizDisturbSummariesRecursive(os.path.join(topFolder, f), overwrite=overwrite, **kwargs)
-            if len(u)>len(units):
-                units = u
-            out = out + summaries
-        return out, units
-    try:
-        summary, units = horizDisturbSummary(topFolder, overwrite=overwrite, **kwargs)
-    except Exception as e:
-        print(f'Error in {topFolder}: {e}')
-    else:
-        if len(summary)>0:
-            return [summary], units
-        else:
-            return [], {}
+    s = summaries(topFolder, horizDisturbMeasureSummarize, overwrite=overwrite, **kwargs)
+    return s.out, s.units
     
-
-def horizDisturbSummaries(folder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
+def horizDisturbSummaries(topFolder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
     '''measure all cross-sections in the folder and export table'''
-    out, units  = horizDisturbSummariesRecursive(folder, overwrite=overwrite, **kwargs)
-    df = pd.DataFrame(out)
-    fn = os.path.join(exportFolder, 'horizDisturbSummaries.csv')
-    plainExp(fn, df, units, index=False)
+    s = summaries(topFolder, horizDisturbMeasureSummarize, overwrite=overwrite, **kwargs)
+    s.export(os.path.join(exportFolder, 'horizDisturbSummaries.csv'))
     

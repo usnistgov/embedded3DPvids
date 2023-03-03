@@ -463,7 +463,11 @@ def allIn(slist:List[str], s:str) -> bool:
 def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[], **kwargs) -> List[str]:
     '''Get a list of bottom level print folders in the top folder'''
     if isPrintFolder(topFolder):
-        if allIn(tags, topFolder) and anyIn(someIn, topFolder):
+        if len(someIn)>0:
+            anyin = anyIn(someIn, topFolder)
+        else:
+            anyin = True
+        if allIn(tags, topFolder) and anyin:
             folders = [topFolder]
         else:
             folders = []
@@ -498,6 +502,41 @@ def singleDisturb2FileDict() -> str:
 def singleDisturbName(file:str) -> str:
     '''get the short name, given the sbp file name'''
     d = singleDisturb2FileDict()
+    for key,val in d.items():
+        if val in file:
+            return key
+    raise ValueError(f'Unexpected sbp file name: {file}')
+    
+#--------------
+
+def SDTSBPfiles() -> dict:
+    '''get a dictionary of singleDoubleTriple sbp file names and their shortcuts'''
+    files = {'disturbHoriz':'DH', 'disturbVert':'DV', 'disturbXS':'DX'}
+    return files
+
+def SDTSt() -> list:
+    '''get a list of disturbed line object types'''
+    return [f'{s}{i}' for s in ['HIx', 'HOx', 'HOh', 'V'] for i in [1,2,3]]
+
+def SDTSBPPicfiles() -> dict:
+    '''get a dictionary of triple line pic file names and their shortcuts'''
+    tls = SDTSBPfiles()
+    files = dict([[f'{key}',f'{val}P'] for key,val in tls.items()])
+    return files
+
+def SDT2FileDict() -> str:
+    '''get the corresponding object name and sbp file'''
+    d = {}
+    for i in [1,2,3]:
+        d[f'HIx{i}'] = f'disturbXS2_{i}_+y'
+        d[f'HOx{i}'] = f'disturbXS2_{i}_+z'
+        d[f'HOh{i}'] = f'disturbHoriz3_{i}'
+        d[f'V{i}'] = f'disturbVert2_{i}'
+    return d
+    
+def SDTName(file:str) -> str:
+    '''get the short name, given the sbp file name'''
+    d = SDT2FileDict()
     for key,val in d.items():
         if val in file:
             return key
@@ -593,7 +632,7 @@ def isStitch(file:str) ->bool:
         return False
     if '_vid_' in file or '_vstill_' in file:
         return False
-    for st in (singleLineStN()+tripleLineSt()+singleDisturbSt()):
+    for st in (singleLineStN()+tripleLineSt()+singleDisturbSt()+SDTSt()):
         if f'_{st}_' in file:
             return True
     
@@ -614,18 +653,29 @@ def splitName(fname:str) -> List[str]:
     while spl[0][-1].isnumeric():
         spl[0] = spl[0][:-1]
     return spl
-    
 
-def isStill(file:str) -> bool:
-    '''determine if the file is an unstitched image'''
+def splitFileName(file:str) -> str:
     exspl = os.path.splitext(os.path.basename(file))
     ext = exspl[-1]
     fname = exspl[0]
     spl = splitName(fname)
-    if spl[0] in tripleLineSBPPicfiles() or spl[0] in singleLineSBPPicfiles():
-        return True
-    else:
-        return False
+    return spl
+
+def isTripleLineStill(file):
+    spl = splitFileName(file)
+    return spl[0] in tripleLineSBPPicfiles()
+    
+def isSingleLineStill(file):
+    spl = splitFileName(file)
+    return spl[0] in singleLineSBPPicfiles()
+
+def isSDTStill(file):
+    spl = splitFileName(file)
+    return spl[0] in SDTSBPPicfiles()
+
+def isStill(file:str) -> bool:
+    '''determine if the file is an unstitched image'''
+    return isTripleLineStill(file) or isSingleLineStill(file) or isSDTStill(file)
     
 #------------    
 
@@ -774,20 +824,40 @@ class printFileDict:
         self.progPos = []
         self.printType = ''
         
+    def getPrintType(self) -> None:
+        '''get the print type from the folder hierarchy'''
+        f = os.path.basename(self.levels.printTypeFolder)
+        if f=='singleDisturb':
+            self.printType='singleDisturb'
+        elif f=='singleLines':
+            self.printType='singleLine'
+        elif f=='tripleLines':
+            self.printType='tripleLine'
+        elif f=='singleDoubleTriple':
+            self.printType='SDT'
+        else:
+            logging.error('Could not determine print type from file hierarchy')
+            bn = re.split('_',os.path.basename(self.printFolder))[0]
+            if bn in tripleLineSBPfiles():
+                self.printType='tripleLine'
+            elif bn in singleLineSBPfiles():
+                self.printType='singleLine'
+            elif bn in SDTSBPfiles():
+                self.printType = 'SDT'
+            elif bn in singleDisturbSBPfiles():
+                self.printType = 'singleDisturb'
+            
+            
+        
     def sortFiles(self, folder:str):
         '''sort and label files in the given folder'''
         
         tls = tripleLineSBPfiles()
         sls = singleLineSBPfiles()
         sds = singleDisturbSBPfiles()
+        sdt = SDTSBPfiles()
+        self.getPrintType()
         
-        bn = re.split('_',os.path.basename(folder))[0]
-        if bn in tls:
-            self.printType='tripleLine'
-        elif bn in sls:
-            self.printType='singleLine'
-        elif bn in sds:
-            self.printType = 'singleDisturb'
 
         for f1 in os.listdir(folder):
             ffull = os.path.join(folder, f1)
@@ -801,15 +871,14 @@ class printFileDict:
                 spl = splitName(fname)
                 if ext=='.avi':
                     if 'Basler camera' in fname:
-                        if spl[0] in tls:
-                            self.printType='tripleLine'
+                        if spl[0] in sdt:
+                            self.vid.append(ffull)
+                        elif spl[0] in tls:
                             self.vid.append(ffull)
                         elif spl[0] in sls:
-                            self.printType='singleLine'
                             self.vid.append(ffull)
                         elif spl[0] in sds:
-                            self.printType='singleDisturb'
-                            self.vid.append(ffull)
+                            self.vid.append(ffull)                            
                         else:
                             self.vid_unknown.append(ffull)
                     else:
@@ -849,10 +918,6 @@ class printFileDict:
                     elif isStill(f1):
                         if 'Basler camera' in fname:
                             # raw still
-                            if spl[0] in singleLineSBPPicfiles():
-                                self.printType='singleLine'
-                            elif spl[0] in tripleLineSBPPicfiles():
-                                self.printType='tripleLine'
                             self.still.append(ffull)
                         else: 
                             self.still_unknown.append(ffull)
@@ -1051,6 +1116,30 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
             sortRecursive(os.path.join(levels.printTypeFolder, f), debug=debug)
     elif levels.currentLevel in ['sampleFolder', 'subFolder', 'sbpFolder']:
         labelAndSort(folder, debug=debug)
+        
+def putStillsAway(folder:str, debug:bool=False) -> None:
+    '''identify the stills and put them in a folder'''
+    if not os.path.exists(folder):
+        return
+    if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
+        return
+    levels = labelLevels(folder)
+    if levels.currentLevel in ['sampleTypeFolder', 'printTypeFolder', 'sampleFolder', 'subFolder']:
+        for f in os.listdir(folder):
+            putStillsAway(os.path.join(folder, f), debug=debug) # sort the folders inside sampleTypeFolder
+    elif levels.currentLevel in ['sbpFolder']:    
+        pfd = printFileDict(folder)
+        snap = os.path.join(folder, 'raw')
+        if not os.path.exists(snap):
+            os.mkdir(snap)
+        if debug:
+            print('old names: ')
+            print(pfd.still_unknown)
+            print('new names: ')
+            print([os.path.join(snap, os.path.basename(file)) for file in pfd.still_unknown])
+        else:
+            for file in pfd.still_unknown:
+                os.rename(file, os.path.join(snap, os.path.basename(file)))
 
             
 #------------------------------------------------------

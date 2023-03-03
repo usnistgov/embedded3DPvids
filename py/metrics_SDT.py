@@ -52,13 +52,13 @@ def measureFolders(topFolder:str, overwrite:bool=False, horiz:bool=True, xs:bool
     try:
         if 'Horiz' in topFolder:
             if horiz:
-                horizDisturbMeasures(topFolder, overwrite=overwrite, **kwargs)
+                horizSDTMeasures(topFolder, overwrite=overwrite, **kwargs)
         elif 'XS' in topFolder:
             if xs:
-                xsDisturbMeasures(topFolder, overwrite=overwrite, **kwargs)
+                xsSDTMeasures(topFolder, overwrite=overwrite, **kwargs)
         elif 'Vert' in topFolder:
             if vert:
-                vertDisturbMeasures(topFolder, overwrite=overwrite, **kwargs)
+                vertSDTMeasures(topFolder, overwrite=overwrite, **kwargs)
     except Exception as e:
         errorFolders.append(topFolder)
     return errorFolders

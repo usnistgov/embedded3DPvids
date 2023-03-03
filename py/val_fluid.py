@@ -36,6 +36,7 @@ class fluidVals:
         self.days = 1
         self.rheModifier = 'fumed silica'
         self.surfactant = ''
+        self.surfactantWt = ''
         self.dye = ''
         if fluid[0]=='M':
             self.var = 'w% silica'
@@ -45,6 +46,7 @@ class fluidVals:
                 self.dye = 'red'
             if fluid[-1]=='S':
                 self.surfactant = 'Span 20'
+                self.surfactantWt = 0.5
                 self.val = self.val[:-1]
         elif fluid[:4]=='PDMS':
             self.var = 'w% silica'
@@ -57,6 +59,7 @@ class fluidVals:
             self.val = fluid[5:]
             if fluid[-1]=='S':
                 self.surfactant = 'Span 20'
+                self.surfactantWt = 0.5
                 self.val = self.val[:-1]
         elif fluid[:3]=='PEG':
             if ftype=='ink':
@@ -64,6 +67,24 @@ class fluidVals:
             self.var = 'w% silica'
             self.val = fluid[3:]
             self.base = 'PEGDA_40'
+        elif fluid[0:2]=='SO':
+            self.var = 'w% silica'
+            self.base = 'silicone oil'
+            self.rheModifier = 'Aerosil R812S'
+            spl = re.split('-', fluid)
+            self.val = spl[0][2:]
+            self.dye = 'red'
+            if len(spl)>1:
+                if spl[1]=='S20':
+                    self.surfactant = 'Span 20'
+                elif spl[1]=='S85':
+                    self.surfactant = 'Span 85'
+                else:
+                    raise ValueError(f'Unexpected surfactant in {fluid}')
+                if len(spl)>2:
+                    self.surfactantWt=float(spl[2])
+                else:
+                    raise ValueError(f'Missing surfactant wt in {fluid}')
         else:
             self.var = 'w% Laponite RD'
             self.rheModifier = 'Laponite RD'
@@ -79,7 +100,10 @@ class fluidVals:
         except:
             logging.warning(f'Failed to convert fluid value to float: {fluid}, {self.val}')
         if len(self.surfactant)>0:
-            self.type = self.base + '_'+self.surfactant
+            if self.base=='silicone oil':
+                self.type = f'{self.base}_{self.surfactant}_{self.surfactantWt}'
+            else:
+                self.type = f'{self.base}_{self.surfactant}'
         else:
             self.type = self.base
         if properties:
@@ -91,32 +115,42 @@ class fluidVals:
         
     def metarow(self, tag:s='') -> Tuple[dict,dict]:
         '''row containing metadata'''
-        mlist = ['shortname', 'days', 'rheModifier', 'surfactant' ,'dye', 'var', 'val', 'base', 'type']
+        mlist = ['shortname', 'days', 'rheModifier', 'surfactant', 'surfactantWt', 'dye', 'var', 'val', 'base', 'type']
         meta = [[f'{tag}{i}',getattr(self,i)] for i in mlist]  # metadata
         munits = [[f'{tag}{i}', ''] for i in mlist]            # metadata units
         
-        rhelist = ['tau0', 'eta0']             
-        rhe = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in rhelist]        # rheology data
-        rheunits = [[f'{tag}{i}', self.rheUnits[i]] for i in rhelist] # rheology units
-        clist = self.constUnits.keys()
-        const = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in clist]           # constants data
-        constunits = [[f'{tag}{i}', self.constUnits[i]] for i in clist]  # constants units
+        if hasattr(self, 'rheUnits'):
+            rhelist = ['tau0', 'eta0']             
+            rhe = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in rhelist]        # rheology data
+            rheunits = [[f'{tag}{i}', self.rheUnits[i]] for i in rhelist] # rheology units
+        else:
+            rhe = []
+            rheunits = []
+        if hasattr(self, 'constUnits'):
+            clist = self.constUnits.keys()
+            const = [[f'{tag}{i}',getattr(self,i) if hasattr(self, i) else ''] for i in clist]           # constants data
+            constunits = [[f'{tag}{i}', self.constUnits[i]] for i in clist]  # constants units
+        else:
+            const = []
+            constunits = []
         out = dict(meta+rhe+const)
         units = dict(munits+rheunits+constunits)
         units[f'{tag}val'] = self.var
         return out,units
-            
-    def findRhe(self) -> dict:
-        '''find Herschel-Bulkley fit from file'''
-        if not os.path.exists(cfg.path.rheTable):
-            logging.error(f'No rheology table found: {cfg.path.rheTable}')
+    
+    def findRheTable(self, table:str) -> int:
+        if not os.path.exists(table):
+            logging.error(f'No rheology table found: {table}')
             return
-        rhe = pd.read_excel(cfg.path.rheTable)
+        rhe = pd.read_excel(table)
         rhe = rhe.fillna('') 
-        entry = rhe[(rhe.base==self.base)&(rhe.rheModifier==self.rheModifier)&(rhe.rheWt==self.val)&(rhe.surfactant==self.surfactant)&(rhe.dye==self.dye)&(rhe.days==self.days)]
+        criterion = rhe.rheWt==self.val
+        for s in ['base', 'rheModifier', 'surfactant', 'surfactantWt', 'dye', 'days']:
+            if s in rhe:
+                criterion = criterion&(rhe[s]==getattr(self, s))
+        entry = rhe[criterion]
         if len(entry)==0:
-            logging.error(f'No rheology fit found for fluid {self.shortname}')
-            return
+            return 1
         if len(entry)>1:
             print(entry)
             logging.error(f'Multiple rheology fits found for fluid {self.shortname}')
@@ -126,24 +160,45 @@ class fluidVals:
         self.n = entry['y2_n']
         self.eta0 = entry['y2_eta0'] # these values are for Pa.s, vs. frequency in 1/s
         self.rheUnits = {'tau0':'Pa', 'k':'Pa*s^n', 'n':'','eta0':'Pa*s'}
+        return 0
+            
+    def findRhe(self) -> dict:
+        '''find Herschel-Bulkley fit from file'''
+        for table in cfg.path.rheTable.values():
+            out = self.findRheTable(table)
+            if out==0:
+                return
+        logging.error(f'No rheology fit found for fluid {self.shortname}')
         return
+    
+    def findDensityTable(self, table:str) -> int:
+        if not os.path.exists(table):
+            logging.error(f'No density table found: {table}')
+            return 1
+        tab = pd.read_excel(table)
+        tab = tab.fillna('') 
+        
+        criterion = tab.rheWt==self.val
+        for s in ['base', 'rheModifier', 'surfactant', 'surfactantWt']:
+            if s in tab:
+                criterion = criterion&(tab[s]==getattr(self, s))
+        entry = tab[criterion]
+        if len(entry)==0:
+            return 1
+        if len(entry)>1:
+            print(entry)
+            logging.error(f'Multiple rheology fits found for fluid {self.shortname}')
+        entry = entry.iloc[0]
+        self.density = entry['density'] # g/mL
+        return 0
     
     def findDensity(self) -> dict:
         '''find density from file'''
-        if not os.path.exists(cfg.path.densityTable):
-            logging.error(f'No rheology table found: {cfg.path.densityTable}')
-            return
-        tab = pd.read_excel(cfg.path.densityTable)
-        tab = tab.fillna('') 
-        entry = tab[(tab.base==self.base)&(tab.rheModifier==self.rheModifier)&(tab.rheWt==self.val)]
-        if len(entry)==0:
-            logging.error(f'No density fit found for fluid {self.shortname}')
-            return
-        if len(entry)>1:
-            print(entry)
-            logging.error(f'Multiple density fits found for fluid {self.shortname}')
-        entry = entry.iloc[0]
-        self.density = entry['density'] # g/mL
+        for table in cfg.path.densityTable.values():
+            out = self.findDensityTable(table)
+            if out==0:
+                return
+        logging.error(f'No density fit found for fluid {self.shortname}')
         return
     
     def visc(self, gdot:float) -> float:

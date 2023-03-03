@@ -227,146 +227,6 @@ def removeChannel(im:np.array, channel:int) -> np.array:
     red[:,:,channel] = np.zeros(shape=(red[:,:,channel]).shape, dtype=np.uint8)
     return red
 
-def threshes(img:np.array, gray:np.array, removeVert:bool, attempt:int, botthresh:int=150, topthresh:int=200, whiteval:int=80, diag:int=0, **kwargs) -> np.array:
-    '''threshold the grayscale image
-    img is the original image
-    gray is the grayscale conversion of the image
-    removeVert=True to remove vertical lines from the thresholding. useful for horizontal images where stitching leaves edges
-    attempt number chooses different strategies for thresholding ink
-    botthresh = lower threshold for thresholding
-    topthresh is the initial threshold value
-    whiteval is the pixel intensity below which everything can be considered white
-    increase diag to see more diagnostic messages
-    '''
-    if attempt==0:
-#         ret, thresh = cv.threshold(gray,180,255,cv.THRESH_BINARY_INV)
-        # just threshold on intensity
-        crit = topthresh
-        impx = np.product(gray.shape)
-        allwhite = impx*whiteval
-        prod = allwhite
-        while prod>=allwhite and crit>50: # segmentation included too much
-            ret, thresh1 = cv.threshold(gray,crit,255,cv.THRESH_BINARY_INV)
-            ret, thresh2 = cv.threshold(gray,crit+10,255,cv.THRESH_BINARY_INV)
-            thresh = np.ones(shape=thresh2.shape, dtype=np.uint8)
-            thresh[:600,:] = thresh2[:600,:] # use higher threshold for top 2 lines
-            thresh[600:,:] = thresh1[600:,:] # use lower threshold for bottom line
-            prod = np.sum(np.sum(thresh))
-            crit = crit-10
-#         ret, thresh = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-        if diag>0:
-            logging.info(f'Threshold: {crit+10}, product: {prod/impx}, white:{whiteval}')
-    elif attempt==1:
-        # adaptive threshold, for local contrast points
-        thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,11,2)
-        filled = fillComponents(thresh)
-        thresh = cv.add(255-thresh,filled)
-    elif attempt==2:
-        # threshold based on difference between red and blue channel
-        b = img[:,:,2]
-        g = img[:,:,1]
-        r = img[:,:,0]
-        gray2 = cv.subtract(r,b)
-        gray2 = cv.medianBlur(gray2, 5)
-        ret, thresh = cv.threshold(gray2,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-        ret, background = cv.threshold(r,0,255, cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
-        background = 255-background
-        thresh = cv.subtract(background, thresh)
-    elif attempt==3:
-        # adaptive threshold, for local contrast points
-        thresh = cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,21,2)
-        filled = fillComponents(thresh)
-        thresh2 = cv.add(255-thresh,filled)
-
-        # remove verticals
-        if removeVert:
-            thresh = cv.subtract(thresh, verticalFilter(gray))
-            ret, topbot = cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU) 
-            thresh = cv.subtract(thresh,topbot)
-    elif attempt==4:
-        thresh0 = threshes(img, gray, removeVert, 0)
-        thresh2 = threshes(img, gray, removeVert, 2)
-        thresh = cv.bitwise_or(thresh0, thresh2)
-        thresh = cv.medianBlur(thresh,3)
-    thresh = closeVerticalTop(thresh, **kwargs)
-    return thresh
-
-def segmentInterfaces(img:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, eraseMaskSpill:bool=False, **kwargs) -> np.array:
-    '''from a color image, segment out the ink, and label each distinct fluid segment. 
-    acrit is the minimum component size for an ink segment
-    removeVert=True to remove vertical lines from the thresholded image
-    removeBorder=True to remove border components from the thresholded image'''
-    if len(img.shape)==3:
-        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
-    else:
-        gray = img.copy()
-    gray = cv.medianBlur(gray, 5)
-    attempt = 0
-    finalAt = attempt
-    while attempt<1:
-        finalAt = attempt
-        thresh = threshes(img, gray, removeVert, attempt, diag=diag, **kwargs)
-        if 'nozData' in kwargs and 'crops' in kwargs:
-            nd = kwargs['nozData']
-            thresh = nd.maskNozzle(thresh, ave=False, invert=False, crops=kwargs['crops'])   # add the nozzle back in for filling
-            h,w = thresh.shape
-            thresh[0, :] = 0   # clear out the top row
-            thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
-            thresh[:int(h/4),-1] = 0
-        
-        if removeBorder:
-            filled = removeBorderAndFill(thresh)    
-        else:
-            filled = fillComponents(thresh)
-        if 'nozData' in kwargs:
-            filled = nd.maskNozzle(filled, ave=False, invert=True, crops=kwargs['crops'])  # remove the nozzle again
-            if eraseMaskSpill:
-                filled = nd.eraseSpillover(filled, crops=kwargs['crops'])
-        labels, markers, ret = filterMarkers(filled, acrit=acrit)
-        if ret==0:
-            attempt = 6
-        else:
-            attempt = attempt+1
-        if diag>0:
-            imshow(img, gray, thresh, labels, maxwidth=13)
-            plt.title(f'attempt:{attempt}')
-    finalAt = attempt
-    return labels, markers, finalAt
-
-
-def filterMarkers(filled:np.array, acrit:float=2500) -> Tuple[np.array, Tuple]:
-    '''get connected components and filter by area, then create a new binary image without small components'''
-    markers = cv.connectedComponentsWithStats(filled, 8, cv.CV_32S)
-    labels = markers[1]
-    if markers[0]==0:
-        # no components. redo segmentation
-        return labels, markers, 1
-    # we collected points
-    boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
-
-    if len(boxes)==1 or max(boxes.loc[1:,'area'])<acrit:
-        # poor segmentation. redo with adaptive thresholding.
-        return labels, markers, 1
-
-    boxes = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w', 'h', 'area'])
-    for i in list(boxes[boxes.area<acrit].index):
-        labels[labels==i] = 0
-    markers = markers[0], labels.copy(), markers[2], markers[3]
-    labels[labels>0]=255
-    labels = labels.astype(np.uint8)
-    return labels, markers, 0
-
-
-
-def markers2df(markers:Tuple) -> pd.DataFrame:
-    '''convert the labeled segments to a dataframe'''
-    df = pd.DataFrame(markers[2], columns=['x0', 'y0', 'w','h','a'])
-    df2 = pd.DataFrame(markers[3], columns=['xc','yc'])
-    df = pd.concat([df, df2], axis=1) 
-        # combine markers into dataframe w/ label stats
-    df = df[df.a<df.a.max()] 
-        # remove largest element, which is background
-    return df
 
 def normalize(im:np.array) -> np.array:
     '''normalize the image'''
@@ -384,18 +244,6 @@ def white_balance(img:np.array) -> np.array:
     result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
     result = cv.cvtColor(result, cv.COLOR_LAB2BGR)
     return result
-
-def reconstructMask(markers:Tuple, df:pd.DataFrame) -> np.array:
-    '''construct a binary mask with all components labeled in the dataframe'''
-    masks = [(markers[1] == i).astype("uint8") * 255 for i,row in df.iterrows()]
-    if len(masks)>0:
-        componentMask = masks[0]
-        if len(masks)>1:
-            for mask in masks[1:]:
-                componentMask = cv.add(componentMask, mask)
-        return componentMask
-    else:
-        return np.zeros(markers[1].shape).astype(np.uint8)
 
 def removeDust(im:np.array, acrit:int=1000, diag:int=0) -> np.array:
     '''remove dust from the image'''
@@ -428,4 +276,38 @@ def blackenRed(im:np.array) -> np.array:
     badParts = cv.bitwise_not(im2,im2,mask = thresh)
     frameMasked = cv.subtract(im, badParts)
     return frameMasked
+
+
     
+def relativeCrop(progDims, nozData, tag:str, crops0:dict) -> dict:
+    '''get the crop dictionary as y0,yf,x0,xf given a line to target'''
+    if tag in crops0:
+        crops = crops0[tag]
+    else:
+        crops = crops0
+    out = {}
+    if 'relative' in crops and 'w' in crops and 'h' in crops and 'wc' in crops and 'hc' in crops:
+        # coordinates relative to the nozzle, centered on the line given by the tag
+        # w and h are total width and height, and wc and hc are position of center within that space
+        rc = progDims.relativeCoords(tag)   # shift in mm
+        c = nozData.absoluteCoords(rc)   # absolute coords of center in px from bottom left
+        out = {}
+        for s1 in [['x', 'w'], ['y', 'h']]:
+            v = s1[0]
+            d = s1[1]
+            out[f'{v}0']=c[v]-crops[f'{d}c']
+            out[f'{v}f']=c[v]-crops[f'{d}c']+crops[d]
+    else:  
+        for s1 in [['y','h'], ['x', 'w']]:
+            v = s1[0]
+            d = s1[1]
+            if f'{v}c' in crops and d in crops:
+                # centered coordinates
+                out[f'{v}0'] = crops[f'{v}c']-crops[d]/2
+                out[f'{v}f'] = crops[f'{v}c']+crops[d]/2
+            else:
+                # start/end coordinates
+                for s in [f'{v}0', f'{v}f']:
+                    if s in crops:
+                        out[s] = crops[s]
+    return out

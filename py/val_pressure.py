@@ -90,10 +90,7 @@ class pressureVals:
         
     def calculateSpeed(self, p:float) -> float:
         '''calculate speed from pressure'''
-        if (self.caliba==0 or self.calibb==0 or self.calibc==0):
-            return 0
-        else:
-            return self.caliba*p**2+self.calibb*p+self.calibc
+        return self.caliba*p**2+self.calibb*p+self.calibc
         
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''

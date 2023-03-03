@@ -68,7 +68,7 @@ class printVals:
         self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties)
         self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties)
         
-        if self.pfd.printType in ['tripleLine', 'singleDisturb']:
+        if self.pfd.printType in ['tripleLine', 'singleDisturb', 'SDT']:
             split = re.split('_', os.path.basename(self.levels.sbpFolder))
             if len(split)>1:
                 self.spacing = float(split[-1])
@@ -192,13 +192,30 @@ class printVals:
     
     def tension(self) -> float:
         '''pull the surface tension from a table'''
-        if not os.path.exists(cfg.path.sigmaTable):
-            logging.error(f'No sigma table found: {cfg.path.sigmaTable}')
+        if self.pfd.printType in ['singleLine', 'singleDisturb']:
+            table = cfg.path.sigmaTable.single
+        else:
+            table = cfg.path.sigmaTable.SDT
+        if not os.path.exists(table):
+            logging.error(f'No sigma table found: {table}')
             return
-        sigt = pd.read_excel(cfg.path.sigmaTable)
+        ext = os.path.splitext(table)[-1]
+        if ext=='.xlsx':
+            sigt = pd.read_excel(table)
+        elif ext=='.csv':
+            sigt = pd.read_csv(table)
+        else:
+            print(ext)
+            raise ValueError(f'Could not read sigma table: {table}')
         sigt = sigt.fillna('') 
-        entry = sigt[(sigt.ink_base==self.ink.base)&(sigt.sup_base==self.sup.base)&(sigt.ink_surfactant==self.ink.surfactant)&(sigt.sup_surfactant==self.sup.surfactant)]
+        criterion = sigt.ink_base==self.ink.base
+        for s in ['sup_base', 'ink_surfactant', 'ink_surfactantWt', 'sup_surfactant']:
+            if s in sigt:
+                spl = re.split('_', s)
+                criterion = criterion&(sigt[s]==getattr(getattr(self, spl[0]), spl[1]))
+        entry = sigt[criterion]
         if len(entry)==0:
+            print(sigt)
             logging.error(f'No surface tension fit found for fluid {self.bn}')
             return
         if len(entry)>1:
@@ -210,7 +227,11 @@ class printVals:
     
     def vidFile(self) -> str:
         '''get the path of the video file taken during the print'''
-        return self.pfd.vidFile()        
+        return self.pfd.vidFile()   
+    
+    
+            
+
     
     #--------------------------------------------------
     
@@ -392,7 +413,6 @@ class pvTriple(printVals):
         self.exportSummary(out, outunits)
         return out, outunits
     
-    
-    
+
 
         

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single line XS'''
+'''Functions for collecting data from stills of single line xs'''
 
 # external packages
 import os, sys
@@ -13,6 +13,7 @@ import numpy as np
 import cv2 as cv
 import shutil
 import subprocess
+import copy
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -21,6 +22,7 @@ from pic_stitch_bas import stitchSorter
 from file_handling import isSubFolder, fileScale
 import im_crop as vc
 import im_morph as vm
+from im_segment import *
 from tools.imshow import imshow
 from tools.plainIm import *
 from val_print import *
@@ -39,309 +41,369 @@ pd.set_option("display.precision", 2)
 
 #----------------------------------------------
 
-#-------------------------------
+class xsSegment(metricSegment):
+    '''collects data about XS segments'''
+    
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        
+        
+    def filterXSComponents(self) -> None:
+        '''filter out cross-section components'''
+        errorRet = [], []
+        h,w = self.segmenter.labelsBW.shape[:2]
+        xest = w/2 # estimated x
+        if h>600:
+            yest = h-300
+            dycrit = 200
+        else:
+            yest = h/2
+            dycrit = h/2
+        if len(self.segmenter.df)>1:
+            secondLargest = 2*list(self.segmenter.df.a.nlargest(2))[1]
+        seg1 = copy.deepcopy(self.segmenter)    # make a copy of the segmenter in case we need to roll back changes  
+        self.segmenter.eraseBorderComponents(10)  # remove anything too close to the border
+        goodpts = (abs(self.segmenter.df.xc-xest)<100)&(abs(self.segmenter.df.yc-yest)<dycrit)
+        self.segmenter.selectComponents(goodpts)
+            # filter by location relative to expectation and area
+        if not self.segmenter.success:
+            self.segmenter = seg1
+            self.segmenter.selectComponents(self.segmenter.df.a>1000)   # just filter by area
+        if len(self.segmenter.df)>1 and self.segmenter.df.a.max() < secondLargest:
+            # largest object not much larger than 2nd largest
+            self.segmenter.success = False
+        
+    
+    def dims(self) -> None:
+        '''get the dimensions of the segments'''
+        roughness = getRoughness(self.segmenter.labelsBW, diag=max(0,self.diag-1))
+        m = self.segmenter.largestObject() # select largest object
+        self.x0 = int(m['x0'])
+        self.y0 = int(m['y0'])
+        self.w = int(m['w'])
+        self.h = int(m['h'])
+        area = int(m['a'])
+        self.xc = m['xc']
+        self.yc = m['yc']
+        aspect = self.h/self.w # height/width
+        boxcx = self.x0+self.w/2 # x center of bounding box
+        boxcy = self.y0+self.h/2 # y center of bounding box
+        xshift = (self.xc-boxcx)/self.w
+        yshift = (self.yc-boxcy)/self.h
+        self.units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px'
+                  , 'w':'px', 'h':'px'
+                      , 'xc':'px', 'yc':'px', 'roughness':''} # where pixels are in original scale
+        self.stats = {'line':self.name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':area*self.scale**2
+                  , 'w':self.w*self.scale, 'h':self.h*self.scale
+                      , 'xc':self.xc*self.scale, 'yc':self.yc*self.scale, 'roughness':roughness}
 
-def filterXSComponents(markers:Tuple, im2:np.ndarray) -> pd.DataFrame:
-    '''filter out cross-section components'''
-    errorRet = [],[]
-    df = vm.markers2df(markers)
-    xest = im2.shape[1]/2 # estimated x
-    if im2.shape[0]>600:
-        yest = im2.shape[0]-300
-        dycrit = 200
-    else:
-        yest = im2.shape[0]/2
-        dycrit = im2.shape[0]/2
-    df2 = df.copy()
-    df2 = df2[(df2.x0>10)&(df2.y0>10)&(df2.x0+df2.w<im2.shape[1]-10)&(df2.y0+df2.h<im2.shape[0]-10)] 
-        # remove anything too close to the border
-    df2 = df[(abs(df.xc-xest)<100)&(abs(df.yc-yest)<dycrit)] 
-        # filter by location relative to expectation and area
-    if len(df2)==0:
-        df2 = df[(df.a>1000)] # if everything was filtered out, only filter by area
-        if len(df2)==0:
-            return errorRet
-    return df, df2
 
-
-def singleXSMeasure(im:np.array, im2:np.array, markers:Tuple, attempt:int, s:float, title:str, name:str, diag:bool=False, **kwargs) -> dict:
-    '''measure a single xs'''
-    errorRet = {}, {}
-    if markers[0]==1:
-        return errorRet
-    roughness = getRoughness(im2, diag=max(0,diag-1))
-    df, df2 = filterXSComponents(markers, im2)
-    if len(df2)>1 and df2.a.max() < 2*list(df.a.nlargest(2))[1]:
-        # largest object not much larger than 2nd largest
-        return errorRet
-    if len(df2)==0:
-        return errorRet
-    m = (df2[df2.a==df2.a.max()]).iloc[0] # select largest object
-    x0 = int(m['x0'])
-    y0 = int(m['y0'])
-    w = int(m['w'])
-    h = int(m['h'])
-    area = int(m['a'])
-    xc = m['xc']
-    yc = m['yc']
-    aspect = h/w # height/width
-    boxcx = x0+w/2 # x center of bounding box
-    boxcy = y0+h/2 # y center of bounding box
-    xshift = (xc-boxcx)/w
-    yshift = (yc-boxcy)/h
-
-    if diag:
+    def display(self, title:str='') -> None:
+        if self.diag==0:
+            return
         # show the image with annotated dimensions
-        im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
-        for j, imgi in enumerate([im]):
-            cv.rectangle(imgi, (x0,y0), (x0+w,y0+h), (0,0,255), 1)   # bounding box
-            cv.circle(imgi, (int(xc), int(yc)), 2, (0,0,255), 2)     # centroid
-            cv.circle(imgi, (x0+int(w/2),y0+int(h/2)), 2, (0,255,255), 2) # center of bounding box
-        imshow(im, im2)
-        plt.title(title)
-    units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'xc':'px', 'yc':'px', 'roughness':''} # where pixels are in original scale
-    retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':area*s**2, 'x0':x0*s, 'y0':y0*s, 'w':w*s, 'h':h*s, 'xc':xc*s, 'yc':yc*s, 'roughness':roughness}
-    return retval, units
+        im2 = cv.cvtColor(self.segmenter.labelsBW,cv.COLOR_GRAY2RGB)
+        imgi = self.im.copy()
+        cv.rectangle(imgi, (self.x0,self.y0), (self.x0+self.w,self.y0+self.h), (0,0,255), 1)   # bounding box
+        cv.circle(imgi, (int(self.xc), int(self.yc)), 2, (0,0,255), 2)     # centroid
+        cv.circle(imgi, (self.x0+int(self.w/2),self.y0+int(self.h/2)), 2, (0,255,255), 2) # center of bounding box
+        imshow(imgi, im2, self.statText())
+        if hasattr(self, 'title'):
+            plt.title(self.title)
+        
     
+    def singleMeasure(self) -> None:
+        '''measure a single cross section'''
+        self.filterXSComponents()
+        if not self.segmenter.success:
+            return 
+        self.dims()
+        self.display()
+        
+    def multiMeasure(self) -> None:
+        '''measure multiple cross sections'''
+        # find contours
+        contours = cv.findContours(self.segmenter.labelsBW,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+        self.cnt = np.vstack(contours[0])
+        self.hull = cv.convexHull(self.cnt)
 
-def xsMeasureIm(im:np.ndarray, s:float, title:str, name:str, acrit:int=100, diag:bool=False, **kwargs) -> Tuple[dict,dict]:
-    '''im is imported image. 
-    s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
-    title is the title to put on the plot
-    name is the name of the line, e.g. xs1
-    acrit is the minimum segment size to be considered a cross-section
-    '''
+        # measure components
+        hullArea = cv.contourArea(self.hull)
+        filledArea = self.segmenter.df.a.sum()
+        porosity = 1-(filledArea/hullArea)
+
+        perimeter = 0
+        for cnti in contours[0]:
+            perimeter+=cv.arcLength(cnti, True)
+        hullPerimeter = cv.arcLength(self.hull, True)
+        excessPerimeter = perimeter/hullPerimeter - 1
+
+        self.x0,self.y0,self.w,self.h = cv.boundingRect(self.hull)
+        aspect = self.h/self.w
+
+        M = cv.moments(self.cnt)
+        self.xc = int(M['m10']/M['m00'])
+        self.yc = int(M['m01']/M['m00'])
+        boxcx = self.x0+self.w/2 # x center of bounding box
+        boxcy = self.y0+self.h/2 # y center of bounding box
+        xshift = (self.xc-boxcx)/self.w
+        yshift = (self.yc-boxcy)/self.h
+
+        self.units = {'line':'', 'segments':'', 
+                      'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px'
+                      , 'x0':'px', 'y0':'px'
+                        , 'xc':'px', 'yc':'px'
+                         , 'w':'px', 'h':'px'
+                      , 'porosity':'', 'excessPerimeter':''} # where pixels are in original scale
+        self.stats = {'line':self.name, 'segments':len(self.segmenter.df)
+                      , 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':filledArea*self.scale**2
+                      , 'x0':self.x0*self.scale, 'y0':self.y0*self.scale
+                      , 'xc':self.xc*self.scale, 'yc':self.yc*self.scale
+                     , 'w':self.w*self.scale, 'h':self.h*self.scale
+                      , 'porosity':porosity, 'excessPerimeter':excessPerimeter}
+        
+        
+
+class xsSegmentSingle(xsSegment):
+    '''collects data about single line XS segments'''
     
-    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
-    return singleXSMeasure(im, im2, markers, attempt, s, title, name, diag=diag)
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
 
-def xsMeasure(file:str, diag:bool=False) -> Tuple[dict,dict]:
-    '''measure cross-section'''
-    name = lineName(file, 'xs')
-    im = cv.imread(file)
-    if 'I_M' in file or 'I_PD' in file:
-        im = vc.imcrop(im, 10)
-    # label connected components
-    s = 1/fileScale(file)
-    title = os.path.basename(file)
-    im = vm.normalize(im)
-    return xsMeasureIm(im, s, title, name, diag=diag)
+    def xsSegment() -> None:
+        '''im is imported image. 
+        s is is the scaling of the stitched image compared to the raw images, e.g. 0.33 
+        title is the title to put on the plot
+        name is the name of the line, e.g. xs1
+        acrit is the minimum segment size to be considered a cross-section
+        '''
+        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1))
+        if not self.segmenter.success:
+            return
+        self.singleMeasure()
+    
+    def measure(self) -> None:
+        '''import image, filter, and measure cross-section'''
+        self.name = self.lineName('xs')
+        if 'I_M' in self.file or 'I_PD' in self.file:
+            self.im = vc.imcrop(self.im, 10)
+        # label connected components
+        self.title = os.path.basename(self.file)
+        self.im = vm.normalize(self.im)
+        self.xsSegment()
 
 #--------
 
 
-
-def xs3Measure(file:str, acrit:int=100, diag:int=0, **kwargs) -> Tuple[dict,dict]:
-    '''measure cross-section of 3 lines'''
-    errorRet = {},{}
-    spl = re.split('xs', os.path.basename(file))
-    name = re.split('_', spl[0])[-1] + 'xs' + re.split('_', spl[1])[1]
-    im = cv.imread(file)
-    s = 1/float(fileScale(file))
-    title = os.path.basename(file)
-    im = vm.normalize(im)
+class xsSegmentTriple(xsSegment):
+    '''colleges data about triple line XS segments'''
     
-    # segment components
-    if 'LapRD_LapRD' in file:
-        # use more aggressive segmentation to remove leaks
-        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, botthresh=75, topthresh=75, diag=max(0,diag-1))
-    else:
-        im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, diag=max(0,diag-1))
-    df, df2 = filterXSComponents(markers, im2)
-    if len(df2)==0:
-        return errorRet
-    labels = markers[1]
-    for i in list(df.index):
-        if i in df2.index:
-            labels[labels==i] = 255
-        else:
-            labels[labels==i] = 0
-    labels = labels.astype(np.uint8)
-
-    # find contours
-    contours = cv.findContours(labels,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-    cnt = np.vstack(contours[0])
-    hull = cv.convexHull(cnt)
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
     
-    if diag>0:
-        cm = im2.copy()
+    
+    def display(self) -> None:
+        if self.diag==0:
+            return
+        cm = self.labelsBW.copy()
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
-        cv.drawContours(cm, [hull], -1, (110, 245, 209), 6)
-        cv.drawContours(cm, cnt, -1, (186, 6, 162), 6)
+        cv.drawContours(cm, [self.hull], -1, (110, 245, 209), 6)
+        cv.drawContours(cm, self.cnt, -1, (186, 6, 162), 6)
         imshow(cm)
-        
-    # measure components
-    hullArea = cv.contourArea(hull)
-    filledArea = df2.a.sum()
-    porosity = 1-(filledArea/hullArea)
+        if hasattr(self, 'title'):
+            plt.title(self.title)
     
-    perimeter = 0
-    for cnti in contours[0]:
-        perimeter+=cv.arcLength(cnti, True)
-    hullPerimeter = cv.arcLength(hull, True)
-    excessPerimeter = perimeter/hullPerimeter - 1
-    
-    x0,y0,w,h = cv.boundingRect(hull)
-    aspect = h/w
-    
-    M = cv.moments(cnt)
-    xc = int(M['m10']/M['m00'])
-    yc = int(M['m01']/M['m00'])
-    boxcx = x0+w/2 # x center of bounding box
-    boxcy = y0+h/2 # y center of bounding box
-    xshift = (xc-boxcx)/w
-    yshift = (yc-boxcy)/h
-    
-    units = {'line':'', 'aspect':'h/w', 'xshift':'w', 'yshift':'h', 'area':'px','x0':'px', 'y0':'px', 'w':'px', 'h':'px', 'porosity':'', 'excessPerimeter':''} # where pixels are in original scale
-    retval = {'line':name, 'aspect':aspect, 'xshift':xshift, 'yshift':yshift, 'area':filledArea*s**2, 'w':w*s, 'h':h*s, 'porosity':porosity, 'excessPerimeter':excessPerimeter}
-    return retval, units
+    def measure(self) -> None:
+        '''measure cross-section of 3 lines'''
+        spl = re.split('xs', os.path.basename(self.file))
+        name = re.split('_', spl[0])[-1] + 'xs' + re.split('_', spl[1])[1]
+        self.title = os.path.basename(self.file)
+        self.im = vm.normalize(self.im)
 
-    
-    
-def xsDisturbMeasure(file:str, acrit:int=100, diag:int=0, **kwargs) -> Tuple[dict,dict]:
-    '''measure cross-section of single disturbed line'''
-    errorRet = {},{}
-    spl = re.split('_', re.split('vstill_', os.path.basename(file))[1])
-    name = f'{spl[0]}_{spl[1]}'
-    im = cv.imread(file)
-    h,w,_ = im.shape
-    s = 1
-    title = os.path.basename(file)
-    im = vm.normalize(im)
-    pv = printVals(os.path.dirname(file))
-    
-    # segment components
-    hc = 150
-    crop = {'y0':hc, 'yf':h-hc, 'x0':170, 'xf':300}
-    im = vc.imcrop(im, crop)
-    
-    if 'water' in pv.ink.base:
-        th = 130
-    else:
-        th = 80
-    im2, markers, attempt = vm.segmentInterfaces(im, acrit=acrit, botthresh=th, topthresh=th, diag=max(0,diag-1))  
-    retval, units = singleXSMeasure(im, im2, markers, attempt, s, title, name, diag=diag)
-    if len(retval)==0:
-        return retval, units
-    for s in ['x0', 'xc']:
-        retval[s] = retval[s]+crop['x0']
-    for s in ['y0', 'yc']:
-        retval[s] = retval[s] + hc
-    return retval, units
-
-def xsDisturbMeasures(folder:str, overwrite:bool=False, **kwargs) -> None:
-    '''measure all cross-sections in the folder and export table'''
-    if not 'disturbXS' in os.path.basename(folder):
-        return
-    pfd = fh.printFileDict(folder)
-    fn = pfd.newFileName('xsMeasure', '.csv')
-    if os.path.exists(fn) and not overwrite:
-        return
-    files = {}
-    for f in os.listdir(folder):
-        if 'vstill' in f:
-            files[re.split('_', re.split('vstill_', f)[1])[1]] = f
-    
-    units = {}
-    out = []
-    for i in range(4):
-        for s in ['w', 'd']:
-            m,u = xsDisturbMeasure(os.path.join(folder, files[f'l{i}{s}o']), **kwargs)
-            if len(u)>0:
-                units = u
-                out.append(m)
-    df = pd.DataFrame(out)
-    
-    plainExp(fn, df, units)
-
-#-----------------------------------------------------------------
-# summaries
-    
-def xsDisturbSummary(folder:str, overwrite:bool=False, **kwargs) -> None:
-    '''summarize xsical measurements in the folder and export table'''
-    if not 'disturbXS' in os.path.basename(folder):
-        return {},{}
-    pfd = fh.printFileDict(folder)
-    fn = pfd.newFileName('xsSummary', '.csv')
-    if os.path.exists(fn) and not overwrite:
-        out,u = plainImDict(fn, unitCol=1, valCol=2)
-        return out,u
-    if not hasattr(pfd, 'xsMeasure'):
-        xsDisturbMeasures(folder, **kwargs)
-    if not hasattr(pfd, 'xsMeasure'):
-        return {},{}
-    
-    df, du = plainIm(pfd.xsMeasure, ic=0)
-    pv = printVals(folder)
-    pxpmm = pv.pxpmm
-    mr, mu = pv.metarow()
-    
-    # find changes between observations
-    aves = {}
-    aveunits = {}
-    for num in range(4):
-        wodf = df[df.line.str.contains(f'l{num}wo')]
-        dodf = df[df.line.str.contains(f'l{num}do')]
-        if len(wodf)==1 and len(dodf)==1:
-            wo = wodf.iloc[0]
-            do = dodf.iloc[0]
-            for s in ['aspect', 'yshift', 'xshift']:
-                try:
-                    addValue(aves, aveunits, f'delta_{s}', difference(do, wo, s), du[s])
-                except ValueError:
-                    pass
-            for s in ['h', 'w']:
-                try:
-                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/wo[s], '')
-                except ValueError:
-                    pass
-            for s in ['xc']:
-                try:
-                    addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/pxpmm/pv.dEst, 'dEst')
-                except ValueError:
-                    pass
-
-                       
-    ucombine = aveunits 
-    out = {}
-    units = {}
-    lists = aves
-    for key,val in lists.items():
-        convertValue(key, val, ucombine, pxpmm, units, out)
-
-    out = {**mr, **out}
-    units = {**mu, **units}
-
-    plainExpDict(fn, out, units=units)
-    
-    return out,units
-
-
-def xsDisturbSummariesRecursive(topFolder:str, overwrite:bool=False, **kwargs) -> None:
-    '''recursively go through folders'''
-    out = []
-    units = {}
-    if not fh.isPrintFolder(topFolder):
-        for f in os.listdir(topFolder):
-            summaries, u = xsDisturbSummariesRecursive(os.path.join(topFolder, f), overwrite=overwrite, **kwargs)
-            if len(u)>len(units):
-                units = u
-            out = out + summaries
-        return out, units
-    try:
-        summary, units = xsDisturbSummary(topFolder, overwrite=overwrite, **kwargs)
-    except Exception as e:
-        print(f'Error in {topFolder}: {e}')
-    else:
-        if len(summary)>0:
-            return [summary], units
+        # segment components
+        if 'LapRD_LapRD' in file:
+            # use more aggressive segmentation to remove leaks
+            self.segmented = segmenter(self.im, acrit=self.acrit, topthresh=75, diag=max(0, self.diag-1))
         else:
-            return [], {}
-    
+            self.segmented = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1))
+        self.filterXSComponents()
+        if not self.segmented.success:
+            return 
+        
+        
+        
 
-def xsDisturbSummaries(folder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
+class xsSegmentDisturb(xsSegment):
+    '''for disturbed lines'''
+    
+    def __init__(self, file:str, diag:int=0, acrit:int=100, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        self.pv = printVals(os.path.dirname(file))
+        self.lineName()
+        self.measure()
+    
+    def measure(self) -> None:
+        '''measure cross-section of single disturbed line'''
+        
+        self.scale = 1
+        self.title = os.path.basename(self.file)
+        self.im = vm.normalize(self.im)
+
+        # segment components
+        h,w,_ = self.im.shape
+        hc = 150
+        crop = {'y0':hc, 'yf':h-hc, 'x0':170, 'xf':300}
+        self.im = vc.imcrop(self.im, crop)
+
+        if 'water' in self.pv.ink.base:
+            th = 140
+        else:
+            th = 80
+        self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=th, diag=max(0, self.diag-1))
+        if not self.segmenter.success:
+            return
+        self.singleMeasure()
+        self.adjustForCrop(crop)
+     
+    
+class xsSegmentSDT(xsSegment, segmentDisturb):
+    '''for singledoubletriple lines'''
+    
+    def __init__(self, file:str, diag:int=0, acrit:int=100, **kwargs):
+        self.numLines = int(re.split('_', os.path.basename(file))[1])
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        
+    def makeRelative(self) -> None:
+        '''convert the coords to relative coordinates'''
+        for s in ['c', '0']:
+            xs = f'x{s}'
+            ys = f'y{s}'
+            if xs in self.stats and ys in self.stats:
+                self.stats[xs], self.stats[ys] = self.nd.relativeCoords(self.stats[xs], self.stats[ys])
+                self.units[xs] = 'mm'
+                self.units[ys] = 'mm'
+                
+    def findIntendedCoords(self) -> None:
+        '''find the intended x0,y0,xc,and yc of the assembly'''
+        rc1 = self.pg.relativeCoords(self.tag)   # position of line 1 in mm, relative to the nozzle
+        if self.numLines>1:
+            lt = re.split('o', re.split('_', self.name)[1][2:])[0]
+            if lt=='d' or lt==f'w{self.numLines}':
+                # get the last line
+                rc2 = self.pg.relativeCoords(self.tag, self.numLines)
+            else:
+                lnum = int(lt[1])
+                rc2 = self.pg.relativeCoords(self.tag, lnum)
+
+            
+        print(rc1, rc2)
+    
+    def measure(self) -> None:
+        '''measure cross-section of single disturbed line'''
+        self.im = self.nd.subtractBackground(self.im, 10)   # remove the background and the nozzle
+        self.getProgDims()
+        rc = {'relative':True, 'w':250, 'h':250, 'wc':50, 'hc':170}
+        self.crop = vm.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
+        self.crop = vc.convertCrop(self.im, self.crop)    # make sure everything is in bounds
+        self.im = vc.imcrop(self.im, self.crop)
+        if 'water' in self.pv.ink.base:
+            th = 140
+        else:
+            th = 120
+        self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=th, diag=max(0, self.diag-1))
+        if not self.segmenter.success:
+            return
+        self.multiMeasure()
+        self.adjustForCrop(self.crop)
+        self.makeRelative()
+        self.display()
+        self.findIntendedCoords()
+        
+        
+#------------------------------------------------------------------------------
+
+        
+                    
+def xsDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    return xsSegmentDisturb(file, **kwargs).values()           
+
+
+class xsDisturbMeasures(disturbMeasures):
+    '''for a xsDisturb folder, measure the disturbed lines'''
+    
+    def __init__(self, folder:str, overwrite:bool=False, **kwargs) -> None:
+        super().__init__(folder, overwrite=overwrite, **kwargs)
+
+    def measureFolder(self) -> None:
+        '''measure all cross-sections in the folder and export table'''
+        if not 'disturbXS' in os.path.basename(folder):
+            return
+        self.fn = self.pfd.newFileName('xsMeasure', '.csv')
+        if 'lines' in self.kwargs:
+            lines = self.kwargs['lines']
+        else:
+            lines = [f'l{i}{s}{s2}' for i in range(4) for s in ['w', 'd'] for s2 in ['o']]
+        self.measure(lines, xsDisturbMeasure)
+
+
+    #-----------------------------------------------------------------
+    # summaries
+
+    def summarize(self, dire:str='+y', **kwargs) -> Tuple[dict,dict]:
+        '''summarize xsical measurements in the folder and export table'''
+        if not dire in os.path.basename(self.folder):
+            return {}, {}
+        
+        r = self.summaryHeader('xs')
+        if r==0:
+            return self.summary, self.summaryUnits
+        elif r==2:
+            return 
+        
+        # find changes between observations
+        aves = {}
+        aveunits = {}
+        for num in range(4):
+            wodf = self.df[self.df.line.str.contains(f'l{num}wo')]
+            dodf = self.df[self.df.line.str.contains(f'l{num}do')]
+            if len(wodf)==1 and len(dodf)==1:
+                wo = wodf.iloc[0]
+                do = dodf.iloc[0]
+                for s in ['aspect', 'yshift', 'xshift']:
+                    try:
+                        addValue(aves, aveunits, f'delta_{s}', difference(do, wo, s), self.du[s])
+                    except ValueError:
+                        pass
+                for s in ['h', 'w']:
+                    try:
+                        addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/wo[s], '')
+                    except ValueError:
+                        pass
+                for s in ['xc']:
+                    try:
+                        addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/self.pxpmm/self.pv.dEst, 'dEst')
+                    except ValueError:
+                        pass
+
+
+        ucombine = aveunits 
+        lists = aves
+        self.convertValuesAndExport(ucombine, lists)
+        return self.summary, self.summaryUnits
+    
+    
+def xsDisturbMeasureSummarize(topFolder:str, dire:str='+y', overwrite:bool=False, **kwargs) -> Tuple[dict, dict]:
+    return xsDisturbMeasures(topFolder, overwrite=overwrite, **kwargs).summarize(dire)
+
+def xsDisturbSummariesRecursive(topFolder:str, dire:str, overwrite:bool=False, **kwargs) -> None:
+    '''recursively go through folders'''
+    s = summaries(topFolder, xsDisturbMeasureSummarize, overwrite=overwrite, dire=dire, **kwargs)
+    return s.out, s.units
+    
+def xsDisturbSummaries(topFolder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
     '''measure all cross-sections in the folder and export table'''
-    out, units  = xsDisturbSummariesRecursive(folder, overwrite=overwrite, **kwargs)
-    df = pd.DataFrame(out)
-    fn = os.path.join(exportFolder, 'xsDisturbSummaries.csv')
-    plainExp(fn, df, units, index=False)
+    for dire in ['+y', '+z']:
+        s = summaries(topFolder, xsDisturbMeasureSummarize, overwrite=overwrite, dire=dire, **kwargs)
+        s.export(os.path.join(exportFolder, f'xs{dire}DisturbSummaries.csv'))
+    
+ 
