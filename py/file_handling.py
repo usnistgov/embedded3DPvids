@@ -895,6 +895,12 @@ class printFileDict:
                             self.progDims.append(ffull)
                         elif 'progPos' in fname:
                             self.progPos.append(ffull)
+                        elif 'Failure' in fname:
+                            self.failure = ffull
+                        elif 'Summary' in fname:
+                            self.summary = ffull
+                        elif 'Measure' in fname:
+                            self.measure = ffull
                         else:
                             setattr(self, self.deconstructFileName(ffull), ffull)
                     elif spl[0] in singleLineSBPPicfiles():
@@ -919,6 +925,8 @@ class printFileDict:
                         if 'Basler camera' in fname:
                             # raw still
                             self.still.append(ffull)
+                        elif isVidStill(f1):
+                            self.vstill.append(ffull)
                         else: 
                             self.still_unknown.append(ffull)
                     elif isStitch(f1):

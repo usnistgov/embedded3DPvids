@@ -69,12 +69,12 @@ def splitUnits(df:pd.DataFrame) -> Tuple[pd.DataFrame,dict]:
     
 def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True) -> None:
     '''export the file'''
-    if len(data)==0:
-        return
+    # if len(data)==0:
+    #     return
     if len(units)==0:
         col = data.columns
     else:
-        col = pd.MultiIndex.from_tuples([(k,units[k]) for k in data]) # index with units
+        col = pd.MultiIndex.from_tuples([(k,units[k] if k in units else '') for k in data]) # index with units
     data = np.array(data)
     df = pd.DataFrame(data, columns=col)       
     df.to_csv(fn, index=index)
