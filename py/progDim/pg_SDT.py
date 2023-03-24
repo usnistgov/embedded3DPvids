@@ -57,7 +57,7 @@ class progDimsSDT(progDim):
         self.rewritten = True
         return 0
         
-    def initializeProgDims(self):
+    def initializeProgDims(self, xs:bool=False):
         '''initialize programmed dimensions table'''
         super().initializeProgDims()
         if '_1_' in os.path.basename(self.printFolder):
@@ -75,7 +75,11 @@ class progDimsSDT(progDim):
             self.ll = ['w1', 'w2', 'w3']
             self.wnum = 3
             self.dnum = 0
-        self.progDims.name = [f'l{i}{s2}{s3}' for i in range(self.numLines) for s2 in self.ll for s3 in ['', 'o1', 'o2'] ] 
+        if xs:
+            s3list = ['', 'o1', 'o2']
+        else:
+            s3list = ['p1', 'p2', 'p3', 'p4', 'p5', 'o1', 'o2']
+        self.progDims.name = [f'l{i}{s2}{s3}' for i in range(self.numLines) for s2 in self.ll for s3 in s3list] 
         
     def vLongLines(self, moveDir:str, diag:bool=False) -> None:
         '''filter out just the write and disturb moves from progPos'''
@@ -186,7 +190,6 @@ class progDimsSDT(progDim):
         elif moveDir=='-x':
             self.checkLongLinesx()
         return
-                
 
         
     def splitProgPos(self, moveDir:str, diag:bool=False):
@@ -230,13 +233,107 @@ class progDimsSDT(progDim):
             row['a'] = row['vol']/row['l']
             row['w'] = 2*np.sqrt(row['a']/np.pi)
         row['t'] = row['tf']-row['t0']
+        row['ltr'] = self.progPos.loc[nmin:n, 'dtr'].max()
         return row
+    
+    def labelProgLine(self, line:pd.Series, j:int, cha:str, gfl:dict) -> None:
+        '''label a single progdims row
+        j is the group number, 1 2 3 4
+        cha is the line name, e.g. l1w1p3'''
+        row = (self.progDims['name']==cha)
+        
+        # adopt the line's values
+        for y in ['l', 'w', 't', 'a', 'vol', 't0', 'tf', 'speed']:
+            self.progDims.loc[row,y] = line[y]
+            
+        # find the pic time
+        if 'p' in cha:
+            # this is an in-progress line
+            frac = 0.1 + (int(cha[-1])-1)*0.2
+        else:
+            frac = 0.5
+        tpic = line['t0']+line['dprog']*frac/line['speed']
+        
+        # find midpoint of line
+        for cs in ['x', 'y', 'z']:
+            self.progDims.loc[row,f'{cs}pic'] = line[f'{cs}t']-line[f'd{cs}']*(1-frac)
+        self.progDims.loc[row,'tpic'] = tpic
+        self.progDims.loc[row,'lprog'] = line['dprog']
+        self.progDims.loc[row,'ltr'] = line['dtr']
+        if cha[2]=='w':
+            for key,val in gfl.items():
+                self.progDims.loc[row,key] = val
+            
+    def labelObserveLine(self, cha:str, otimes:pd.DataFrame, oi:int) -> int:
+        '''label a single observe line. 
+        j is the group number
+        cha is the full name of the line, e.g. l1w1o2
+        k is the o
+        '''
+        tpic = otimes.iloc[oi]['time']
+        row = (self.progDims['name']==cha)
+        self.progDims.loc[row,'tpic'] = tpic
+
+        # get the position where the image is taken
+        lines = self.progPos[(self.progPos.t0<tpic)&(self.progPos.tf>=tpic)]
+        if len(lines)==0:
+            display(self.progPos)
+            raise ValueError(f'Could not find observe line in progPos: {tpic}')
+        line = lines.iloc[0]
+        for cs in ['x', 'y', 'z']:
+            self.progDims.loc[row,f'{cs}pic'] = line[f'{cs}t']
+        oi+=1
+        return oi
+    
+    def labelSublist(self, j:int, ss:str, i:int, oi:int, lines:pd.DataFrame, otimes:pd.DataFrame) -> Tuple[int,int]:
+        '''find all relevant pics in the sublist and put their stats in progDims. 
+        j is the line number, 1, 2,3,4
+        ss is a name for the write mode, e.g. w1, w2, d1
+        i is the current index within lines
+        oi is the current index within olines
+        lines is the list of lines for this type, either wlines or dlines
+        olines is the list of observe lines'''
+        sublist = list(filter(lambda l: l[0]==ss , self.ll))   # all the names for this write mode, e.g. w1, w2, d1
+        if i>=len(lines):
+            # we've run out
+            return 100,oi
+        line = lines.iloc[i]
+        gfl = self.getFullLength(line)
+        i = i+1
+        
+        names = self.progDims[(self.progDims.name.str.contains(ss))&(self.progDims.name.str.contains(f'l{j}'))].name  
+                      # all the line pic names with this line number and write format. includes all p lines and o lines
+
+        for cha in names:
+            if not 'o' in cha:
+                self.labelProgLine(line, j, cha, gfl)
+            else:
+                oi = self.labelObserveLine(cha, otimes, oi)  
+        return i, oi
+    
+    
+    def getPrimaryLines(self, c:str, pg:pd.DataFrame):
+        '''get the list of printed lines that have this character, only taking one in-progress write line per written line'''
+        if c=='o':
+            return pg[pg.name.str.contains('o')]
+        else:
+            p1 = pg[(pg.name.str.contains(c))&(~(pg.name.str.contains('o')))]
+            p1p = p1[p1.name.str.contains('p3')]
+            if len(p1p)==0:
+                return p1
+            else:
+                return p1p
+    
+    def getNumLines(self, c:str):
+        '''get the number of printed lines that have this character'''
+        return len(self.getPrimaryLines(c, self.progDims))
+        
 
     def getProgDims(self, diag:bool=False):
         '''convert the full position table to a list of timings'''
         self.importProgPos()
         self.importFlagFlip()
-        self.initializeProgDims()
+        self.initializeProgDims('XS' in self.sbp)
     
         
         if 'Horiz' in self.sbp:
@@ -247,15 +344,15 @@ class progDimsSDT(progDim):
             wlines, dlines = self.splitProgPos('-x', diag=diag)
         otimes = self.otimes
         
-        wprog = len(self.progDims[(self.progDims.name.str.contains('w'))&(~(self.progDims.name.str.contains('o')))])
+        wprog = self.getNumLines('w')
         if not len(wlines)==wprog:
             raise ValueError(f'Mismatch in write lines: {len(wlines)} found, {wprog} programmed')
 
-        dprog = len(self.progDims[self.progDims.name.str.contains('d')&(~(self.progDims.name.str.contains('o')))])
+        dprog = self.getNumLines('d')
         if not len(dlines)==dprog:
             raise ValueError(f'Mismatch in disturb lines: {len(dlines)} found, {dprog} programmed')
             
-        oprog = len(self.progDims[self.progDims.name.str.contains('o')])
+        oprog = self.getNumLines('o')
         if not len(otimes)==oprog:
             raise ValueError(f'Mismatch in observe lines: {len(otimes)} found, {oprog} programmed')
         
@@ -263,53 +360,15 @@ class progDimsSDT(progDim):
         # assign written lines
         wi = 0 # 
         di = 0
-        for j in range(self.numLines):        
-            for ss in ['w', 'd']:
-                for cha in list(filter(lambda l: l[0]==ss , self.ll)):
-                    if ss=='w':  
-                        if wi>=len(wlines):
-                            # we've run out
-                            return
-                        line = wlines.iloc[wi]
-                        wi = wi+1
-                    else:
-                        if di>=len(dlines):
-                            # we've run out
-                            return
-                        line = dlines.iloc[di]
-                        di = di+1
-                    for y in ['l', 'w', 't', 'a', 'vol', 't0', 'tf']:
-                        self.progDims.loc[self.progDims['name']==f'l{j}{cha}',y] = line[y]
-                                    # determine where to take pic
-                    tpic = line['t0']+line['dprog']*0.5/line['speed']
-                    
-                    # find midpoint of line
-                    for cs in ['x', 'y', 'z']:
-                        self.progDims.loc[self.progDims['name']==f'l{j}{cha}',f'{cs}pic'] = line[f'{cs}t']-line[f'd{cs}']*0.5
-                    self.progDims.loc[self.progDims['name']==f'l{j}{cha}','tpic'] = tpic
-                    self.progDims.loc[self.progDims['name']==f'l{j}{cha}','lprog'] = line['dprog']
-                    self.progDims.loc[self.progDims['name']==f'l{j}{cha}','ltr'] = line['dtr']
-                    self.progDims.loc[self.progDims['name']==f'l{j}{cha}','speed'] = line['speed']
-                    if ss=='w':
-                        gfl = self.getFullLength(line)
-                        for key,val in gfl.items():
-                            self.progDims.loc[self.progDims['name']==f'l{j}{cha}',key] = val
-                    
-                    for k in range(2):
-                        # get the time when the image is taken
-                        tpic = otimes.iloc[oi]['time']
-                        self.progDims.loc[self.progDims['name']==f'l{j}{cha}o{k+1}','tpic'] = tpic
-                        
-                        # get the position where the image is taken
-                        lines = self.progPos[(self.progPos.t0<tpic)&(self.progPos.tf>=tpic)]
-                        if len(lines)==0:
-                            display(self.progPos)
-                            raise ValueError(f'Could not find observe line in progPos: {tpic}')
-                        line = lines.iloc[0]
-                        for cs in ['x', 'y', 'z']:
-                            self.progDims.loc[self.progDims['name']==f'l{j}{cha}o{k+1}',f'{cs}pic'] = line[f'{cs}t']
-                        oi+=1
+        for j in range(self.numLines):  
+            for l in self.ll:
+                if l[0]=='w':
+                    wi, oi = self.labelSublist(j, l, wi, oi, wlines, otimes)
+                else:
+                    di, oi = self.labelSublist(j, l, di, oi, dlines, otimes)
         self.checkProgDims()  # check that all values are correct
+        if diag:
+            display(self.progDims)
             
             
     def checkProgDimsXS(self):
@@ -373,7 +432,9 @@ class progDimsSDT(progDim):
                 if zlin>1:
                     raise ValueError(f'Too many {ss} observe locations in {self.printFolder} group {gnum}: {zlin}')
                     
-            dwlines = gp[~gp.name.str.contains('o')]
+            # dwlines = gp[~gp.name.str.contains('o')]
+            dwlines = pd.concat([self.getPrimaryLines('w', gp), self.getPrimaryLines('d', gp)])
+            
             spacings = dwlines.ypic.diff()
             for sp in spacings:
                 if sp>intendedSpacing+scrit or sp<intendedSpacing-scrit:
@@ -398,7 +459,7 @@ class progDimsSDT(progDim):
                 if zlin>1:
                     raise ValueError(f'Too many {ss} observe locations in {self.printFolder} group {gnum}: {zlin}')
                     
-            dwlines = gp[~gp.name.str.contains('o')]
+            dwlines = pd.concat([self.getPrimaryLines('w', gp), self.getPrimaryLines('d', gp)])
             for ss in ['xpic', 'ypic']:
                 zlin = len(olines[ss].unique())
                 if zlin>1:

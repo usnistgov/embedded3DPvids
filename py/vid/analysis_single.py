@@ -22,7 +22,7 @@ from im.imshow import imshow
 import im.morph as vm
 from tools.config import cfg
 from tools.plainIm import *
-from file_handling import isSubFolder
+from file.file_handling import isSubFolder
 import metrics.m_single as me
 
 # logging

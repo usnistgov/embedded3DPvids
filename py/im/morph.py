@@ -30,23 +30,35 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 ######### MORPHOLOGICAL OPERATIONS
 
-def morph(img:np.array, width:int, func:str, iterations:int=1, shape:bool=cv.MORPH_RECT, aspect:float=1, **kwargs) -> np.array:
+def morph(img:np.array, width:int, func:str, iterations:int=1, shape:bool=cv.MORPH_RECT, aspect:float=1, hitBorder:bool=False, **kwargs) -> np.array:
     '''erode, dilate, open, or close. func should be erode, dilate, open, or close. aspect is aspect ratio of the kernel, height/width'''
     if width==0:
         return img
     if not shape in [cv.MORPH_RECT, cv.MORPH_ELLIPSE, cv.MORPH_CROSS]:
         raise NameError('Structuring element must be rect, ellipse, or cross')
     kernel = cv.getStructuringElement(cv.MORPH_RECT,(width, int(width*aspect)))
+    if not hitBorder:
+        if len(img.shape)==3:
+            c = (0,0,0)
+        else:
+            c = 0
+        dy =  int(width*aspect+1)
+        dx = int(width+1)
+        img = cv.copyMakeBorder(img,dy, dy, dx, dx, cv.BORDER_CONSTANT, None, c)
     if func=='erode':
-        return cv.erode(img, kernel, iterations = iterations)
+        img =  cv.erode(img, kernel, iterations = iterations)
     elif func=='dilate':
-        return cv.dilate(img, kernel, iterations = iterations)
+        img = cv.dilate(img, kernel, iterations = iterations)
     elif func=='open':
-        return cv.morphologyEx(img, cv.MORPH_OPEN, kernel)
+        img =  cv.morphologyEx(img, cv.MORPH_OPEN, kernel)
     elif func=='close':
-        return cv.morphologyEx(img, cv.MORPH_CLOSE, kernel)
+        img =  cv.morphologyEx(img, cv.MORPH_CLOSE, kernel)
     else:
         raise NameError('func must be erode, dilate, open, or close')
+    if not hitBorder:
+        img = img[dy:-dy, dx:-dx]
+    return img
+        
 
 def erode(img:np.array, size:int, **kwargs) -> np.array:
     '''erode an image, given a kernel size. https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html'''
@@ -80,19 +92,60 @@ def componentCentroids(img:np.array) -> np.array:
     '''identify a list of all of the component centroids for a labeled image'''
     labels = list(np.unique(img))
     centroids = [componentCentroid(img, l) for l in labels]
-    return centroids       
+    return centroids  
 
-def fillComponents(thresh:np.array)->np.array:
-    '''fill the connected components in the thresholded image https://www.programcreek.com/python/example/89425/cv2.floodFill'''
-    
-    # fill in objects
+def emptySpaces(thresh:np.array) -> np.array:
+    ff = floodFill(thresh)
+    img_out = cv.subtract(ff, thresh)
+    return img_out
+
+def floodFill(thresh:np.array) -> np.array:
+    '''fill extra components'''
     im_flood_fill = thresh.copy()
     h, w = thresh.shape[:2]
     mask = np.zeros((h + 2, w + 2), np.uint8)
     im_flood_fill = im_flood_fill.astype("uint8")
     cv.floodFill(im_flood_fill, mask, (0, 0), 255)
     im_flood_fill_inv = cv.bitwise_not(im_flood_fill)
+    return im_flood_fill_inv
+
+def fillComponents(thresh:np.array, diag:int=0, leaveHollows:bool=True)->np.array:
+    '''fill the connected components in the thresholded image https://www.programcreek.com/python/example/89425/cv.floodFill'''
+    
+    # fill in objects
+    im_flood_fill_inv = floodFill(thresh)
     img_out = thresh | im_flood_fill_inv
+    if leaveHollows:
+        # remove the inside of any bubbles inside objects
+        i2 = cv.bitwise_not(im_flood_fill_inv)
+        i2[-1, :] = 255
+        cnt, hierarchy = cv.findContours(i2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        hdf = pd.DataFrame(hierarchy[0], columns=['previous', 'next', 'child', 'parent'])
+        toplevel = hdf[(hdf.parent<0)]   # no parents
+        level1 = hdf[(hdf.parent>=0)]    # has parents
+        level2 = level1[level1.parent.isin(level1.index.tolist())]   # has grandparents
+        level3 = level2[level2.parent.isin(level2.index.tolist())]   # has great grandparents
+        
+        im2 = thresh.copy()*0
+        if diag>0:
+            c2 = thresh.copy()
+            c2 = cv.cvtColor(c2, cv.COLOR_GRAY2BGR)
+            hdf.loc[(toplevel.index), 'level'] = 0
+            hdf.loc[(level1.index), 'level'] = 1
+            hdf.loc[(level2.index), 'level'] = 2
+            hdf.loc[(level3.index), 'level'] = 3
+            for n in hdf.level.unique():
+                color = list(np.random.random(size=3) * 256)
+                for i,row in hdf[hdf.level==n].iterrows():
+                    if cv.contourArea(cnt[i])>50:
+                        cv.drawContours(c2, [cnt[i]], -1, color, 2)
+            imshow(c2)
+        for i in level3.index:
+            if cv.contourArea(cnt[i])>50:
+                cv.drawContours(im2, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
+        img_out = cv.subtract(img_out, im2)
+    if diag>0:
+        imshow(thresh, im_flood_fill_inv, img_out, title='fillComponents')
     return img_out
 
 def removeBorderAndFill(thresh:np.array) -> np.array:
@@ -151,41 +204,6 @@ def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
         adjusted = normalize(adjusted)
     return adjusted
 
-
-def closeHorizLine(thresh:np.array, imtop:int) -> np.array:
-    '''draw a black line across the y position imtop between the first and last black point'''
-    marks = np.where(thresh[imtop]==255) 
-    if len(marks[0])==0:
-        return thresh
-    
-    first = marks[0][0] # first position in x in y row where black
-    last = marks[0][-1]
-    if last-first<thresh.shape[1]*0.2:
-        thresh[imtop:imtop+3, first:last] = 255*np.ones(thresh[imtop:imtop+3, first:last].shape)
-    return thresh
-
-def closeVerticalTop(thresh:np.array, cutoffTop:float=0.03, closeBottom:bool=False, **kwargs) -> np.array:
-    '''if the image is of a vertical line, close the top'''
-    if thresh.shape[0]<thresh.shape[1]*2:
-        return thresh
-    
-    # cut off top 3% of image
-    if cutoffTop>0:
-        imtop = int(thresh.shape[0]*cutoffTop)  
-        thresh[0:imtop, :] = np.ones(thresh[0:imtop, :].shape)*0
-
-    # vertical line. close top to fix bubbles
-    top = np.where(np.array([sum(x) for x in thresh])>0) 
-
-    if len(top[0])==0:
-        return thresh
-
-    imtop = top[0][0] # first position in y where black
-    thresh = closeHorizLine(thresh, imtop)
-    if closeBottom:
-        imbot = top[0][-1]-3
-        thresh = closeHorizLine(thresh, imbot)
-    return thresh
 
 def verticalFilter(gray:np.array) -> np.array:
     '''vertical line filter'''
@@ -278,5 +296,25 @@ def blackenRed(im:np.array) -> np.array:
     frameMasked = cv.subtract(im, badParts)
     return frameMasked
 
+def skeletonize(img:np.array, w:int=3) -> np.array:
+    size = np.size(img)
+    skel = np.zeros(img.shape,np.uint8)
+
+    ret,img = cv.threshold(img,127,255,0)
+    element = cv.getStructuringElement(cv.MORPH_CROSS,(w,w))
+    done = False
+
+    while( not done):
+        eroded = cv.erode(img,element)
+        temp = cv.dilate(eroded,element)
+        temp = cv.subtract(img,temp)
+        skel = cv.bitwise_or(skel,temp)
+        img = eroded.copy()
+
+        zeros = size - cv.countNonZero(img)
+        if zeros==size:
+            done = True
+
+    return skel
 
     

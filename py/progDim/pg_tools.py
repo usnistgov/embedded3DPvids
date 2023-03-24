@@ -17,7 +17,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 from val.v_print import printVals
 
 # logging
@@ -379,10 +379,7 @@ class progDim:
     
     def progDimsFile(self) -> str:
         '''get the name of the progDims file'''
-        if len(self.pfd.progDims)>0:
-            fn = self.pfd.progDims[0]
-        else:
-            fn = self.pfd.newFileName('progDims', 'csv')
+        fn = self.pfd.newFileName('progDims', 'csv')
         return fn
     
     def importProgDims(self, overwrite:bool=False) -> str:
@@ -447,11 +444,15 @@ class progDim:
         if writeLine==1:
             if f'{gname}w1' in list(self.progDims.name):
                 write = f'{gname}w1'
+            elif f'{gname}w1p3' in list(self.progDims.name):
+                write = f'{gname}w1p3'
             else:
                 raise ValueError(f'Could not find first write line for {gname}, {writeLine}')
         else:
             if f'{gname}w{writeLine}' in list(self.progDims.name):
                 write = f'{gname}w{writeLine}'
+            elif f'{gname}w{writeLine}p3' in list(self.progDims.name):
+                write = f'{gname}w{writeLine}p3'
             else:
                 raise ValueError(f'Could not find write line for {gname}, {writeLine}')
         return write
@@ -489,7 +490,11 @@ class progDim:
     
     def linePicPoint(self, lineName:str) -> dict:
         '''get the coordinates of the picture from the progDims table'''
-        timeRow = self.progDims[self.progDims.name==lineName].iloc[0]
+        sel = self.progDims[self.progDims.name==lineName]
+        if len(sel)==0:
+            print(self.progDims)
+            raise ValueError(f'Cannot find line {lineName} in progDims')
+        timeRow = sel.iloc[0]
         return {'y':timeRow['ypic'], 'z':timeRow['zpic']}
 
     
@@ -510,7 +515,7 @@ class progDim:
         d = {'dx':0, 'dy':0}   # change in coords from nozzle to the region we want to see
         if 'o' in tag:
             # put the first observe point in the center. find position of observe point
-            center1 = f'{write}o1'
+            center1 = f'{write[:4]}o1'
             # centerPoint1 = self.lineEndPoint(center1)  # where the origin should be
             centerPoint1 = self.linePicPoint(center1)
             

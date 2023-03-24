@@ -19,7 +19,7 @@ import time
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
-from file_handling import fileScale
+from file.file_handling import fileScale
 from im.imshow import imshow
 from tools.plainIm import *
 from tools.config import cfg
@@ -79,18 +79,105 @@ class metricSegment:
     
     #------------------------------------
     
+    def getContour(self, combine:bool=False) -> None:
+        '''get the contour of the mask, combining all objects if requested, otherwise using the largest object'''
+        if hasattr(self, 'cnt'):
+            return
+        self.excessPerimeter = 0
+        contours = cv.findContours(self.componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+        if int(cv.__version__[0])>=4:
+            contours = contours[0]
+        else:
+            contours = contours[1]
+        if len(contours)==0:
+            return -1
+        if len(contours)==1:
+            cnt = contours[0]
+        else:
+            if combine:
+                # combine all contours into one big contour
+                cnt = [] 
+                for ctr in contours:
+                    if len(cnt)>0:
+                        self.excessPerimeter = self.excessPerimeter + ppdist(list(ctr[0][0]), list(cnt[-1]))
+                    cnt += [pt[0] for pt in ctr]
+                self.excessPerimeter = self.excessPerimeter + ppdist(cnt[0], cnt[-1])
+                cnt = np.array(cnt)
+            else:  
+                contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
+                cnt = contours[0]
+        self.cnt = cv.approxPolyDP(cnt, 1, True) # smooth the contour by 1 px
+        return
+    
+    
+    def getRoughness(self, diag:int=0, combine:bool=False) -> float:
+        '''measure roughness as perimeter of object / perimeter of convex hull. 
+        componentMask is a binarized image of just one segment'''
+        self.getContour(combine=combine)
+        perimeter = cv.arcLength(self.cnt,True) - self.excessPerimeter
+        if perimeter==0:
+            return {}, {}
+        self.hull = cv.convexHull(self.cnt)
+        hullperimeter = cv.arcLength(self.hull,True)
+        roughness = perimeter/hullperimeter-1  # how much extra perimeter there is compared to the convex hull
+        
+        
+        return roughness
+    
+    def getLDiff(self, horiz:bool=False) -> float:
+        '''get the difference in length between 
+        the left and right lines if not horiz, 
+        or the top and bottom lines if horiz'''
+        
+        # smooth the hull until it is a quadrilateral
+        self.hull2 = [0,0,0,0,0]
+        ii = 20
+        while len(self.hull2)>4:
+            ii = ii+5
+            self.hull2 = cv.approxPolyDP(self.hull, ii, True)
+        while len(self.hull2)<4:
+            ii = ii-1
+            self.hull2 = cv.approxPolyDP(self.hull, ii, True)
+            
+        # filter the points
+        df1 = pd.DataFrame(self.hull2[:, 0, :], columns=['x', 'y'])
+        if horiz:
+            mid = df1.y.nlargest(2).min()
+            bottom = df1[df1.y>=mid]
+            wbottom = bottom.x.max()-bottom.x.min()
+            top = df1[df1.y<mid]
+            wtop = top.x.max()-top.x.min()
+            return wtop-wbottom
+        else:
+            mid = df1.x.nlargest(2).min()
+            right = df1[df1.x>=mid]
+            hright = right.y.max()-right.y.min()
+            left = df1[df1.x<mid]
+            hleft = left.y.max()-left.y.min()
+            return hright-hleft
+        
+    def roughnessIm(self) -> np.array:
+        '''add annotations for roughness to the image'''
+        cm = self.componentMask.copy()
+        cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
+        if hasattr(self, 'cnt'):
+            cv.drawContours(cm, [self.cnt], -1, (186, 6, 162), 2)
+        if hasattr(self, 'hull'):
+            cv.drawContours(cm, [self.hull], -1, (110, 245, 209), 2)
+        if hasattr(self, 'hull2'):
+            cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 2)
+        return cm
+
+    
     def sumsAndWidths(self, horiz:bool) -> Tuple[list, list]:
         '''sum up the number of pixels per row and the width of the pixels in the row'''
         if horiz:
-    #         sums = [sum(i)/255 for i in componentMask.transpose()]            # total number of pixels per row
+          # total number of pixels per row
             sums = self.componentMask.sum(axis=0)/255
-            widths = widthsInArray(self.componentMask.transpose())
         else:
-    #         sums = [sum(i)/255 for i in self.componentMask]
             sums = self.componentMask.sum(axis=1)/255
-            widths = widthsInArray(self.componentMask)
         sums = list(filter(lambda i:i>0, sums)) # remove empty rows
-        return sums,widths
+        return sums
     
     def limitLen(self, sums:list, reverse:bool) -> Tuple[list,list]:
         '''limit the maximum length of the line and put the rest in leaks'''
@@ -108,10 +195,11 @@ class metricSegment:
             leaks = []
         return sums, leaks
     
-    def getEmptiness(self, sums:list, widths:list, emptiness:bool) -> float:
+    def getEmptiness(self, atot:float, emptiness:bool=True) -> float:
         '''measure the empty space inside of the segment'''
-        if emptiness:
-            return 1-sum(sums)/sum(widths)     # how much of the middle of the component is empty
+        if emptiness and hasattr(self, 'hull'):
+            ha = cv.contourArea(self.hull)
+            return 1-(atot/ha)     # how much of the middle of the component is empty
         else:
             return 0
         
@@ -137,7 +225,7 @@ class metricSegment:
         return meant, stdev, minmax
 
         
-    def measureComponent(self, horiz:bool=True, reverse:bool=False, emptiness:bool=True, diag:int=0) -> Tuple[dict,dict]:
+    def measureComponent(self, horiz:bool=True, reverse:bool=False, emptiness:bool=True, atot:float=0, combine:bool=False, diag:int=0) -> Tuple[dict,dict]:
         '''measure parts of a segmented fluid. 
         horiz = True to get variation along length of horiz line. False to get variation along length of vertical line.
         scale is the scaling of the stitched image compared to the raw images, e.g. 0.33 
@@ -148,12 +236,12 @@ class metricSegment:
                 raise ValueError(f'{s} undefined for {self.file}')
         
         errorRet = {}, {}
-        roughness = getRoughness(self.componentMask, diag=max(0,diag-1))
-        sums,widths = self.sumsAndWidths(horiz)
+        roughness = self.getRoughness(diag=max(0,diag-1), combine=combine)
+        sums = self.sumsAndWidths(horiz)
         if len(sums)==0:
             return errorRet
         sums, leaks = self.limitLen(sums, reverse)
-        empty = self.getEmptiness(sums, widths, emptiness)
+        empty = self.getEmptiness(atot, emptiness)
         vest, vleak = self.measureVolumes(sums, leaks)
         meant, stdev, minmax = self.measureWidths(sums)
         units = {'roughness':'', 'emptiness':'', 'meanT':'px', 'stdevT':'meanT', 'minmaxT':'meanT', 'vintegral':'px^3', 'vleak':'px^3'}
@@ -223,8 +311,8 @@ class metricSegment:
         dd = {}
         bot = nd.yB - crop['y0']   
         dd['bot'] = bot
-        dd['left'] = nd.xL - crop['x0'] - 10   # nozzle cover was 10 extra pixels to left and right
-        dd['right'] = nd.xR - crop['x0'] + 10
+        dd['left'] = nd.xL - crop['x0'] - self.nd.maskPad   # nozzle cover was 10 extra pixels to left and right
+        dd['right'] = nd.xR - crop['x0'] + self.nd.maskPad
         mid = (dd['left']+dd['right'])/2
         dd['mid'] = mid
         
@@ -235,14 +323,7 @@ class metricSegment:
         else:
             raise ValueError(f'Unexpected direc {direc} given to displacement. Value should be y or z')
     
-    def lineName(self) -> None:
-        '''get the name of a singleDisturb, or tripleLine line'''
-        if not 'vstill' in self.file:
-            raise ValueError(f'Cannot determine line name for {self.file}')
-        spl = re.split('_', re.split('vstill_', os.path.basename(self.file))[1])
-        self.name = f'{spl[0]}_{spl[1]}'  # this is the full name of the pic, e.g. HOx2_l3w2o1
-        self.tag = spl[1]                 # this is the name of the pic, e.g. l3w2o1
-        self.gname = self.tag[:2]
+
         
     def adjustForCrop(self, d:dict, crop:dict, reverse:bool=False) -> None:
         '''adjust the stats for cropping. reverse to go to the cropped '''
@@ -279,12 +360,36 @@ class segmentDisturb(metricSegment):
     def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         self.scale = 1
-        self.nd = nozData(os.path.dirname(file))   # detect nozzle
+        if 'nd' in kwargs:
+            self.nd = kwargs['nd']
+        else:
+            self.nd = nozData(os.path.dirname(file))   # detect nozzle
         self.pfd = self.nd.pfd
-        self.pv = printVals(os.path.dirname(file), levels=self.nd.levels, pfd = self.pfd, fluidProperties=False)
+        if 'pv' in kwargs:
+            self.pv =  kwargs['pv']
+        else:
+            self.pv = printVals(os.path.dirname(file), pfd = self.pfd, fluidProperties=False)
+        if 'pg' in kwargs:
+            self.pg = kwargs['pg']
+        else:
+            self.getProgDims()
         self.title = os.path.basename(self.file)
         self.lineName()
         self.measure()
+        
+    def timeCounter(self, s:str):
+        tt = time.time()
+        print(f'segmentDisturb {s} {(tt-self.timeCount):0.4f} seconds')
+        self.timeCount = tt
+        
+    def lineName(self) -> None:
+        '''get the name of a singleDisturb, or tripleLine line'''
+        if not 'vstill' in self.file:
+            raise ValueError(f'Cannot determine line name for {self.file}')
+        spl = re.split('_', re.split('vstill_', os.path.basename(self.file))[1])
+        self.name = f'{spl[0]}_{spl[1]}'  # this is the full name of the pic, e.g. HOx2_l3w2o1
+        self.tag = spl[1]                 # this is the name of the pic, e.g. l1wo
+        self.gname = self.tag[:2]     # group name, e.g. l3
         
     def getProgDims(self):
         '''initialize the progDims object'''
@@ -297,31 +402,152 @@ class segmentDisturb(metricSegment):
             
     def getProgRow(self):
         '''get the progDims row for this line'''
+        progRows = pd.concat([self.pg.progLine(i+1, self.gname) for i in range(self.lnum)])
+        self.progRows = progRows
+        
+    def renameY(self) -> None:
+        '''rename y variables to clarify what is top and bottom'''
+        
+        replacement = {'yf':'yBot', 'y0':'yTop', 'x0':'xLeft', 'xf':'xRight'}
+        for k, v in list(self.stats.items()):
+            if k in self.stats and k in self.units:
+                self.stats[replacement.get(k, k)] = self.stats.pop(k)
+                self.units[replacement.get(k, k)] = self.units.pop(k)
+            
+    def makeRelative(self) -> None:
+        '''convert the coords to relative coordinates'''
+        for s in ['c', '0', 'f']:
+            xs = f'x{s}'
+            ys = f'y{s}'
+            if xs in self.stats:
+                x = self.stats[xs]
+            else:
+                x = 0
+            if ys in self.stats:
+                y = self.stats[ys]
+            else:
+                y = 0
+            out = {}
+            out[xs],out[ys] = self.nd.relativeCoords(x,y)
+            for s2 in [xs, ys]:
+                if s2 in self.stats:
+                    self.stats[s2] = out[s2]
+                    self.units[s2] = 'mm'
+                
+    def findNozzlePx(self) -> None:
+        '''find the nozzle position on the cropped image'''
+        self.nozPx = {}
+        self.nozPx['x0'] = self.nd.xL
+        self.nozPx['xf'] = self.nd.xR
+        self.nozPx['yf'] = self.nd.yB
+        self.adjustForCrop(self.nozPx, self.crop, reverse=True)
+        self.nozPx['y0'] = 0
+        
+    def findIntendedPx(self) -> None:
+        '''convert the intended coordinates to pixels on the cropped image'''
+        self.idealspx = {}
+        for s in ['c', '0', 'f']:
+            xs = f'x{s}'
+            ys = f'y{s}'
+            if xs in self.ideals:
+                x = self.ideals[xs]
+            else:
+                x = 0
+            if ys in self.ideals:
+                y = self.ideals[ys]
+            else:
+                y = 0
+            self.idealspx[xs], self.idealspx[ys] = self.nd.relativeCoords(x,y, reverse=True)
+        self.adjustForCrop(self.idealspx, self.crop, reverse=True)
+        
+    def makeMM(self, d:dict, u:dict) -> Tuple[dict, dict]:
+        '''convert measurements to mm'''
+        for power, l in {1:['w', 'h', 'meanT', 'dxprint', 'dx0', 'dxf', 'space_a', 'space_at'], 2:['area'], 3:['vest', 'vintegral', 'vleak']}.items():
+            if power==1:
+                u2 = 'mm'
+            else:
+                u2 = f'mm^{power}'
+            for s in l:
+                # ratio of size to intended size
+                if s in d and not u[s]==u2:
+                    d[s] = d[s]/self.pv.pxpmm**power
+                    u[s] = u2
+        return d,u
+
+        
+    def intendedRC(self, fixList:list=[]) -> Tuple[dict, list]:
+        '''get the intended center position and width of the whole structure written so far, as coordinates in mm relative to the nozzle'''
+        rc1 = self.pg.relativeCoords(self.tag, fixList=fixList)   # position of line 1 in mm, relative to the nozzle. 
+           # we know y and z stay the same during travel, so we can just use the endpoint
+        w1 = self.progRows.iloc[0]['w']
+        if w1==0 or self.progRows.a.sum()==0:
+            raise ValueError(f'No flow anticipated in {self.folder} {self.name}')
+        self.ideals = {}
+        if self.numLines>1:
+            rc2 = self.pg.relativeCoords(self.tag, self.lnum, fixList=fixList)  # position of last line in mm, relative to the nozzle
+            w2 = self.progRows.iloc[self.lnum-1]['w']    # width of that written line
+        else:
+            rc2 = rc1
+            w2 = w1
+        l = self.progRows.l.max() # length of longest line written so far
+        return rc1, rc2, w1, w2, l
+    
+    
+    
+class segmentSDT(segmentDisturb):
+    '''singleDoubleTriple single files'''
+    
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        
+    
+    def lineName(self) -> None:
+        '''get the name of a singleDisturb, or tripleLine line'''
+        if not 'vstill' in self.file:
+            raise ValueError(f'Cannot determine line name for {self.file}')
+        self.numLines = int(re.split('_', os.path.basename(self.file))[1])
+        spl = re.split('_', re.split('vstill_', os.path.basename(self.file))[1])
+        self.name = f'{spl[0]}_{spl[1]}'  # this is the full name of the pic, e.g. HOx2_l3w2o1
         lt = re.split('o', re.split('_', self.name)[1][2:])[0]
         if lt=='d' or lt=='w':
             # get the last line
-            lnum = self.numLines
+            self.lnum = self.numLines
         else:
-            lnum = int(lt[1])
-        progRows = pd.concat([self.pg.progLine(i+1, self.gname) for i in range(lnum)])
-        self.progRows = progRows
+            self.lnum = int(lt[1])
+        self.tag = spl[1]                 # this is the name of the pic, e.g. l3w2o1
+        self.gname = self.tag[:2]     # group name, e.g. l3
+  
         
 #-------------------------------------------------------------------
     
-def testFile(fstr:str, fistr:str, func, slist:list, diag:int=4, **kwargs) -> None:
+def testFile(fstr:str, fistr:str, func, slist:list, diag:int=4, **kwargs) -> dict:
     '''test a single file, for any print type given a metricSegment class '''
     folder = os.path.join(cfg.path.server, fstr)
     file = os.path.join(folder, fistr)
     d,u = func(file, diag=diag, **kwargs).values()
     out = f'{fstr},{fistr}'
+    olist = {'folder': fstr, 'file':fistr}
     for s in slist:
         if s in d:
             v = d[s]
         else:
             v = -1
         out = f'{out},{v}'
-    print(out)
-    
+        olist[s] =v
+    return olist
+
+def addToTestFile(csv:str, fstr:str, fistr:str, func, slist:list, diag:int=4, **kwargs) -> None:
+    l = testFile(fstr, fistr, func, slist, diag=diag, **kwargs)
+    df, _ = plainIm(csv, ic=None)
+    if len(df)==0:
+        df = pd.DataFrame([l])
+    else:
+        if l['file'] in df.file:
+            for key, val in l:
+                df.loc[df.file==l['file'], key] = val
+        else:
+            df = pd.concat([df, pd.DataFrame([l])])
+    plainExp(csv, df, {}, index=False)
     
 class unitTester:
     '''this class lets you run unit tests and evaluate functions later. fn is the test name, e.g. SDTXS or disturbHoriz, func is the function that you run on a file to get values'''

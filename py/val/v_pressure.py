@@ -17,7 +17,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -103,9 +103,9 @@ class pressureVals:
     # ShopbotPyQt after addition of _speed_ and _meta_ files
     def importMetaFile(self) -> int:
         '''find the metadata file. returns 0 if successful'''
-        if not hasattr(self.pfd, 'meta') or len(self.pfd.meta)==0:
+        file = self.pfd.metaFile()
+        if len(file)==0:
             return 1
-        file = self.pfd.meta[0]
         with open(file, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='|')
             for row in reader:

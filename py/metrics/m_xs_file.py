@@ -122,7 +122,19 @@ class xsSegment(metricSegment):
             for s in ['x0', 'xf', 'y0', 'yf']:
                 io[s] = int(self.nozPx[s]/self.scale)
             cv.rectangle(imgi, (io['x0'],io['yf']), (io['xf'],io['y0']), (0,0,0), 1)   # bounding box of nozzle
-        imshow(imgi, im2, self.statText())
+        if self.diag>1 and hasattr(self, 'componentMask'):
+            # show the roughness as well
+            cm = self.componentMask.copy()
+            cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
+            if hasattr(self, 'hull'):
+                cv.drawContours(cm, [self.hull], -1, (110, 245, 209), 6)
+            if hasattr(self, 'hull2'):
+                cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 6)
+            if hasattr(self, 'cnt'):
+                cv.drawContours(cm, self.cnt, -1, (186, 6, 162), 6)
+            imshow(imgi, im2, cm, self.statText())
+        else:
+            imshow(imgi, im2, self.statText())
         if hasattr(self, 'title'):
             plt.title(self.title)
         
@@ -298,38 +310,10 @@ class xsSegmentSDT(xsSegment, segmentDisturb):
         self.numLines = int(re.split('_', os.path.basename(file))[1])
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
-    def makeRelative(self) -> None:
-        '''convert the coords to relative coordinates'''
-        for s in ['c', '0', 'f']:
-            xs = f'x{s}'
-            ys = f'y{s}'
-            if xs in self.stats and ys in self.stats:
-                self.stats[xs], self.stats[ys] = self.nd.relativeCoords(self.stats[xs], self.stats[ys])
-                self.units[xs] = 'mm'
-                self.units[ys] = 'mm'
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly. assume that the center of the first filament should be at the center of the nozzle tip'''
-        rc1 = self.pg.relativeCoords(self.tag, fixList=['y','z'])   # position of line 1 in mm, relative to the nozzle. 
-           # we know y and z stay the same during travel, so we can just use the endpoint
-        w1 = self.progRows.iloc[0]['w']
-        if w1==0 or self.progRows.a.sum()==0:
-            raise ValueError(f'No flow anticipated in {self.folder} {self.name}')
-        self.ideals = {}
-        if self.numLines>1:
-            lt = re.split('o', re.split('_', self.name)[1][2:])[0]
-            if lt=='d' or lt==f'w{self.numLines}':
-                # get the last line
-                lnum = self.numLines   
-            else:
-                lnum = int(lt[1])
-            rc2 = self.pg.relativeCoords(self.tag, lnum, fixList=['y','z'])  # position of last line in mm, relative to the nozzle
-            w2 = self.progRows.iloc[lnum-1]['w']    # width of that written line
-        else:
-            rc2 = rc1
-            w2 = w1
-
-        rc = dict([[key, (rc1[key]+rc2[key])/2] for key in rc1.keys()])
+        rc1, rc2, w1, w2, _ = self.intendedRC(fixList=['y','z'])
         for j in [['dx', 'w'], ['dy', 'h']]:
             coord = j[0][1]
             right = (rc2[j[0]]+w2/2)      # the left edge should be 1/2 diameter to the left of the first line center
@@ -343,26 +327,6 @@ class xsSegmentSDT(xsSegment, segmentDisturb):
             self.ideals[j[1]] = abs(right - left)     # get the ideal width
             self.ideals[f'{coord}c'] = (right+left)/2  # get the ideal center
         self.ideals['area'] = self.progRows.a.sum()
-        
-    def findIntendedPx(self) -> None:
-        '''convert the intended coordinates to pixels on the cropped image'''
-        self.idealspx = {}
-        for s in ['c', '0', 'f']:
-            xs = f'x{s}'
-            ys = f'y{s}'
-            if xs in self.stats and ys in self.stats:
-                self.idealspx[xs], self.idealspx[ys] = self.nd.relativeCoords(self.ideals[xs], self.ideals[ys], reverse=True)
-        self.adjustForCrop(self.idealspx, self.crop, reverse=True)
-        
-    def findNozzlePx(self) -> None:
-        '''find the nozzle position on the cropped image'''
-        self.nozPx = {}
-        self.nozPx['x0'] = self.nd.xL
-        self.nozPx['xf'] = self.nd.xR
-        self.nozPx['yf'] = self.nd.yB
-        self.adjustForCrop(self.nozPx, self.crop, reverse=True)
-        self.nozPx['y0'] = 0
-        
         
     def findDisplacement(self) -> None:
         '''find the displacement of the center and dimensions relative to the intended dimensions'''
@@ -382,15 +346,7 @@ class xsSegmentSDT(xsSegment, segmentDisturb):
         self.units['area'] = 'intended'
         self.stats['aspectI'] = self.stats['h']/self.stats['w']   # ratio of aspect ratio to intended aspect ratio
         self.units['aspectI'] = 'intended'
-        
-    def renameY(self) -> None:
-        '''rename y variables to clarify what is top and bottom'''
-        
-        replacement = {'yf':'yBot', 'y0':'yTop', 'x0':'xLeft', 'xf':'xRight'}
-        for k, v in list(self.stats.items()):
-            self.stats[replacement.get(k, k)] = self.stats.pop(k)
-            self.units[replacement.get(k, k)] = self.units.pop(k)
-        
+
     
     def measure(self) -> None:
         '''measure cross-section of single disturbed line'''

@@ -18,7 +18,7 @@ import matplotlib.ticker as mticker
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
-import file_handling as fh
+import file.file_handling as fh
 from val.v_print import *
 from progDim.prog_dim import getProgDimsPV
 from vid.noz_detect import nozData

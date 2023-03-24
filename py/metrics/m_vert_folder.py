@@ -28,6 +28,7 @@ from val.v_print import *
 from vid.noz_detect import nozData
 from m_tools import *
 from m_folder import *
+from m_vert_file import vertSDTMeasure, vertSDTTestFile
 
 # logging
 logger = logging.getLogger(__name__)

@@ -19,7 +19,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from progDim.prog_dim import getProgDims
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -107,6 +107,9 @@ class vidData:
             tlist = ['frames', 'fps', 'duration', 'dstart']
             for st,val in d.items():
                 setattr(self, st, val)
+            if 'dstart_manual' in d:
+                self.dstart = d['dstart_manual']
+                self.dstart_manual = d['dstart_manual']
             if len(set(tlist)-set(d))>0:
                 return 1
             else:
@@ -126,26 +129,48 @@ class vidData:
 
     def exportVidStats0(self):
         '''export the video stats'''
-        l = ['frames', 'fps', 'duration', 'dstart']
+        l = ['frames', 'fps', 'duration', 'dstart', 'dstart_manual']
         fn = self.vidStatsFN()  # nozzle dimensions file name
-        plainExpDict(fn, dict([[li, getattr(self, li)] for li in l]))
+        d = {}
+        for li in l:
+            if hasattr(self, li):
+                d[li] = getattr(self, li)
+        plainExpDict(fn, d)
+        
+    def importMetaData(self):
+        '''import the frame rate from the metadata file'''
+        self.collectionFrameRate = 120
+        if not hasattr(self.pfd, 'meta') or len(self.pfd.meta)==0:
+            return 1
+        file = self.pfd.meta[0]
+        d,u = plainImDict(file, unitCol=1, valCol=2)
+        if 'Basler_camera_collection_frame_rate' in d:
+            self.collectionFrameRate = d['Basler_camera_collection_frame_rate']
+            
+
         
     def getVidStats(self) -> None:
         '''get the video stats from the stream'''
+        self.importMetaData()
         self.frames = int(self.stream.get(cv.CAP_PROP_FRAME_COUNT)) # total number of frames
         self.fps = self.stream.get(cv.CAP_PROP_FPS)
         self.duration = self.frames/self.fps
+        if hasattr(self, 'dstart_manual'):
+            self.dstart = self.dstart_manual
+            return
         if self.frameError=='sc_sh':
             if not hasattr(self, 'maxT'):
                 self.getProgDims()
             # timing rate should be correct, but vid started earlier than timing
             self.dstart = max(self.duration-self.maxT,0)+1.25
         elif self.frameError=='sh':
-            self.dstart = 1.25
+            self.dstart = 0
             self.rawPicTimes()   # determine if the raw pic times match the progDims times and shift dstart if they are off
-            self.dstart = self.dstart-0.3
+            shift = max(0, ((300/self.collectionFrameRate)-1)/10)
+            self.dstart = self.dstart-shift
         else:
             self.dstart = 0
+        
         
     def openStream(self, overwrite:bool=False) -> None:
         '''open the video stream and get metadata'''
@@ -224,6 +249,7 @@ class vidData:
     def exportStills(self, prefixes:list=[], overwrite:bool=False, **kwargs) -> None:
         '''export stills for all times in the progdims table'''
         self.getProgDims()
+ 
         if not 'tpic' in self.prog:
             raise ValueError('No pic time noted')
         if self.pfd.printType=='singleLine':
@@ -248,42 +274,32 @@ class vidData:
                 frame = self.getFrameAtTime(row['tpic'], (overwrite and i==0))   # this also exports video stats on the first loop if overwriting
                 cv.imwrite(fn, frame)
                 logging.info(f'Exported {fn}')
+            if 'p3' in name:
+                fn2 = fn.replace('p3', '')
+                if os.path.exists(fn2):
+                    os.remove(fn2)
+                    logging.info(f'Removed {fn2}')
             
 #----------------------------------------------
 
-def exportStillsRecursive(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> None:
-    '''export stills of key lines from videos'''
-    errorList = []
-    if not os.path.isdir(folder):
-        return errorList
-    if not fh.isPrintFolder(folder):
-        for f1 in os.listdir(folder):
-            errorList = errorList + exportStillsRecursive(os.path.join(folder, f1), overwrite=overwrite, overwriteDims=overwriteDims, **kwargs)
-        return errorList
+def exportStills(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> None:
+    pdim = getProgDims(folder)
+    pdim.exportAll(overwrite=overwriteDims)
+    vd = vidData(folder)
+    vd.exportStills(overwrite=overwrite, **kwargs)
 
-    try:
-        pdim = getProgDims(folder)
-        pdim.exportAll(overwrite=overwriteDims)
-        vd = vidData(folder)
-        vd.exportStills(overwrite=overwrite, **kwargs)
-    except Exception as e:
-        errorList.append(folder)
-        print(e)
-        traceback.print_exc()
-        return errorList
-    else:
-        return errorList
-    
-def exportStillsList(folders:list, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> None:
-    '''given a list of folders, try exporting stills'''
-    errorList = []
-    for folder in folders:
-        try:
-            pdim = getProgDims(folder)
-            pdim.exportAll(overwrite=overwriteDims)
-            vd = vidData(folder)
-            vd.exportStills(overwrite=overwrite, **kwargs)
-        except Exception as e:
-            errorList.append(folder)
-            print(e)
-    return errorList
+def exportStillsRecursive(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportStills, overwrite=overwrite, overwriteDims=overwriteDims, **kwargs)
+    return fl.run()
+
+def setManualStillTimeFolder(folder:str, dstart:float=0, **kwargs) -> None:
+    vd = vidData(folder)
+    vd.dstart_manual = dstart
+    vd.dstart = dstart
+    vd.exportStills(overwrite=True, **kwargs)
+
+def setManualStillTime(folder:str, dstart:float, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, setManualStillTimeFolder, dstart=dstart, **kwargs)
+    return fl.run()

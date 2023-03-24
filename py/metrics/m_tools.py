@@ -51,36 +51,13 @@ def sem(l:list) -> float:
     return np.std(l)/np.sqrt(len(l))
     
 
-def getRoughness(componentMask:np.array, diag:int=0) -> float:
-    '''measure roughness as perimeter of object / perimeter of convex hull. 
-    componentMask is a binarized image of just one segment'''
-    contours = cv.findContours(componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-    if int(cv.__version__[0])>=4:
-        contours = contours[0]
-    else:
-        contours = contours[1]
-    if len(contours)==0:
-        return -1
-    contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
-    cnt = contours[0]
-    cnt = cv.approxPolyDP(cnt, 1, True) # smooth the contour by 1 px
-    perimeter = cv.arcLength(cnt,True)
-    if perimeter==0:
-        return {}, {}
-    hull = cv.convexHull(cnt)
-    hullperimeter = cv.arcLength(hull,True)
-    roughness = perimeter/hullperimeter-1  # how much extra perimeter there is compared to the convex hull
-    if diag:
-        # show annotated image
-        cm = componentMask.copy()
-        cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
-        cv.drawContours(cm, [hull], -1, (110, 245, 209), 6)
-        cv.drawContours(cm, cnt, -1, (186, 6, 162), 6)
-        
-        x,y,w,h = cv.boundingRect(cnt)
-        cm = cm[max(y-5,0):min(y+h+5, cm.shape[0]),max(x-5, 0):min(x+w+5, cm.shape[1])]
-        imshow(cm)
-    return roughness
+def ppdist(p1:list, p2:list) -> float:
+    d = 0
+    for i in range(len(p1)):
+        d = d + (float(p2[i])-float(p1[i]))**2
+    d = np.sqrt(d)
+    return d
+
 
 def widthInRow(row:list) -> int:
     '''distance between first and last 255 value of row'''

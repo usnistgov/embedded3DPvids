@@ -48,59 +48,50 @@ def getProgDimsPV(pv:printVals) -> progDim:
 def getProgDims(folder:str) -> progDim:
     pv = printVals(folder)
     return getProgDims0(folder, pv)
-    
-    
-def exportProgDims(folder:str, overwrite:bool=False) -> list:
-    '''export programmed dimensions. returns list of bad folders'''
-    errorList = []
-    if not os.path.isdir(folder):
-        return errorList
-    if not fh.isPrintFolder(folder):
-        for f1 in os.listdir(folder):
-            errorList = errorList + exportProgDims(os.path.join(folder, f1), overwrite=overwrite)
-        return errorList
 
+def exportProgDims(folder:str, overwrite:bool=False, **kwargs) -> None:
     pv = printVals(folder)
     if not overwrite:
         if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
-            return errorList
-        
-    try:
-        pdim = getProgDims(folder)
-        pdim.exportProgDims(overwrite=overwrite)
-    except ValueError as e:
-        errorList.append(folder)
-        print(e)
-        traceback.print_exc()
-        return errorList
-    else:
-        return errorList
+            return 
+    pdim = getProgDims(folder)
+    pdim.exportProgDims(overwrite=overwrite)
 
-def exportAllDims(folder:str, overwrite:bool=False) -> list:
-    '''export programmed dimensions. returns list of bad folders'''
-    errorList = []
-    if not os.path.isdir(folder):
-        return errorList
-    if not fh.isPrintFolder(folder):
-        for f1 in os.listdir(folder):
-            errorList = errorList + exportProgDims(os.path.join(folder, f1), overwrite=overwrite)
-        return errorList
+def exportProgDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportProgDims, overwrite=overwrite, **kwargs)
+    return fl.run()
 
+
+def exportProgDims(folder:str, overwrite:bool=False, **kwargs) -> None:
     pv = printVals(folder)
     if not overwrite:
         if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
-            return errorList
-        
-    try:
-        pdim = getProgDims(folder)
-        pdim.exportAll(overwrite=overwrite)
-    except ValueError as e:
-        errorList.append(folder)
-        print(e)
-        traceback.print_exc()
-        return errorList
-    else:
-        return errorList
+            return 
+    pdim = getProgDims(folder)
+    pdim.exportProgDims(overwrite=overwrite)
+
+def exportProgDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportProgDims, overwrite=overwrite, **kwargs)
+    return fl.run()
+
+def exportAllDims(folder:str, overwrite:bool=False, **kwargs) -> None:
+    pv = printVals(folder)
+    if not overwrite:
+        if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
+            return 
+    pdim = getProgDims(folder)
+    pdim.exportAll(overwrite=overwrite)
+
+def exportAllDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportAllDims, overwrite=overwrite, **kwargs)
+    return fl.run()
+
+    
+#----------------------------------------------------
+# single lines
 
 def progTableRecursive(topfolder:str, useDefault:bool=False, overwrite:bool=False, **kwargs) -> pd.DataFrame:
     '''go through all of the folders and summarize the programmed timings'''

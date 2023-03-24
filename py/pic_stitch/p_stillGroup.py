@@ -16,7 +16,7 @@ import cv2 as cv
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
-import file_handling as fh
+import file.file_handling as fh
 from pic_stitch.pic_stitch import Stitch
 
 

@@ -50,6 +50,10 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
                 ax.get_xaxis().set_visible(axesVisible)
                 ax.get_yaxis().set_visible(axesVisible)
                 ax.set_aspect(aspect)
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white') 
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
         for i, im in enumerate(args):
             if type(im) is str:
                 axlist[i].text(0.1,0.1,im, family='Monospace', linespacing=2)
@@ -74,5 +78,5 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
             ax.imshow(im, cmap='Greys')
     if 'title' in kwargs:
         # put title on figure
-        f.suptitle(kwargs['title'])
+        axlist[0].set_title(kwargs['title'])
     f.tight_layout()

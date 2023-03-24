@@ -18,7 +18,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 from val.v_fluid import fluidVals
 from val.v_pressure import pressureVals
 from val.v_geometry import geometryVals
@@ -44,15 +44,18 @@ class printVals:
         self.fluidProperties = fluidProperties
         tic = time.perf_counter()
         self.printFolder = folder
-        if 'levels' in kwargs:
-            self.levels = kwargs['levels']
-        else:
-            self.levels = fh.labelLevels(self.printFolder)
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']
         else:
             self.pfd = fh.printFileDict(self.printFolder)
-        self.bn = os.path.basename(self.levels.subFolder)
+            
+        # get the sample folder
+        fi = self.printFolder
+        while not fh.sampleInName(fi):
+            fi = os.path.dirname(fi)
+        self.bn = os.path.basename(os.path.dirname(fi))
+        self.date = self.pfd.date
+        
         if len(self.pfd.timeSeries)>0:
             self.fluFile = True
         else:
@@ -64,13 +67,13 @@ class printVals:
         split = re.split('_', self.bn)
         inkShortName = split[1]
         supShortName = split[3]
-        self.date = int(fh.fileDate(self.levels.subFolder))
+
         self.constUnits['date'] = 'yymmdd'
         self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties)
         self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties)
         
         if self.pfd.printType in ['tripleLine', 'singleDisturb', 'SDT']:
-            split = re.split('_', os.path.basename(self.levels.sbpFolder))
+            split = re.split('_', os.path.basename(self.pfd.printFolder))
             if len(split)>1:
                 self.spacing = float(split[-1])
                 self.constUnits['spacing'] = '$d_i$'

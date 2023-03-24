@@ -13,6 +13,7 @@ import numpy as np
 import cv2 as cv
 import csv
 import random
+import time
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -23,7 +24,7 @@ import im.morph as vm
 import im.crop as vc
 from tools.config import cfg
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 from v_tools import vidData
 
 
@@ -64,27 +65,34 @@ def lineIntersect(line1:pd.Series, line2:pd.Series) -> Tuple[float,float]:
 class nozData:
     '''holds metadata about the nozzle'''
     
-    def __init__(self, folder:str, **kwargs):
-        if 'levels' in kwargs:
-            self.levels = kwargs['levels']
-        else:
-            self.levels = fh.labelLevels(folder)
-        self.printFolder = self.levels.printFolder()
+    def __init__(self, folder:str, maskPad:int=0, **kwargs):
+        # self.timeCount = time.time()
+        # self.timeCounter('start')
+        self.printFolder = fh.getPrintFolder(folder, **kwargs)
+        # self.timeCounter('printFolder')
+        
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']
         else:
             self.pfd = fh.printFileDict(self.printFolder)
-        if len(self.pfd.vid)>0:
-            self.vidFile = self.pfd.vid[0]
-        else:
-            self.vidFile = ''
-        self.sampleName = os.path.basename(self.levels.subFolder)
+        # self.timeCounter('pfd')
+        self.vidFile = self.pfd.vidFile()
+        self.sampleName = fh.sampleName(self.printFolder)
         self.nozMask = []                   # mask that blocks nozzle
         self.prog = []                      # programmed timings
+        self.maskPadLeft = maskPad
+        self.maskPadRight = maskPad
         self.streamOpen = False
         self.pxpmm = self.pfd.pxpmm()
         self.importNozzleDims()
+        # self.timeCounter('import')
         self.defineCritVals()
+        # self.timeCounter('critvals')
+        
+    def timeCounter(self, s:str):
+        tt = time.time()
+        print(f'nozData {s} {(tt-self.timeCount):0.4f} seconds')
+        self.timeCount = tt
 
         
     #-----------------------------
@@ -92,10 +100,7 @@ class nozData:
     def nozDimsFN(self) -> str:
         '''file name of nozzle dimensions table'''
         # store noz dimensions in the subfolder
-        if hasattr(self.pfd, 'nozDims'):
-            return self.pfd.nozDims
-        else:
-            return self.pfd.newFileName('nozDims', 'csv')
+        return self.pfd.newFileName('nozDims', 'csv')
     
     def nozDims(self) -> dict:
         '''get the nozzle dimensions
@@ -158,7 +163,7 @@ class nozData:
         mode=0 to use median frame, mode=1 to use mean frame, mode=2 to use lightest frame'''
         if not hasattr(self, 'frames') or overwrite:
             if len(self.pfd.progPos)>0:
-                prog,units = plainIm(self.pfd.progPos[0], ic=0)
+                prog,units = plainIm(self.pfd.progPos, ic=0)
                 prog = prog[(prog.l==0)&(prog.zt<0)&(prog.yt>ymin)&(prog.yt<ymax)&(prog.zt>zmin)]        # select moves with no extrusion that aren't close to the edge
                 prog.reset_index(inplace=True, drop=True)
                 tlist = list((prog['tf']+prog['t0'])/2)
@@ -166,7 +171,7 @@ class nozData:
                 tlist = [self.randTime(prog.loc[i]) for i in indices]
             else:
                 if len(self.pfd.progDims)>0:
-                    self.prog, units = plainIm(self.pfd.progDims[0], ic=0)
+                    self.prog, units = plainIm(self.pfd.progDims, ic=0)
                     if len(self.prog)==0:
                         raise ValueError('No programmed timings in folder')
                     else:
@@ -195,7 +200,6 @@ class nozData:
         bg = self.background
         bg = cv.medianBlur(bg, 5)
         subtracted = 255-cv.absdiff(im, bg)
-#         subtracted = vm.normalize(subtracted)
         subtracted = self.maskNozzle(subtracted, dilate=dilate)
         if diag>0:
             imshow(im, bg, subtracted)
@@ -370,40 +374,49 @@ class nozData:
 
         self.edgeImage = thres2.copy()                # store edge image for displaying diagnostics
         
-    def nozzleLines(self) -> pd.DataFrame:
-        '''get lines from the stored edge image'''
-        rho = int(3*self.pxpmm/139)         # distance resolution in pixels of the Hough grid
+        
+    def nozzleLines0(self, im:np.array, yBmin:int, yBmax:int, xLmin:int, xRmax:int, hmax:int
+                     , min_line_length:int=50, max_line_gap:int=300, threshold:int=30, rho:int=0, critslope:float=0.1):
+        if rho==0:
+            rho=int(3*self.pxpmm/139)
         theta = np.pi/180   # angular resolution in radians of the Hough grid
-        threshold = 30      # minimum number of votes (intersections in Hough grid cell)
-        min_line_length = 50  # minimum number of pixels making up a line
-        max_line_gap = 300    # maximum gap in pixels between connectable line segments
-
+      # threshold is minimum number of votes (intersections in Hough grid cell)
         # Run Hough on edge detected image
         # Output "lines" is an array containing endpoints of detected line segments
-        lines = cv.HoughLinesP(self.edgeImage, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
+        lines = cv.HoughLinesP(im, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
         
-        if len(lines)==0:
-            raise ValueError('Failed to detect any lines in nozzle')
+        if lines is None or len(lines)==0:
+            return [], []
 
         # convert to dataframe
         lines = pd.DataFrame(lines.reshape(len(lines),4), columns=['x0', 'y0', 'xf', 'yf'], dtype='int32')
         lines['slope'] = abs(lines['x0']-lines['xf'])/abs(lines['y0']-lines['yf'])
 
         # find horizontal lines
-        horizLines = lines[(lines['slope']>20)&(lines['y0']>self.yBmin)&(lines['y0']<self.yBmax)]
-        self.lines0h = horizLines.copy()
+        horizLines = lines[(lines['slope']>20)&(lines['y0']>yBmin)&(lines['y0']<yBmax)]
+        lines0h = horizLines.copy()
         
         # only take nearly vertical lines, where slope = dx/dy
-        critslope = 0.1
-        lines = lines[(lines['slope']<critslope)&(lines['x0']>self.xLmin)&(lines['x0']<self.xRmax)]
-        self.lines0 = lines.copy()
+        lines = lines[(lines['slope']<critslope)&(lines['x0']>xLmin)&(lines['x0']<xRmax)]
+        lines0 = lines.copy()
         # sort each line by y
-        for i,row in self.lines0.iterrows():
+        for i,row in lines0.iterrows():
             if row['yf']<row['y0']:
-                self.lines0.loc[i,['x0','y0','xf','yf']] = list(row[['xf','yf','x0','y0']])
-        self.lines0 = self.lines0.convert_dtypes()         # convert back to int
-        self.lines0 = self.lines0[self.lines0.yf<400]      # only take lines that extend close to the top of the frame
+                lines0.loc[i,['x0','y0','xf','yf']] = list(row[['xf','yf','x0','y0']])
+        lines0 = lines0.convert_dtypes()         # convert back to int
+        lines0 = lines0[lines0.yf<hmax]      # only take lines that extend close to the top of the frame
+        return lines0h, lines0
         
+        
+    def nozzleLines(self) -> pd.DataFrame:
+        '''get lines from the stored edge image'''
+        lines0h, lines0 = self.nozzleLines0(self.edgeImage, self.yBmin, self.yBmax, self.xLmin, self.xRmax, 400)
+        if len(lines0)==0:
+            raise ValueError('Failed to detect any lines in nozzle')
+        if len(lines0h)>0:
+            self.lines0h = lines0h
+        if len(lines0)>0:
+            self.lines0 = lines0
         
     def useHoriz(self) -> None:
         '''use horizontal line to find nozzle corners'''
@@ -500,7 +513,7 @@ class nozData:
         self.nozMask = 255*np.ones((frame.shape[0], frame.shape[1]), dtype=np.uint8)
         self.nozCover = np.copy(frame)*0                          # create empty mask
 #         average = frame.mean(axis=0).mean(axis=0)                 # background color
-        self.nozCover[0:int(self.yB), int(self.xL)-10:int(self.xR)+10]=255      # set the nozzle region to white
+        self.nozCover[0:int(self.yB), int(self.xL)-self.maskPadLeft:int(self.xR)+self.maskPadRight]=255      # set the nozzle region to white
         m = cv.cvtColor(self.nozCover,cv.COLOR_BGR2GRAY)              # convert to gray
         _,self.nozMask = cv.threshold(m,0,255,cv.THRESH_BINARY_INV)   # binary mask of nozzle
     
@@ -519,15 +532,15 @@ class nozData:
             self.drawDiagnostics(diag) # show diagnostics
         
 
-    def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False) -> None:
+    def detectNozzle(self, diag:int=0, suppressSuccess:bool=False, mode:int=0, overwrite:bool=False, **kwargs) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
 #         logging.info(f'Detecting nozzle in {self.printFolder}')
         if not overwrite:
             im = self.importNozzleDims()
-        if im==0:
-            self.createNozzleMask()
-            # we already detected the nozzle
-            return 0
+            if im==0:
+                self.createNozzleMask()
+                # we already detected the nozzle
+                return 0
         
         # no existing file: detect nozzle
         for i in range(3):
@@ -549,21 +562,18 @@ class nozData:
     #------------------------------------------------------------------------------------
         
         
-    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False, invert:bool=False, normalize:bool=True, **kwargs) -> np.array:
+    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False, invert:bool=False, normalize:bool=True, bottomOnly:bool=False, **kwargs) -> np.array:
         '''block the nozzle out of the image. 
         dilate is number of pixels to expand the mask. 
         ave=True to use the background color, otherwise use white
         invert=False to draw the nozzle back on
         '''
-
+        s = frame.shape
         if not hasattr(self, 'nozMask') or not hasattr(self, 'nozCover'):
             self.createNozzleMask(frame=frame)
         if 'crops' in kwargs:
             crops = kwargs['crops']
-            nm = vc.imcrop(self.nozMask, crops)
-        else:
-            nm = self.nozMask
-        frameMasked = cv.bitwise_and(frame,frame,mask = vm.erode(nm, dilate))   # nozzle removed
+        frameMasked = frame.copy()
         
         if 'crops' in kwargs and 'y0' in kwargs['crops'] and 'x0' in kwargs['crops']:
             yB = int(self.yB-crops['y0'])
@@ -578,29 +588,70 @@ class nozData:
         if ave:
             # mask nozzle with whitest value
             nc = np.copy(frame)*0 # create mask
-            average = frame.max(axis=0).mean(axis=0)
-            
-#             while frame[0:yB-20, xL+20:xR-20].mean(axis=0).mean(axis=0)
-            nc[0:yB, xL-10:xR+10]=average
+            average = int(frame.max(axis=0).mean(axis=0))
+            if bottomOnly:
+                y0 = yB-10
+            else:
+                y0 = 0
+            nc[y0:yB, xL-self.maskPadLeft:xR+self.maskPadRight]=average
         else:
+            # mask nozzle with white
             nc = self.nozCover
             if 'crops' in kwargs:
                 nc = vc.imcrop(nc, crops)
-        s = frameMasked.shape
-        if len(s)==2:
-            nc = cv.cvtColor(nc,cv.COLOR_BGR2GRAY)
+            if bottomOnly:
+                nc[0:yB-10, xL-self.maskPadLeft:xR+self.maskPadRight]=0
+        
+        # put the new mask on top
+        nc = vm.dilate(nc, dilate)  
+        if len(s)<3 and len(nc.shape)==3:
+            nc = cv.cvtColor(nc, cv.COLOR_BGR2GRAY)
         if invert:
-            out = cv.subtract(frameMasked, vm.dilate(nc, dilate))
+            out = cv.subtract(frameMasked, nc)
         else:
-            out = cv.add(frameMasked, vm.dilate(nc, dilate)) 
+            out = cv.add(frameMasked, nc) 
 
         norm = np.zeros(out.shape)
         if normalize:
             out = cv.normalize(out,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image
         return out
     
+    def displayNearLines(self, lines0:pd.DataFrame, im:np.array, edges:np.array) -> None:
+        print('Lines near nozzle: ', lines0)
+        if len(lines0)>0:
+            im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
+            im3 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
+            h,w = im.shape[:2]
+            for i,line in lines0.iterrows():
+                color = list(np.random.random(size=3) * 256)            # assign a random color to each line
+                cv.line(im2,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,1)
+            for i,line in lines0.iterrows():
+                cv.line(im3,(int(line['x0']),int(0)),(int(line['x0']),int(h)),color,1)
+                cv.line(im3,(int(line['xf']),int(0)),(int(line['xf']),int(h)),color,1)
+
+            imshow(im3, im2, edges, title='eraseSpillover', maxwidth=8)
+        
+    
+    def nearLines(self, im:np.array, l0:int, lf:int, diag:int=0, **kwargs):
+        '''get lines near the nozzle'''
+        h,w = im.shape[:2]
+        xmin = l0-2
+        hcrit = 0.5*255
+        while xmin>0 and xmin>l0-20 and xmin<w and im[:, xmin].mean()>hcrit:
+            xmin = xmin-1
+        xmax = lf+1
+        while xmax<w and xmax<lf+20 and xmax>0 and im[:, xmax].mean()>hcrit:
+            xmax = xmax+1
+        if diag>0:
+            im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
+            for x in [xmin, xmax]:
+                color = (0,0,255)
+                cv.line(im2,(int(x),int(0)),(int(x),int(h)),color,1)
+            imshow(im, im2, title='eraseSpillover', maxwidth=6)
+        return xmin, xmax
+    
     def eraseSpillover(self, thresh:np.array, **kwargs) -> np.array:
-        '''erase any extra nozzle on left and right of thresholded image'''
+        '''erase any extra nozzle on left and right of thresholded and cropped image'''
         if 'crops' in kwargs:
             crops = kwargs['crops']
             yB = int(self.yB-crops['y0'])
@@ -610,23 +661,14 @@ class nozData:
             yB = int(self.yB)
             xL = int(self.xL)
             xR = int(self.xR)
-        s = thresh.shape
-        fseg = thresh[0:yB-20, xL+20:xR-20]
-        if fseg.sum()>0:
-            nozColors = fseg.mean(axis=0).mean(axis=0)  # color of nozzle
-        else:
-            nozColors = 0
-        if len(s)==2 and nozColors==0:
-            # also erase any extra nozzle on left and right
-            fseg = thresh[0:yB-20, xL-11:xL-10]
-            if fseg.sum()>0:
-                count = 0
-                while fseg.mean(axis=0).mean(axis=0)>255/2 and count<20:  # more than half of the points are segmented
-                    thresh[0:yB, xL-11:xL-10] = 0  # white out
-                    xL = xL-1  # check next one
-                    count = count+1
-                    fseg = thresh[0:yB-20, xL-11:xL-10]
-                thresh[0:yB, xL-11:xL-10] = 0
+        xL2, xR2 = self.nearLines(thresh[0:yB], xL, xR, **kwargs)
+        xL2 = int(min(xL, xL2))
+        xR2 = int(max(xR, xR2))
+        thresh[0:yB, xL2:xR2] = 0
+        self.xL = self.xL + (xL2-xL)
+        self.xR = self.xR + (xR2-xR)
+        self.nozCover[0:yB, self.xL:self.xR, :] = 255   # update the nozzle cover
+        
         return thresh
     
     def absoluteCoords(self, d:dict) -> dict:
@@ -649,35 +691,21 @@ class nozData:
             return (x-nx)/self.pxpmm, (ny-y)/self.pxpmm
 
 
-    
-def exportNozDims(folder:str, overwrite:bool=False) -> list:
-    '''export programmed dimensions. returns list of bad folders'''
-    errorList = []
-    if not os.path.isdir(folder):
-        return errorList
-    if not fh.isPrintFolder(folder):
-        for f1 in os.listdir(folder):
-            errorList = errorList + exportNozDims(os.path.join(folder, f1), overwrite=overwrite)
-        return errorList
+        
+#--------------------------------------------
 
+def exportNozDims(folder:str, overwrite:bool=False, **kwargs) -> None:
     pfd = fh.printFileDict(folder)
     if not overwrite and hasattr(pfd, 'nozDims') and hasattr(pfd, 'background'):
-        return errorList
+        return
+    nv = nozData(folder)
+    nv.detectNozzle(overwrite=overwrite, **kwargs)
+    nv.exportBackground(overwrite=overwrite)
 
-    try:
-        nv = nozData(folder)
-        nv.detectNozzle(diag=0, overwrite=overwrite)
-        nv.exportBackground(overwrite=overwrite)
-    except ValueError as e:
-        errorList.append(folder)
-        print(f'{folder}:{e}')
-        return errorList
-    except AttributeError as e:
-        errorList.append(folder)
-        print(f'{folder}:{e}')
-        return errorList
-    else:
-        return errorList
+def exportNozDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportNozDims, overwrite=overwrite, **kwargs)
+    return fl.run()
     
     
 def checkBackground(folder:str, diag:bool=False) -> float:

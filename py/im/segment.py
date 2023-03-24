@@ -31,7 +31,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class segmenter:
     '''for thresholding and segmenting images'''
     
-    def __init__(self, im:np.array, acrit:float=2500, diag:int=0, removeBorder:bool=True, eraseMaskSpill:bool=False, closeTop:bool=True, dilation:int=0, **kwargs):
+    def __init__(self, im:np.array, acrit:float=2500, diag:int=0, removeBorder:bool=True, eraseMaskSpill:bool=False, closeTop:bool=True, dilation:int=0, closing:int=0, **kwargs):
         self.im = im
         self.w = self.im.shape[1]
         self.h = self.im.shape[0]
@@ -40,24 +40,28 @@ class segmenter:
         self.removeBorder = removeBorder
         self.eraseMaskSpill = eraseMaskSpill
         self.closeTop = closeTop
+        self.closing = closing
         self.kwargs = kwargs
-        self.success = False
         self.dilation = dilation
         if 'nozData' in kwargs:
             self.nd = kwargs['nozData']
         if 'crops' in kwargs:
             self.crops = kwargs['crops']
-        self.segmentInterfaces()
-        self.getConnectedComponents()
+        self.segmentInterfaces(**kwargs)
+        self.makeDF()
+            
+    def makeDF(self):
+        if hasattr(self, 'filled'):
+            self.sdf = segmenterDF(self.filled, self.acrit, diag=self.diag)
         
         
         
     def display(self):
         if self.diag>0:
             if hasattr(self, 'labeledIm'):
-                imshow(self.im, self.gray, self.thresh, self.labeledIm, maxwidth=13)
+                imshow(self.im, self.gray, self.thresh, self.sdf.labeledIm, maxwidth=13, title='segmenter')
             else:
-                imshow(self.im, self.gray, self.thresh, maxwidth=13) 
+                imshow(self.im, self.gray, self.thresh, maxwidth=13, title='segmenter') 
         
     def getGray(self) -> None:
         '''convert the image to grayscale and store the grayscale image as self.thresh'''
@@ -68,51 +72,212 @@ class segmenter:
         self.gray = cv.medianBlur(gray, 5)
 
         
-    def threshes(self, topthresh:int=200, whiteval:int=80, **kwargs) -> None:
+    def threshes(self, topthresh:int=200, whiteval:int=80, adaptive:bool=False, **kwargs) -> None:
         '''threshold the grayscale image and store the resulting binary image as self.thresh
         topthresh is the initial threshold value
         whiteval is the pixel intensity below which everything can be considered white
         '''
-        crit = topthresh
-        impx = np.product(self.gray.shape)
-        allwhite = impx*whiteval
-        prod = allwhite
-        while prod>=allwhite and crit>50: # segmentation included too much
-            ret, thresh = cv.threshold(self.gray,crit,255,cv.THRESH_BINARY_INV)
-            prod = np.sum(np.sum(thresh))/impx
-            crit = crit-10
-        if self.diag>0:
-            logging.info(f'Threshold: {crit+10}, product: {prod}, white:{whiteval}')
+        if adaptive:
+            thresh = cv.adaptiveThreshold(self.gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,11,2)
+        else:
+            crit = topthresh
+            impx = np.product(self.gray.shape)
+            allwhite = impx*whiteval
+            prod = allwhite
+            while prod>=allwhite and crit>50: # segmentation included too much
+                ret, thresh = cv.threshold(self.gray,crit,255,cv.THRESH_BINARY_INV)
+                prod = np.sum(np.sum(thresh))/impx
+                crit = crit-10
+            if self.diag>0:
+                logging.info(f'Threshold: {crit+10}, product: {prod}, white:{whiteval}')
         self.thresh = thresh
-        self.thresh = closeVerticalTop(self.thresh, **kwargs)
         
-    def addNozzle(self) -> None:
+        
+    def closeHorizLine(self, im:np.array, imtop:int, close:bool) -> np.array:
+        '''draw a black line across the y position imtop between the first and last black point'''
+        marks = np.where(im[imtop]==255) 
+        if len(marks[0])==0:
+            return
+
+        first = marks[0][0] # first position in x in y row where black
+        last = marks[0][-1]
+        if close:
+            val = 255
+        else:
+            val = 255
+        if last-first<im.shape[1]*0.2:
+            im[imtop:imtop+3, first:last] = val*np.ones(im[imtop:imtop+3, first:last].shape)
+        return im
+
+    def closeVerticalTop(self, im:np.array, close:bool=True, cutoffTop:float=0.01, closeBottom:bool=False, **kwargs) -> np.array:
+        '''if the image is of a vertical line, close the top'''
+        if im.shape[0]<im.shape[1]*2:
+            return
+
+        # cut off top 3% of image
+        if cutoffTop>0:
+            if close:
+                val = 255
+            else:
+                val = 0
+            imtop = int(im.shape[0]*cutoffTop)  
+            im[1:imtop, 1:-1] = np.ones(im[1:imtop, 1:-1].shape)*val
+
+        # vertical line. close top to fix bubbles
+        top = np.where(np.array([sum(x) for x in im])>0) 
+
+        if len(top[0])==0:
+            return 
+        imtop = top[0][0] # first position in y where black
+        im = self.closeHorizLine(im, imtop, close)
+        if closeBottom:
+            imbot = top[0][-1]-3
+            im = self.closeHorizLine(im, imbot, close)
+        return im 
+        
+    def addNozzle(self, bottomOnly:bool=False) -> None:
         '''add the nozzle in black back in for filling'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, dilate=self.dilation)   
+        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, dilate=self.dilation, bottomOnly=bottomOnly)   
         h,w = thresh.shape
         thresh[0, :] = 0   # clear out the top row
         thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
         thresh[:int(h/4),-1] = 0
         self.thresh = thresh
+
         
-    def fillParts(self) -> None:
+#     def closeVertLine(self, s:str, w:int=2, aspect:int=10) -> None:
+#         '''find smoothed contours of each component and add them to the image'''
+#         m1 = closeMorph(getattr(self, s), w, aspect=aspect)
+#         m2 = fillComponents(m1)
+#         m3 = openMorph(m2, w, aspect=1)
+#         imshow(getattr(self, s), m1, m2, m3)
+#         setattr(self, s, m3)
+                
+        
+    def fillParts(self, fillTop:bool=True, **kwargs) -> None:
         '''fill the components, and remove the border if needed'''
+        if fillTop:
+            self.thresh = self.closeVerticalTop(self.thresh, close=True)
+        if self.closing>0:
+            self.thresh = closeMorph(self.thresh, self.closing)
         if self.removeBorder:
-            self.filled = removeBorderAndFill(self.thresh)    
+            self.filled = removeBorderAndFill(self.thresh, leaveHollows=True)    
         else:
-            self.filled = fillComponents(self.thresh)
+            self.filled = fillComponents(self.thresh, diag=self.diag-2, leaveHollows=True)
+        self.filled = self.closeVerticalTop(self.filled, close=False)
+        if self.closing>0:
+            self.filled = closeMorph(self.filled, self.closing)
+            
+    def emptyVertSpaces(self) -> None:
+        '''empty the vertical spaces between printed vertical lines'''
+        if not hasattr(self, 'filled'):
+            return
+        # Apply morphology operations
+        thresh2 = self.nd.maskNozzle(self.thresh, dilate=5, crops=self.crops, invert=True)  # generously remove nozzle
+        gX = openMorph(thresh2, 1, aspect=15)    # filter out horizontal lines
+        tot1 = closeMorph(gX, 5, aspect=1/5)   # close sharp edges
+        tot = emptySpaces(tot1)    # fill gaps
+        tot = openMorph(tot, 3)    # remove debris
+        er = cv.subtract(tot1, gX)              # get extra filled gaps
+        tot = cv.add(tot, er)        # remove from image
+        tot = openMorph(tot, 2)           # remove debris
         
-    def removeNozzle(self) -> None:
+        filled = cv.subtract(self.sdf.labelsBW, tot)   # remove from image
+        
+#         skeleton = dilate(skeletonize(self.thresh, w=5),2)
+#         sfilled = fillComponents(skeleton)
+#         emptied = erode(sfilled, 7)
+#         imshow(skeleton, sfilled, emptied)
+
+        if self.diag>1:
+            imshow(gX, tot, filled, self.filled, title='emptyVertSpaces')
+        self.filled = filled
+        self.makeDF()
+        
+            
+        
+    def removeNozzle(self, s:str='filled') -> None:
         '''remove the black nozzle from the image'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        self.filled = self.nd.maskNozzle(self.filled, ave=False, invert=True, crops=self.crops, dilate=self.dilation)  # remove the nozzle again
-        
+        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops, dilate=self.dilation))  # remove the nozzle again
         if self.eraseMaskSpill:
-            self.filled = self.nd.eraseSpillover(self.filled, crops=self.crops)  # erase any extra nozzle that is in the image
+            setattr(self, s, self.nd.eraseSpillover(getattr(self, s), crops=self.crops, diag=self.diag-1))  # erase any extra nozzle that is in the image
+            
+            
+    def segmentInterfaces(self, addNozzle:bool=True, addNozzleBottom:bool=False, **kwargs) -> np.array:
+        '''from a color image, segment out the ink, and label each distinct fluid segment. 
+        acrit is the minimum component size for an ink segment
+        removeVert=True to remove vertical lines from the thresholded image
+        removeBorder=True to remove border components from the thresholded image'''
+        self.getGray()
+        self.threshes(**kwargs)
+        # if self.eraseMaskSpill:
+        #     self.thresh = self.nd.eraseSpillover(self.thresh, crops=self.crops, diag=self.diag-1)
+        #     self.gray = self.nd.maskNozzle(self.gray, ave=True, crops=self.crops, dilate=3)
+        if addNozzle:
+            self.addNozzle()    # add the nozzle to the thresholded image
+        if addNozzleBottom:
+            self.addNozzle(bottomOnly=True)
+        self.fillParts(**kwargs)    # fill components
+        self.removeNozzle() # remove the nozzle again
+        
+    def __getattr__(self, s):
+        if s in ['success', 'df', 'labeledIm']:
+            return getattr(self.sdf, s)
+        
+    def eraseSmallComponents(self):
+        '''erase small components from the labeled image and create a binary image'''
+        return self.sdf.eraseSmallComponents()
+        
+    def eraseSmallestComponents(self, satelliteCrit:float=0.2, **kwargs) -> None:
+        '''erase the smallest relative components from the labeled image'''
+        return self.sdf.eraseSmallestComponents(satelliteCrit, **kwargs)
+          
+    def eraseBorderComponents(self, margin:int) -> None:
+        '''remove any components that are too close to the edge'''
+        return self.sdf.eraseBorderComponents(margin)
+        
+    def eraseFullWidthComponents(self) -> None:
+        '''remove components that are the full width of the image'''
+        return self.sdf.eraseFullWidthComponents()
+        
+    def eraseLeftRightBorder(self) -> None:
+        '''remove components that are touching the left or right border'''
+        return self.sdf.eraseLeftRightBorder()
+        
+    def eraseTopBottomBorder(self) -> None:
+        '''remove components that are touching the top or bottom border'''
+        return self.sdf.eraseTopBottomBorder()
+        
+        
+    def largestObject(self) -> pd.Series:
+        '''the largest object in the dataframe'''
+        return self.sdf.largestObject()
 
+            
+    def reconstructMask(self, df:pd.DataFrame) -> np.array:
+        '''construct a binary mask with all components labeled in the dataframe'''
+        return self.sdf.reconstructMask(df)
+    
+    def noDF(self) -> bool:
+        return self.sdf.noDF(df)
+
+            
+class segmenterDF:
+    '''holds labeled components for an image'''
+    
+    def __init__(self, filled:np.array, acrit:float=100, diag:int=0):
+        self.acrit = acrit
+        self.filled = filled
+        self.success = False
+        self.w = self.filled.shape[1]
+        self.h = self.filled.shape[0]
+        self.diag = diag
+        self.getConnectedComponents()
+    
     def getDataFrame(self):
         '''convert the labeled segments to a dataframe'''
         df = pd.DataFrame(self.stats, columns=['x0', 'y0', 'w', 'h','a'])
@@ -129,10 +294,21 @@ class segmenter:
         self.labelsBW = self.labeledIm.copy()
         self.labelsBW[self.labelsBW>0]=255
         self.labelsBW = self.labelsBW.astype(np.uint8)
+        if self.diag>0 and self.labeledIm.max().max()>6:
+            self.resetNumbering()
         if self.numComponents==0:
             self.success = False
         else:
             self.success = True
+            
+    def resetNumbering(self):
+        '''reset the numbering of the components so the labeledIm is easier to read'''
+        j = 1
+        for i,row in self.df.iterrows():
+            self.labeledIm[self.labeledIm == i] = j
+            self.df.rename(index={i:j}, inplace=True)
+            j = j+1
+            
             
     def noDF(self) -> bool:
         return not hasattr(self, 'df') or len(self.df)==0
@@ -209,17 +385,6 @@ class segmenter:
         self.eraseSmallComponents()
         self.resetStats()
         return 0  
-    
-    def segmentInterfaces(self) -> np.array:
-        '''from a color image, segment out the ink, and label each distinct fluid segment. 
-        acrit is the minimum component size for an ink segment
-        removeVert=True to remove vertical lines from the thresholded image
-        removeBorder=True to remove border components from the thresholded image'''
-        self.getGray()
-        self.threshes(**self.kwargs)
-        self.addNozzle()    # add the nozzle to the thresholded image
-        self.fillParts()    # fill components
-        self.removeNozzle() # remove the nozzle again
 
             
     def reconstructMask(self, df:pd.DataFrame) -> np.array:
@@ -230,9 +395,10 @@ class segmenter:
             if len(masks)>1:
                 for mask in masks[1:]:
                     componentMask = cv.add(componentMask, mask)
-            return componentMask
+            
         else:
             return np.zeros(self.gray.shape).astype(np.uint8)
+        return componentMask
         
     
 #----------------------------------------------------------

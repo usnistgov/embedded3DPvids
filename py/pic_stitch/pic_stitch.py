@@ -16,7 +16,7 @@ import traceback
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-import file_handling as fh
+import file.file_handling as fh
 from im.imshow import imshow
 
 # logging

@@ -17,7 +17,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from tools.plainIm import *
-import file_handling as fh
+import file.file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -66,43 +66,43 @@ class geometryVals:
         
     #-----------------
     # ShopbotPyQt after addition of _speed_ and _meta_ files
-    def checkUnits(self, row:list, bn:str, expected:str) -> None:
+    def checkUnits(self, foundUnit:list, bn:str, expected:str, nam:str) -> None:
         '''check if the units are correct for this row'''
-        if not row[1]==expected:
-            logging.warning(f'Bad units in {bn}: {row[0]}, {row[1]}')
+        if not foundUnit==expected:
+            logging.warning(f'Bad units in {bn}: {nam}, {foundUnit}')
     
     def importMetaFile(self) -> int:
         '''find the metadata file. returns 0 if successful'''
         if not hasattr(self.pfd, 'meta') or len(self.pfd.meta)==0:
             return 1
-        file = self.pfd.meta[0]
+        file = self.pfd.metaFile()
         bn = fh.twoBN(file)
-        with open(file, newline='') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-            for row in reader:
-                if row[0] in ['&nid','nozzle_inner_diameter', 'nozzle_0_diameter']:
-                    self.di = float(row[2])
-                    self.checkUnits(row, bn, self.units['di'])
-                elif row[0]=='&nd':
-                    self.do = float(row[2])
-                    self.checkUnits(row, bn, self.units['do'])
-                elif row[0]=='camera_magnification':
-                    self.camMag = float(row[2])
-                elif row[0]=='camera_position':
-                    self.camPosition = row[2]
-                elif row[0]=='nozzle_length':
-                    self.lNoz = float(row[2])
-                    self.checkUnits(row, bn, self.units['lNoz'])
-                elif row[0]=='tubing_length':
-                    self.lTub = float(row[2])
-                    self.checkUnits(row, bn, self.units['lTub'])
+        d,u = plainImDict(file, unitCol=1, valCol=2)
+  
+        nozkeys = dict([[key,val] for key,val in d.items() if key in ['&nid','nozzle_inner_diameter', 'nozzle_0_diameter']])
+        if len(set(nozkeys.values()))>1:
+            raise ValueError(f'Multiple nozzle diameter values found in {file}')
+        else:
+            k = list(nozkeys.keys())[0]
+            self.di = float(d[k])
+            self.checkUnits(u[k], bn, self.units['di'], k)
+            
+            
+        for key,val in {'&nd':'do', 'camera_magnification':'', 'camera_position':'', 'nozzle_length':'lNoz', 'tubing_length':'lTub'}.items():
+            if key in d:
+                try:
+                    self.do = float(d[key])
+                except ValueError:
+                    self.do = d[key]
+                if val in self.units:
+                    self.checkUnits(u[key], bn, self.units[val], key)
                 
         return 0
     
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''
         mlist = ['di', 'do']
-        meta = [[i,getattr(self,i)] for i in mlist]
-        munits = [[i, self.units[i]] for i in mlist]
+        meta = dict([[i,getattr(self,i)] for i in mlist])
+        munits = dict([[i, self.units[i]] for i in mlist])
         
-        return out, units
+        return meta, munits

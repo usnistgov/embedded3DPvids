@@ -23,7 +23,7 @@ from tools.plainIm import *
 from tools.config import cfg
 from val.v_print import printVals
 from progDim.prog_dim import getProgDims
-import file_handling as fh
+import file.file_handling as fh
 from m_tools import *
 
 # logging
@@ -152,8 +152,9 @@ class disturbMeasures:
         if not hasattr(self, 'pfd'):
             self.pfd = fh.printFileDict(self.folder)
         measureFile = f'{self.lineType}Measure'
-        if hasattr(self.pfd, measureFile) and not self.overwriteMeasure:
-            self.df, self.du = plainIm(getattr(self.pfd, measureFile), ic=0)
+        mf = getattr(self.pfd, measureFile)
+        if len(mf)>0 and not self.overwriteMeasure:
+            self.df, self.du = plainIm(mf, ic=0)
             self.df.line.fillna('', inplace=True)
         else:
             self.measureFolder()
@@ -368,14 +369,15 @@ class summaries:
                 summary, units, failures = self.measureFunc(topFolder, overwrite=self.overwrite, **kwargs)
             else:
                 # just take the existing measurements
-                pfd = fh.printFileDict(topFolder)
-                if hasattr(pfd, 'summary'):
-                    summary, units = plainImDict(pfd.summary, unitCol=1, valCol=2)
+                if not hasattr(self, 'pfd'):
+                    self.pfd = fh.printFileDict(topFolder)
+                if hasattr(self.pfd, 'summary'):
+                    summary, units = plainImDict(self.pfd.summary, unitCol=1, valCol=2)
                 else:
                     summary = {}
                     units = {}
-                if hasattr(pfd, 'failure'):
-                    failures, _ = plainIm(pfd.failure, ic=0)
+                if hasattr(self.pfd, 'failure'):
+                    failures, _ = plainIm(self.pfd.failure, ic=0)
                 else:
                     failures = []
         except Exception as e:
@@ -451,20 +453,22 @@ class failureTest:
         
         # change the failure file in this file's folder
         if export:
-            pfd = fh.printFileDict(folder)
-            if hasattr(pfd, 'failure'):
-                df, _ = plainIm(pfd.failure, ic=0)
+            if not hasattr(self, 'pfd'):
+                self.pfd = fh.printFileDict(folder)
+            if hasattr(self.pfd, 'failure'):
+                df, _ = plainIm(self.pfd.failure, ic=0)
                 df = df[~(df.file==file)]
-                plainExp(pfd.failure, df, {})
+                plainExp(fn, df, {})
         self.countFailures()
         
     def approveFolder(self, fostr:str):
         ffiles = self.df[self.df.fostr==fostr]
         for i,_ in ffiles.iterrows():
             self.approveFile(i, export=False)
-        pfd = fh.printFileDict(os.path.join(cfg.path.server, fostr))
-        if hasattr(pfd, 'failure'):
-            plainExp(pfd.failure, pd.DataFrame(['']), {})
+        if not hasattr(self, 'pfd'):
+            self.pfd = fh.printFileDict(os.path.join(cfg.path.server, fostr))
+        if hasattr(self.pfd, 'failure'):
+            plainExp(self.pfd.failure, pd.DataFrame(['']), {})
         
     def export(self):
         plainExp(self.failureFile, self.df, {}, index=False)

@@ -50,37 +50,65 @@ class vertSegment(metricSegment):
     def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
-    def dims(self) -> None:
+    def dims(self, numLines:int=1) -> None:
         '''get the dimensions of the segments'''
-        df2 = self.segmenter.df
-        filI = df2.a.idxmax() # index of filament label, largest remaining object
-        component = df2.loc[filI]
-        inline = df2[(df2.x0>component['x0']-50)&(df2.x0<component['x0']+50)] # other objects inline with the biggest object
+        print(numLines)
+        df2 = self.segmenter.df.copy()
+        
+        if numLines==1:
+            # take only components in line with the largest component
+            filI = df2.a.idxmax() # index of filament label, largest remaining object
+            component = df2.loc[filI]
+            inline = df2.copy()
+            inline = inline[(inline.x0>component['x0']-50)&(inline.x0<component['x0']+50)] # other objects inline with the biggest object
+        else:
+            # take all components
+            inline = df2.copy()
 
-        # get combined mask of all objects in line
-        self.componentMask = self.segmenter.reconstructMask(inline)
-
+        # measure overall dimensions
+        inline['xf'] = inline.x0+inline.w
+        inline['yf'] = inline.y0+inline.h
         self.x0 = int(inline.x0.min())  # unscaled
         self.y0 = int(inline.y0.min())  # unscaled
-        self.w = int(inline.w.max())    # unscaled
-        self.h = int(inline.h.sum())    # unscaled
+        self.xf = int(inline.xf.max()) # unscaled 
+        self.yf = int(inline.yf.max()) # unscaled 
+        self.w = self.xf - self.x0    # unscaled 
+        if numLines==1:
+            self.h = int(inline.h.sum())    # unscaled
+        else:
+            self.h = int(self.yf - self.y0)
         self.xc = int(sum(inline.a * inline.xc)/sum(inline.a))
         self.yc = int(sum(inline.a * inline.yc)/sum(inline.a))
         co = {'area':int(inline.a.sum())*self.scale**2
-                     , 'x0':self.x0*self.scale, 'y0':self.y0*self.scale, 'w':self.w*self.scale, 'h':self.h*self.scale
-                     , 'xc':self.xc*self.scale, 'yc':self.yc*self.scale, 'segments':len(inline)}    
-        componentMeasures, cmunits = self.measureComponent(self.componentMask, horiz=False, reverse=True, diag=max(0,self.diag-1))
+                     , 'x0':self.x0*self.scale, 'y0':self.y0*self.scale
+                      , 'w':self.w*self.scale, 'h':self.h*self.scale
+                      , 'xf':self.xf*self.scale, 'yf':self.yf*self.scale
+                     , 'xc':self.xc*self.scale, 'yc':self.yc*self.scale, 'segments':len(inline)} 
+        units = {'line':'', 'aspect':'h/w', 'area':'px'
+                 ,'x0':'px', 'y0':'px', 'xf':'px', 'yf':'px', 'w':'px', 'h':'px'
+                 , 'xc':'px', 'yc':'px', 'segments':''} # where pixels are in original scale
+        
+        # get combined mask of all objects in line
+        self.componentMask = self.segmenter.reconstructMask(inline)
+        # measure roughness, thickness, etc.
+        componentMeasures, cmunits = self.measureComponent(horiz=False, reverse=True, diag=max(0,self.diag-1), combine=(numLines>1), emptiness=True, atot=inline.a.sum())
         if len(componentMeasures)==0:
             return
-
+        
         # component measures and co are pre-scaled
         aspect = co['h']/componentMeasures['meanT'] # height/width
+        ret = {**{'line':self.name, 'aspect':aspect}, **co}
+        units = {**units}
+        
         r = componentMeasures['meanT']/2
-        vest = calcVest(co['h'], r)
-        units = {'line':'', 'aspect':'h/w', 'area':'px'
-                 ,'x0':'px', 'y0':'px', 'w':'px', 'h':'px'
-                 , 'xc':'px', 'yc':'px', 'segments':'', 'vest':'px^3'} # where pixels are in original scale
-        ret = {**{'line':self.name, 'aspect':aspect}, **co, **{'vest':vest}, **componentMeasures}
+        ret['vest'] = calcVest(co['h'], r)
+        units['vest'] = 'px^3'
+
+        if numLines>1:
+            ret['ldiff'] = self.getLDiff(horiz=False)/self.h
+            units['ldiff'] = 'h'
+
+        ret = {**ret, **componentMeasures}
         units = {**units, **cmunits}
         self.stats = {**self.stats, **ret}
         self.units = {**self.units, **units}
@@ -89,7 +117,7 @@ class vertSegment(metricSegment):
         if not hasattr(self, 'nd') or not hasattr(self, 'crop') or 'o' in self.name:
             return
         # get displacements
-        disps = self.displacement(self.componentMask, 'z', distancemm*self.nd.pxpmm)
+        disps = self.displacement('z', distancemm*self.nd.pxpmm)
         dispunits = dict([[ii, 'px'] for ii in disps])
         self.stats = {**self.stats, **disps}
         self.units = {**self.units, **dispunits}
@@ -97,13 +125,34 @@ class vertSegment(metricSegment):
    
     def display(self) -> None:
         '''display diagnostics'''
-        if self.diag>0:
-            self.segmenter.display()
+        if self.diag<=0:
+            return
+        self.segmenter.display()
+        if hasattr(self, 'componentMask'):
             im2 = cv.cvtColor(self.componentMask,cv.COLOR_GRAY2RGB)
-            im2 = cv.rectangle(im2, (self.x0,self.y0), (self.x0+self.w,self.y0+self.h), (0,0,255), 2)
-            im2 = cv.circle(im2, (self.xc, self.yc), 2, (0,0,255), 2)
-            imshow(self.im, im2, self.statText())
-            plt.title(os.path.basename(self.file))
+        else:
+            im2 = self.im.copy()
+        imgi = self.im.copy() 
+        for im in [im2, imgi]:
+            if hasattr(self, 'x0'):
+                cv.rectangle(im, (self.x0,self.y0), (self.x0+self.w,self.y0+self.h), (0,0,255), 2)
+                cv.circle(im, (self.xc, self.yc), 2, (0,0,255), 2)
+            if hasattr(self, 'idealspx'):
+                io = {}
+                for s in ['x0', 'xf']:
+                    io[s] = int(self.idealspx[s]/self.scale)
+                cv.rectangle(im, (io['x0'],0), (io['xf'],600), (237, 227, 26), 2)   # bounding box of intended
+            if hasattr(self, 'nozPx'):
+                io = {}
+                for s in ['x0', 'xf', 'y0', 'yf']:
+                    io[s] = int(self.nozPx[s]/self.scale)
+                cv.rectangle(im, (io['x0'],io['yf']), (io['xf'],io['y0']), (125, 125, 125), 3)   # bounding box of nozzle
+        if hasattr(self, 'hull'):
+            # show the roughness
+            imshow(imgi, im2, self.roughnessIm(), self.statText(), title='vertFile')
+        else:
+            imshow(imgi, im2, self.statText(), title='vertFile')
+        plt.title(os.path.basename(self.file))
         return 
 
 
@@ -138,7 +187,7 @@ class vertSegmentSingle(vertSegment, segmentSingle):
         if not self.segmenter.success:
             return
         
-        self.dims()
+        self.dims(selectInline=True)
         self.display()
 
 
@@ -201,61 +250,133 @@ class vertSegmentDisturb(vertSegment, segmentDisturb):
         self.display()
         
         
-class vertSegmentSDT(vertSegment, segmentDisturb):
+class vertSegmentSDT(vertSegment, segmentSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
-        self.numLines = int(re.split('_', os.path.basename(file))[1])
+    def __init__(self, file:str, diag:int=0, acrit:int=1000, **kwargs):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
-        
-    def makeRelative(self) -> None:
-        '''convert the coords to relative coordinates'''
-        for s in ['c', '0']:
-            xs = f'x{s}'
-            ys = f'y{s}'
-            if xs in self.stats and ys in self.stats:
-                self.stats[xs], self.stats[ys] = self.nd.relativeCoords(self.stats[xs], self.stats[ys])
-                self.units[xs] = 'mm'
-                self.units[ys] = 'mm'
+
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly'''
-        rc1 = self.pg.relativeCoords(self.tag)   # position of line 1 in mm, relative to the nozzle
-        if self.numLines>1:
-            lt = re.split('o', re.split('_', self.name)[1][2:])[0]
-            if lt=='d' or lt==f'w{self.numLines}':
-                # get the last line
-                rc2 = self.pg.relativeCoords(self.tag, self.numLines)
-            else:
-                lnum = int(lt[1])
-                rc2 = self.pg.relativeCoords(self.tag, lnum)
+        rc1, rc2, w1, w2, l = self.intendedRC()
+        for j in [['dx', 'w']]:
+            coord = j[0][1]
+            right = (rc2[j[0]]+w2/2)      # the left edge should be 1/2 diameter to the left of the first line center
+            left = (rc1[j[0]]-w1/2)       # the right edge should be 1/2 diameter to the right of the last line center
+            if coord=='y':
+                y0 = left
+                left = right
+                right = y0
+            self.ideals[f'{coord}0'] = left
+            self.ideals[f'{coord}f'] = right
+            self.ideals[j[1]] = abs(right - left)     # get the ideal width
+            self.ideals[f'{coord}c'] = (right+left)/2  # get the ideal center
+        w = self.ideals['w']
+        r = w/2
+        self.ideals['area'] = l*w
+        self.ideals['v'] = (l-w)*np.pi*r**2 + 4/3*np.pi*r**3
+        self.ideals['h'] = l
+        
+    def findDisplacement(self) -> None:
+        '''find the displacement of the center and dimensions relative to the intended dimensions'''
+        for s,ival in {'xc':'xc', 'x0':'x0', 'xf':'xf', 'dxprint':'xc'}.items():
+            # ratio of size to intended size
+            if s in self.stats:
+                self.stats[s] = ((self.stats[s]-self.ideals[ival])/self.pv.dEst)
+                self.units[s] = 'dEst'
+        for s in ['dxprint', 'dx0', 'dxf', 'space_a', 'space_at']:
+            if s in self.stats:
+                self.stats[s] = self.stats[s]/self.pv.dEst
+                self.units[s] = 'dEst'
+        for s,ival in {'w':'w', 'h':'h', 'meanT':'w', 'vest':'v', 'vintegral':'v'}.items():
+            # ratio of size to intended size
+            if s in self.stats:
+                self.stats[s] = (self.stats[s]/self.ideals[ival])
+                self.units[s] = 'intended'
+        for s in ['area', 'vleak', 'aspect']:
+            if s in self.stats:
+                self.stats.pop(s)
+                
+        # remove length measurements for mid-print measurements 
+        if not 'o' in self.tag:
+            for s in ['h', 'vest', 'vintegral', 'w', 'xf', 'meanT', 'stdevT', 'minmaxT']:
+                if s in self.stats:
+                    self.stats.pop(s)
 
-            
-        print(rc1, rc2)
     
     def measure(self) -> None:
-        '''measure cross-section of single disturbed line'''
-        self.im = self.nd.subtractBackground(self.im, 10)   # remove the background and the nozzle
-        self.getProgDims()
-        rc = {'relative':True, 'w':250, 'h':250, 'wc':50, 'hc':170}
-        self.crop = vm.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
+        '''measure vertical SDT line'''
+        self.getProgRow()
+        self.nd.maskPadRight=30  # there is nothing on the right side of the nozzle, so just mask generously
+        h,w,_ = self.im.shape
+        self.maxlen = h
+        self.dilation = 3
+        self.nd.maskPad = 0
+        self.im = self.nd.subtractBackground(self.im, self.dilation)   # remove the background and the nozzle
+        rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
+        self.crop = vc.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
         self.crop = vc.convertCrop(self.im, self.crop)    # make sure everything is in bounds
         self.im = vc.imcrop(self.im, self.crop)
         if 'water' in self.pv.ink.base:
             th = 140
         else:
-            th = 120
-        self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=th, diag=max(0, self.diag-1))
+            th = 180
+        self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=th, diag=max(0, self.diag-1)
+                                   , removeBorder=False, eraseMaskSpill=True, dilation=self.dilation
+                                   , nozData=self.nd, crops=self.crop, adaptive=True, addNozzle=False
+                                   , addNozzleBottom=True, fillTop=True, openBottom=True)
+        # self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=200, diag=max(0, self.diag-1)
+        #                            , removeBorder=False, eraseMaskSpill=True, dilation=self.dilation
+        #                            , nozData=self.nd, crops=self.crop, adaptive=False, addNozzle=False
+        #                            , addNozzleBottom=True, fillTop=True)
+        self.segmenter.eraseFullWidthComponents() # remove glue or air
+        # self.segmenter.emptyVertSpaces()
         if not self.segmenter.success:
+            if self.diag>0:
+                logging.warning(f'Segmenter failed on {self.file}')
+            self.display()
             return
-        self.multiMeasure()
-        self.adjustForCrop(self.crop)
-        self.makeRelative()
-        self.display()
+        if self.tag[2]=='d':
+            ln = self.lnum-1
+        else:
+            ln = self.lnum
+        self.dims(numLines=ln)
+        for s in ['y0', 'yc', 'yf']:
+            self.stats.pop(s)
+            self.units.pop(s)
+        self.gaps(self.pv.dEst)
+        if len(self.stats)==1:
+            if self.diag>0:
+                logging.warning(f'Measurement failed on {self.file}')
+            self.display()
+            return
+        self.adjustForCrop(self.stats, self.crop)  # px, full image
+        self.stats, self.units = self.makeMM(self.stats, self.units)
+        self.makeRelative()           # mm, relative to nozzle
+        
         self.findIntendedCoords()
+        if self.diag>0:
+            self.findIntendedPx()
+            self.findNozzlePx()
+        self.findDisplacement()  # dEst, relative to intended coords
+        self.display()
 
         
     
 def vertDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
     return vertSegmentDisturb(file, **kwargs).values()
+
+
+def vertSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    return vertSegmentSDT(file, **kwargs).values() 
+
+def vertSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
+    '''test a single file and print diagnostics'''
+    testFile(fstr, fistr, vertSegmentSDT, ['w', 'h', 'xc', 'yc'], **kwargs)
+    
+def addVertToTestFile(csvstr:str, fstr:str, fistr:str, **kwargs) -> None:
+    cdir = os.path.dirname(os.path.abspath(os.path.join('..')))
+    file = os.path.join(cdir, 'tests', f'test_{csvstr}.csv')
+    addToTestFile(file, fstr, fistr, vertSegmentSDT, ['emptiness', 'x0', 'segments'], **kwargs)
 

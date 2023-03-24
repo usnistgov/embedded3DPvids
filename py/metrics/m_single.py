@@ -19,7 +19,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from pic_stitch.p_bas import stitchSorter
-from file_handling import isSubFolder
+from file.file_handling import isSubFolder
 from tools.plainIm import *
 from val.v_print import *
 from vid.noz_detect import nozData
