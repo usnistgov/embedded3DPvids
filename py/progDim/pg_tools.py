@@ -505,6 +505,8 @@ class progDim:
         if not hasattr(self, 'progPos'):
             self.importProgPos()
         if not tag in list(self.progDims.name):
+            print(self.printFolder)
+            print(self.progDims)
             raise ValueError(f'Line {tag} is not in progDims')
         gname = tag[:2]   # l1, l2, etc.    
         # find the name of the first write line, e.g. l2w

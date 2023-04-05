@@ -19,7 +19,7 @@ import time
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
-from file.file_handling import fileScale
+import file.file_handling as fh
 from im.imshow import imshow
 from tools.plainIm import *
 from tools.config import cfg
@@ -49,7 +49,7 @@ class metricSegment:
         self.folder = os.path.dirname(self.file)
         if not os.path.exists(self.file):
             raise ValueError(f'File {self.file} does not exist')
-        self.scale = 1/fileScale(self.file)
+        self.scale = 1/fh.fileScale(self.file)
         self.im = cv.imread(self.file)
         self.acrit = acrit
         self.diag = diag
@@ -76,19 +76,16 @@ class metricSegment:
             else:
                 out = out + '   '
         return out 
+
     
     #------------------------------------
     
-    def getContour(self, combine:bool=False) -> None:
+    def getContour(self, combine:bool=False) -> int:
         '''get the contour of the mask, combining all objects if requested, otherwise using the largest object'''
         if hasattr(self, 'cnt'):
-            return
+            return 0
         self.excessPerimeter = 0
-        contours = cv.findContours(self.componentMask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-        if int(cv.__version__[0])>=4:
-            contours = contours[0]
-        else:
-            contours = contours[1]
+        contours = getContours(self.componentMask)
         if len(contours)==0:
             return -1
         if len(contours)==1:
@@ -107,21 +104,22 @@ class metricSegment:
                 contours = sorted(contours, key=lambda x: cv.contourArea(x), reverse=True) # select the largest contour
                 cnt = contours[0]
         self.cnt = cv.approxPolyDP(cnt, 1, True) # smooth the contour by 1 px
-        return
+        self.hull = cv.convexHull(self.cnt)
+        if hasattr(self, 'nd') and hasattr(self, 'crop'):
+            # conform the hull to the nozzle to avoid extra emptiness and roughness
+            self.hull = self.nd.dentHull(self.hull, self.crop)
+        return 0
     
     
     def getRoughness(self, diag:int=0, combine:bool=False) -> float:
         '''measure roughness as perimeter of object / perimeter of convex hull. 
         componentMask is a binarized image of just one segment'''
-        self.getContour(combine=combine)
         perimeter = cv.arcLength(self.cnt,True) - self.excessPerimeter
         if perimeter==0:
             return {}, {}
-        self.hull = cv.convexHull(self.cnt)
         hullperimeter = cv.arcLength(self.hull,True)
         roughness = perimeter/hullperimeter-1  # how much extra perimeter there is compared to the convex hull
-        
-        
+
         return roughness
     
     def getLDiff(self, horiz:bool=False) -> float:
@@ -236,6 +234,9 @@ class metricSegment:
                 raise ValueError(f'{s} undefined for {self.file}')
         
         errorRet = {}, {}
+        out = self.getContour(combine=combine)
+        if out<0:
+            return errorRet
         roughness = self.getRoughness(diag=max(0,diag-1), combine=combine)
         sums = self.sumsAndWidths(horiz)
         if len(sums)==0:
@@ -357,7 +358,7 @@ class segmentSingle(metricSegment):
 class segmentDisturb(metricSegment):
     '''collect measurements of segments in disturbed prints'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, measure:bool=True, **kwargs):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         self.scale = 1
         if 'nd' in kwargs:
@@ -375,7 +376,11 @@ class segmentDisturb(metricSegment):
             self.getProgDims()
         self.title = os.path.basename(self.file)
         self.lineName()
-        self.measure()
+        if measure:
+            self.measure()
+            
+    def initializeTimeCounter(self):
+        self.timeCount = time.time()
         
     def timeCounter(self, s:str):
         tt = time.time()
@@ -516,6 +521,56 @@ class segmentSDT(segmentDisturb):
             self.lnum = int(lt[1])
         self.tag = spl[1]                 # this is the name of the pic, e.g. l3w2o1
         self.gname = self.tag[:2]     # group name, e.g. l3
+        
+    def subFN(self, subFolder:str, title:str) -> str:
+        '''get the filename of a file that goes into a subfolder'''
+        cropfolder = os.path.join(self.folder, subFolder)
+        if not os.path.exists(cropfolder):
+            os.mkdir(cropfolder)
+        fnorig = os.path.join(cropfolder, self.title.replace('vstill', title))
+        return fnorig
+        
+    def exportImage(self, att:str, subFolder:str, title:str, overwrite:bool=False) -> None:
+        '''export an image stored as attribute att to a subfolder subFolder with the new title title'''
+        if not hasattr(self, att):
+            raise ValueError(f'No {att} found for {self.file}')
+        fnorig = self.subFN(subFolder, title)
+        if not os.path.exists(fnorig) or overwrite:
+            im = getattr(self, att)
+            cv.imwrite(fnorig, im)
+            print(f'Exported {fnorig}')
+        
+        
+    def exportCrop(self, overwrite:bool=False) -> None:
+        '''add the cropped image to the folder for machine learning'''
+        if not hasattr(self, 'im0'):
+            self.generateIm0()
+        self.exportImage('im0', 'crop', 'vcrop')
+        
+    def segmentFN(self) -> str:
+        return self.subFN('Usegment', 'Usegment')
+            
+    def exportSegment(self, overwrite:bool=False) -> None:
+        '''add the cropped image to the folder for machine learning'''
+        self.exportImage('componentMask', 'Usegment', 'Usegment')
+        
+    def addToTraining(self, trainFolder:str=r'singleDoubleTriple\trainingVert', s:str='componentMask', openPaint:bool=False):
+        '''add the original image and the segmented image to the training dataset'''
+        folder = os.path.join(cfg.path.fig, trainFolder)
+        fnorig = os.path.join(folder, 'orig', self.title)
+        cv.imwrite(fnorig, self.im0)
+        fnseg = os.path.join(folder, 'segmented', self.title)
+        if s=='thresh':
+            img = self.segmenter.thresh
+            ccl = segmenterDF(img)   # remove little segments
+            ccl.eraseFullWidthComponents()
+            img = ccl.labelsBW
+        else:
+            img = getattr(self, s)
+        cv.imwrite(fnseg, img)
+        if s=='thresh' or openPaint:
+            openInPaint(fnseg)
+        print(f'Exported {self.title} to training data')
   
         
 #-------------------------------------------------------------------
@@ -571,8 +626,11 @@ class unitTester:
         if not hasattr(self, 'testList'):
             self.testList = pd.read_csv(self.testcsv)
             
-    def runTest(self, i:int, diag:int=0) -> Tuple[pd.Series, dict, list]:
+    def runTest(self, i:int, diag:int=0, **kwargs) -> Tuple[pd.Series, dict, list]:
         self.importList()
+        if i>=len(self.testList):
+            print(f'UnitTester has {len(self.testList)} entries. {i} not in list')
+            return [],{},[]
         row = self.testList.loc[i]
         folder = row['folder']
         file = row['file']
@@ -580,15 +638,17 @@ class unitTester:
             print(f'TEST {i} (excel row {i+2})\nFolder: {folder}\nFile: {file}')
         folder = os.path.join(cfg.path.server, folder)
         file = os.path.join(folder, file)
-        d,u = self.func(file, diag=diag)
+        d,u = self.func(file, diag=diag, **kwargs)
         cols = list(self.testList.keys())
         cols.remove('folder')
         cols.remove('file')
         return row, d, cols
         
-    def compareTest(self, i:int) -> None:
+    def compareTest(self, i:int, diag:int=1, **kwargs) -> None:
         '''print diagnostics on why a test failed. fn is the basename of the test csv, e.g. test_SDTXS.csv. i is the row number'''
-        row, d, cols = self.runTest(i, diag=1)
+        row, d, cols = self.runTest(i, diag=diag, **kwargs)
+        if len(row)==0:
+            return
         df = pd.DataFrame({})
         for c in cols:
             df.loc['expected', c] = row[c]
@@ -599,8 +659,14 @@ class unitTester:
         
     def compareAll(self):
         '''check diagnostics for all failed files'''
+        c = 0
+        if len(self.failedFiles)>5:
+            print(f'{len(self.failedFiles)} failed files, showing 5')
         for i in self.failedFiles:
             self.compareTest(i)
+            c = c+1
+            if c==5:
+                return
             
     def openCSV(self):
         subprocess.Popen([cfg.path.excel, self.testcsv]);
@@ -628,3 +694,225 @@ def runUnitTest(testName:str, func):
     ut = unitTester(testName, func)
     ut.run()
     ut.compareAll()
+    
+    
+def convertFilesToBW(folder:str, diag:bool=False) -> None:
+    '''convert all the files in the folder to black and white'''
+    for f in os.listdir(folder):
+        ffull = os.path.join(folder, f)
+        im = cv.imread(ffull)
+        im = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+        _,im = cv.threshold(im, 120, 255, cv.THRESH_BINARY)
+        im[im==255]=1
+        if diag:
+            print(im.shape, np.unique(im), im[0,0])
+        else:
+            cv.imwrite(ffull, im)
+            
+def removeOme(folder:str):
+    '''remove .ome from all of the file names'''
+    for f in os.listdir(folder):
+        ffull = os.path.join(folder, f)
+        new = ffull.replace('.ome', '')
+        os.rename(ffull, new)
+            
+class segmentCompare:
+    '''for comparing pre-segmented images to freshly segmented images. func should be a metricSegment class definition '''
+    
+    def __init__(self, segFolder:str, serverFolder:str, origFolder:str, func):
+        self.segFolder = segFolder
+        self.serverFolder = serverFolder
+        self.origFolder = origFolder
+        self.func = func
+        self.images = {}
+        self.df = pd.DataFrame({'bn':os.listdir(self.segFolder)})
+        
+    def compare(self):
+        '''iterate through all images in the segmentation folder and compare them to the current code'''
+        for i in self.df.index:
+            self.compareFile(i)
+            
+    def getSegIdeal(self, i:int, bn:str) -> np.array:
+        '''get the manually segmented image'''
+        segfile = os.path.join(self.segFolder, bn)
+        self.df.loc[i, 'segfile'] = segfile
+        segIdeal = cv.imread(segfile, cv.IMREAD_GRAYSCALE)
+        return segIdeal
+    
+    def getSegReal(self, i:int, bn:str, diag:int=0, **kwargs) -> np.array:
+        '''segment the image using the current algorithm'''
+        try:
+            fn = fh.findFullFN(bn, self.serverFolder)
+        except FileNotFoundError:
+            self.df.loc[i, 'result'] = 'FileNotFound'
+            return []
+        ob = self.func(fn, diag=diag, **kwargs) 
+        if not hasattr(ob, 'componentMask'):
+            self.df.loc[i, 'result'] = 'NoMask'
+            return []
+        segReal = ob.componentMask
+        return segReal
+    
+    def getSegMachine(self, i:int, bn:str) -> np.array:
+        '''get the ML segmented image from a folder'''
+        fn = os.path.join(self.serverFolder, bn)
+        if not os.path.exists(fn):
+            self.df.loc[i, 'result'] = 'MLNotFound'
+            return []
+        segReal = cv.imread(fn, cv.IMREAD_GRAYSCALE)
+        return segReal
+    
+    def getOrig(self, bn:str) -> np.array:
+        '''get the original image'''
+        fn = os.path.join(self.origFolder, bn)
+        if not os.path.exists(fn):
+            return []
+        orig = cv.imread(fn)
+        return orig
+            
+    def compareFile(self, i:int, diag:int=0, **kwargs) -> dict:
+        '''segfile is the pre-segmented file'''
+        bn = self.df.loc[i, 'bn']
+        self.df.loc[i, 'difference'] = 1
+        
+        # find original file
+        segIdeal = self.getSegIdeal(i, bn)
+        
+        if type(self.func) is str:
+            # get the file from the folder
+            segReal = self.getSegMachine(i, bn)
+        else:
+            # segment the file
+            segReal = self.getSegReal(i, bn, diag=diag, **kwargs)
+        if len(segReal)==0:
+            return
+        
+        # compare segmentation to ideal
+        if not segIdeal.shape==segReal.shape:
+            self.df.loc[i, 'result'] = 'ShapeMismatch'
+            return
+        diff = self.measureDifference(bn, i, segIdeal, segReal)
+        self.createImDiag(bn, segIdeal, segReal, diff, diag=diag)
+        
+        
+    def measureDifference(self, bn:str, i:int, segIdeal:np.array, segReal:np.array) -> None:
+        '''measure the number of pixels that are different between the two images'''
+        diff = cv.bitwise_xor(segIdeal, segReal)
+        self.df.loc[i, 'result'] = 'Found'
+        shape = segIdeal.shape
+        a = shape[0]*shape[1]
+        self.df.loc[i, 'difference'] = diff.sum(axis=0).sum(axis=0)/255/a  # number of different pixels
+        return diff
+        
+    def createImDiag(self, bn:str, segIdeal:np.array, segReal:np.array, diff:np.array, diag:int=0) -> None:
+        '''create a diagnostic image that compares the found image to the manual segmented image and shows differences in color'''
+        imdiag = cv.cvtColor(segIdeal, cv.COLOR_GRAY2BGR)
+        r0 = cv.bitwise_and(segIdeal, segReal)
+        imdiag[(r0==255)] = [100,100,100]
+        r1 = cv.subtract(segIdeal, segReal)
+        imdiag[(r1==255)] = [0,255,0]
+        r2 = cv.subtract(segReal, segIdeal)
+        imdiag[(r2==255)] = [0,0,255]
+        if diag>0:
+            orig = self.getOrig(bn)
+            if len(orig)>0:
+                imshow(imdiag, segIdeal, segReal, orig, titles=['diff', 'ideal', 'real', 'orig'])
+            else:
+                imshow(imdiag, segIdeal, segReal, diff, titles=['diff', 'ideal', 'real', 'difference'])
+        self.images[bn] = imdiag 
+        
+    def showWorstSegmentation(self, n:int=6) -> None:
+        '''show the segmented images with the worst diff values'''
+        print(f'Success rate: {self.successRate():0.3f}, Average diff: {self.averageDiff():0.3f}')
+        df2 = self.df.sort_values(by='difference', ascending=False)
+        ims = []
+        print(df2.iloc[:n*2][['result', 'difference']])
+        print('Red = algorithm, green = manual')
+        i = 0
+        j = 0
+        while j<n and i<len(df2):
+            bn = df2.iloc[i]['bn']
+            if bn in self.images:
+                ims.append(self.images[bn])
+                j = j+1
+            i = i+1
+        imshow(*ims)
+        
+    def successRate(self, dcrit:float=0.01) -> float:
+        '''get the percentage of files that have a diff less than dcrit'''
+        return (len(self.df[self.df.difference<dcrit])/len(self.df))
+    
+    def averageDiff(self) -> float:
+        '''get the average difference'''
+        return self.df.difference.mean()
+
+    
+class trainingGenerator:
+    '''a class for generating training data'''
+    
+    def __init__(self, topFolder:str, excludeFolders:list=[], mustMatch:list=[], someIn:list=[]):
+        self.topFolder = topFolder
+        self.excludeFolders = excludeFolders
+        self.printFolders = fh.printFolders(topFolder, tags=mustMatch, someIn=someIn)
+        self.numFolders = len(self.printFolders)
+        
+    def randomFolder(self):
+        '''get a random folder'''
+        i = np.random.randint(self.numFolders)
+        return self.printFolders[i]
+    
+    def excluded(self, bn:str) -> bool:
+        '''check if the file basename is already in one of the excluded folders. return True if it should be excluded'''
+        for f in self.excludeFolders:
+            if os.path.exists(os.path.join(f, bn)):
+                return True
+        return False
+    
+    def randomFile(self) -> str:
+        '''get a random vert vstill from the topFolder, but get a new one if it's already in one of the excludeFolders '''
+        folder = self.randomFolder()
+        pfd = fh.printFileDict(folder)
+        pfd.sort()
+        numstills = len(pfd.vstill)
+        if numstills==0:
+            return self.randomFile()
+        excluded = True
+        guessed = []
+        while excluded:
+            i = np.random.randint(numstills)
+            if not i in guessed:
+                guessed.append(i)
+                file = pfd.vstill[i]
+                excluded = self.excluded(os.path.basename(file))
+            if len(guessed)==numstills:
+                # we've guessed all of the files. remove this folder from contention and pick a different one
+                self.printFolders.remove(folder)
+                return self.randomFile()
+        return file
+    
+def moveMLResult(file:str, serverFolder:str) -> None:
+    '''move the segmented machine learning file into the folder'''
+    origname = file.replace('vcrop', 'vstill')
+    origname = origname.replace('.ome','')
+    bn = os.path.basename(origname)
+    fn = fh.findFullFN(bn, serverFolder)
+    if not os.path.exists(fn):
+        raise FileNotFoundError(f'Cannot find folder for {file}')
+    folder = os.path.dirname(fn)
+    segfolder = os.path.join(folder, 'MLsegment')
+    if not os.path.exists(segfolder):
+        os.mkdir(segfolder)
+    newname = os.path.join(segfolder, bn.replace('vstill', 'MLsegment'))
+    shutil.copyfile(file, newname)
+    print(f'copied file to {newname}')
+    
+def moveMLResults(segFolder:str, serverFolder:str) -> list:
+    '''move all of the segmented images from segFolder into the appropriate folders in serverFolder'''
+    error = []
+    for file in os.listdir(segFolder):
+        try:
+            moveMLResult(os.path.join(segFolder, file), serverFolder)
+        except FileNotFoundError:
+            error.append(file)
+    return error
+    

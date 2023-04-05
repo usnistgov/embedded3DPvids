@@ -66,9 +66,9 @@ class folderImages:
                     imfile = os.path.join(self.folder, f)
         if not os.path.exists(imfile):
             # no file in the main folder. search archives
-            raw = os.path.join(folder, 'raw')
+            raw = os.path.join(self.folder, 'raw')
             if os.path.exists(raw):
-                out = parseTag(tag)
+                out = self.parseTag(tag)
                 archive = os.path.join(raw, out['tag'])
                 if not os.path.exists(archive):
                     archive = os.path.join(raw, tag[:-1]) # remove last char, e.g. for xs1 just use xs

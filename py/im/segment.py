@@ -17,6 +17,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from imshow import imshow
 from morph import *
+from m_tools import contourRoughness, getContours
 
 # logging
 logger = logging.getLogger(__name__)
@@ -28,21 +29,34 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 #----------------------------------------------
 
+class fillMode:
+    removeBorder = 0
+    fillSimple = 1
+    fillSimpleWithHoles = 2
+    fillByContours = 3
+    
+
 class segmenter:
     '''for thresholding and segmenting images'''
     
-    def __init__(self, im:np.array, acrit:float=2500, diag:int=0, removeBorder:bool=True, eraseMaskSpill:bool=False, closeTop:bool=True, dilation:int=0, closing:int=0, **kwargs):
+    def __init__(self, im:np.array, acrit:float=2500, diag:int=0
+                 , fillMode:int=fillMode.removeBorder, eraseMaskSpill:bool=False, closeTop:bool=True
+                 , nozDilation:int=0, closing:int=0, grayBlur:int=3, removeSharp:bool=False
+                 , leaveHollows:bool=True, **kwargs):
         self.im = im
         self.w = self.im.shape[1]
         self.h = self.im.shape[0]
         self.acrit = acrit
         self.diag = diag
-        self.removeBorder = removeBorder
+        self.fillMode = fillMode
         self.eraseMaskSpill = eraseMaskSpill
         self.closeTop = closeTop
         self.closing = closing
         self.kwargs = kwargs
-        self.dilation = dilation
+        self.nozDilation = nozDilation
+        self.leaveHollows = leaveHollows
+        self.removeSharp = removeSharp
+        self.grayBlur = grayBlur
         if 'nozData' in kwargs:
             self.nd = kwargs['nozData']
         if 'crops' in kwargs:
@@ -54,14 +68,12 @@ class segmenter:
         if hasattr(self, 'filled'):
             self.sdf = segmenterDF(self.filled, self.acrit, diag=self.diag)
         
-        
-        
     def display(self):
         if self.diag>0:
             if hasattr(self, 'labeledIm'):
-                imshow(self.im, self.gray, self.thresh, self.sdf.labeledIm, maxwidth=13, title='segmenter')
+                imshow(self.im, self.gray, self.thresh, self.sdf.labeledIm, maxwidth=13, titles=['seg.im', 'gray', 'thresh', 'labeled'])
             else:
-                imshow(self.im, self.gray, self.thresh, maxwidth=13, title='segmenter') 
+                imshow(self.im, self.gray, self.thresh, maxwidth=13, titles=['seg.im', 'gray', 'thresh']) 
         
     def getGray(self) -> None:
         '''convert the image to grayscale and store the grayscale image as self.thresh'''
@@ -69,42 +81,92 @@ class segmenter:
             gray = cv.cvtColor(self.im,cv.COLOR_BGR2GRAY)
         else:
             gray = self.im.copy()
-        self.gray = cv.medianBlur(gray, 5)
+        if self.grayBlur>0:
+            self.gray = cv.medianBlur(gray, self.grayBlur)
+        else:
+            self.gray = gray
+        
+    def adaptiveThresh(self) -> np.array:
+        '''adaptive threshold'''
+        return cv.adaptiveThreshold(self.gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,11,6)
+    
+    def threshThresh(self, topthresh, whiteval) -> np.array:
+        '''conventional threshold
+        topthresh is the initial threshold value
+        whiteval is the pixel intensity below which everything can be considered white'''
+        crit = topthresh
+        impx = np.product(self.gray.shape)
+        allwhite = impx*whiteval
+        prod = allwhite
+        while prod>=allwhite and crit>50: # segmentation included too much
+            ret, thresh = cv.threshold(self.gray,crit,255,cv.THRESH_BINARY_INV)
+            prod = np.sum(np.sum(thresh))/impx
+            crit = crit-10
+        if self.diag>0:
+            logging.info(f'Threshold: {crit+10}, product: {prod}, white:{whiteval}')
+        return thresh
+    
+    def kmeansThresh(self) -> np.array:
+        '''use kmeans clustering on the color image to segment interfaces'''
+        twoDimage = self.im.reshape((-1,3))
+        twoDimage = np.float32(twoDimage)
+        attempts= 2
+        epsilon = 0.5
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, attempts, epsilon)
+        K = 2
+        h,w = self.im.shape[:2]
+        
+        ret,label,center=cv.kmeans(twoDimage,K,None,criteria,attempts,cv.KMEANS_PP_CENTERS)
+        center = np.uint8(center)
+        res = center[label.flatten()]
+        result_image = res.reshape((self.im.shape))
+        for i,c in enumerate(center):
+            result_image[result_image==c]=int(i*255)
+
+        result_image = cv.cvtColor(result_image, cv.COLOR_BGR2GRAY)
+        if result_image.sum(axis=0).sum(axis=0)/255/(h*w)>0.5:
+            result_image = cv.bitwise_not(result_image)
+        return result_image
 
         
-    def threshes(self, topthresh:int=200, whiteval:int=80, adaptive:bool=False, **kwargs) -> None:
+    def threshes(self, topthresh:int=200, whiteval:int=80, adaptive:int=0, **kwargs) -> None:
         '''threshold the grayscale image and store the resulting binary image as self.thresh
         topthresh is the initial threshold value
         whiteval is the pixel intensity below which everything can be considered white
         '''
-        if adaptive:
-            thresh = cv.adaptiveThreshold(self.gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,11,2)
+        threshes = []
+        if not type(adaptive) is list:
+            adaptives = [adaptive]
         else:
-            crit = topthresh
-            impx = np.product(self.gray.shape)
-            allwhite = impx*whiteval
-            prod = allwhite
-            while prod>=allwhite and crit>50: # segmentation included too much
-                ret, thresh = cv.threshold(self.gray,crit,255,cv.THRESH_BINARY_INV)
-                prod = np.sum(np.sum(thresh))/impx
-                crit = crit-10
-            if self.diag>0:
-                logging.info(f'Threshold: {crit+10}, product: {prod}, white:{whiteval}')
+            adaptives = adaptive
+        for a in adaptives:
+            if a==0:
+                threshes.append(self.threshThresh(topthresh, whiteval))
+            elif a==1:
+                threshes.append(self.adaptiveThresh())
+            elif a==2:
+                # use k-means clstering
+                threshes.append(self.kmeansThresh())
+        thresh = threshes[0]
+        for t in threshes[1:]:
+            thresh = cv.add(thresh, t)
         self.thresh = thresh
         
         
     def closeHorizLine(self, im:np.array, imtop:int, close:bool) -> np.array:
         '''draw a black line across the y position imtop between the first and last black point'''
-        marks = np.where(im[imtop]==255) 
-        if len(marks[0])==0:
-            return
 
-        first = marks[0][0] # first position in x in y row where black
-        last = marks[0][-1]
         if close:
+            marks = np.where(im[imtop]==255) 
+            if len(marks[0])==0:
+                return
             val = 255
+            first = marks[0][0] # first position in x in y row where black
+            last = marks[0][-1]
         else:
             val = 255
+            first = 0
+            last = im.shape[1]
         if last-first<im.shape[1]*0.2:
             im[imtop:imtop+3, first:last] = val*np.ones(im[imtop:imtop+3, first:last].shape)
         return im
@@ -134,41 +196,66 @@ class segmenter:
             imbot = top[0][-1]-3
             im = self.closeHorizLine(im, imbot, close)
         return im 
+    
+    def closeFullBorder(self, im:np.array) -> np.array:
+        '''put a white border around the whole image'''
+        if len(im.shape)>2:
+            zero = [0,0,0]
+        else:
+            zero = 255
+        im2 = im.copy()
+        im2[0, :] = zero
+        im2[-1, :] = zero
+        im2[:, 0] = zero
+        im2[:,-1] = zero
+        return im2
         
     def addNozzle(self, bottomOnly:bool=False) -> None:
         '''add the nozzle in black back in for filling'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, dilate=self.dilation, bottomOnly=bottomOnly)   
+        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, dilate=self.nozDilation, bottomOnly=bottomOnly)   
         h,w = thresh.shape
         thresh[0, :] = 0   # clear out the top row
         thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
         thresh[:int(h/4),-1] = 0
         self.thresh = thresh
+        
+    def removeLaplacian(self, sharpCrit:int=20, **kwargs) -> None:
+        '''remove from thresh the edges with a sharp gradient from white to black'''
+        self.laplacian = cv.Laplacian(self.gray,cv.CV_64F)
+        # ret, thresh2 = cv.threshold(laplacian,10,255,cv.THRESH_BINARY)   # sharp transition from black to white
+        ret, thresh3 = cv.threshold(self.laplacian,-sharpCrit,255,cv.THRESH_BINARY_INV)  # sharp transition from white to black
+        thresh3 = erode(normalize(thresh3), 2)  # remove tiny boxes
+        thresh3 = thresh3.astype(np.uint8)
+        self.thresh = cv.subtract(self.thresh, thresh3)
 
-        
-#     def closeVertLine(self, s:str, w:int=2, aspect:int=10) -> None:
-#         '''find smoothed contours of each component and add them to the image'''
-#         m1 = closeMorph(getattr(self, s), w, aspect=aspect)
-#         m2 = fillComponents(m1)
-#         m3 = openMorph(m2, w, aspect=1)
-#         imshow(getattr(self, s), m1, m2, m3)
-#         setattr(self, s, m3)
-                
-        
     def fillParts(self, fillTop:bool=True, **kwargs) -> None:
         '''fill the components, and remove the border if needed'''
         if fillTop:
             self.thresh = self.closeVerticalTop(self.thresh, close=True)
         if self.closing>0:
             self.thresh = closeMorph(self.thresh, self.closing)
-        if self.removeBorder:
+        elif self.closing<0:
+            self.thresh = openMorph(self.thresh, -self.closing)
+        if self.removeSharp:
+            self.removeLaplacian(**self.kwargs)
+        if self.fillMode == fillMode.removeBorder:
             self.filled = removeBorderAndFill(self.thresh, leaveHollows=True)    
-        else:
+        elif self.fillMode == fillMode.fillSimple:
+            self.filled = fillComponents(self.thresh, diag=self.diag-2, leaveHollows=False)
+        elif self.fillMode == fillMode.fillSimpleWithHoles:
             self.filled = fillComponents(self.thresh, diag=self.diag-2, leaveHollows=True)
+        elif self.fillMode == fillMode.fillByContours:
+            if hasattr(self, 'laplacian'):
+                self.filled = fillByContours(self.thresh, self.im, diag=self.diag-2, laplacian=self.laplacian)
+            else:
+                self.filled = fillByContours(self.thresh, self.im, diag=self.diag-2)
         self.filled = self.closeVerticalTop(self.filled, close=False)
         if self.closing>0:
             self.filled = closeMorph(self.filled, self.closing)
+        elif self.closing<0:
+            self.filled = openMorph(self.filled, -self.closing)
             
     def emptyVertSpaces(self) -> None:
         '''empty the vertical spaces between printed vertical lines'''
@@ -185,11 +272,6 @@ class segmenter:
         tot = openMorph(tot, 2)           # remove debris
         
         filled = cv.subtract(self.sdf.labelsBW, tot)   # remove from image
-        
-#         skeleton = dilate(skeletonize(self.thresh, w=5),2)
-#         sfilled = fillComponents(skeleton)
-#         emptied = erode(sfilled, 7)
-#         imshow(skeleton, sfilled, emptied)
 
         if self.diag>1:
             imshow(gX, tot, filled, self.filled, title='emptyVertSpaces')
@@ -202,9 +284,9 @@ class segmenter:
         '''remove the black nozzle from the image'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops, dilate=self.dilation))  # remove the nozzle again
-        if self.eraseMaskSpill:
-            setattr(self, s, self.nd.eraseSpillover(getattr(self, s), crops=self.crops, diag=self.diag-1))  # erase any extra nozzle that is in the image
+        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops, dilate=self.nozDilation, bottomDilate=2))  # remove the nozzle again
+#         if self.eraseMaskSpill:
+#             setattr(self, s, self.nd.eraseSpillover(getattr(self, s), crops=self.crops, diag=self.diag-1))  # erase any extra nozzle that is in the image
             
             
     def segmentInterfaces(self, addNozzle:bool=True, addNozzleBottom:bool=False, **kwargs) -> np.array:
@@ -213,10 +295,14 @@ class segmenter:
         removeVert=True to remove vertical lines from the thresholded image
         removeBorder=True to remove border components from the thresholded image'''
         self.getGray()
-        self.threshes(**kwargs)
-        # if self.eraseMaskSpill:
-        #     self.thresh = self.nd.eraseSpillover(self.thresh, crops=self.crops, diag=self.diag-1)
-        #     self.gray = self.nd.maskNozzle(self.gray, ave=True, crops=self.crops, dilate=3)
+        self.threshes(**kwargs)  # threshold
+        if self.eraseMaskSpill:
+            xl = self.nd.xL
+            xr = self.nd.xR
+            self.thresh = self.nd.eraseSpillover(self.thresh, crops=self.crops, diag=self.diag-1)
+            if not xl==self.nd.xL or not xr==self.nd.xR:
+                self.gray = self.nd.maskNozzle(self.gray, ave=True, crops=self.crops, dilate=self.nozDilation)
+                self.threshes(**kwargs)  # re-threshold with new boundaries  
         if addNozzle:
             self.addNozzle()    # add the nozzle to the thresholded image
         if addNozzleBottom:
@@ -225,39 +311,40 @@ class segmenter:
         self.removeNozzle() # remove the nozzle again
         
     def __getattr__(self, s):
-        if s in ['success', 'df', 'labeledIm']:
+        if s in ['success', 'df', 'labeledIm', 'numComponents', 'labelsBW']:
             return getattr(self.sdf, s)
         
-    def eraseSmallComponents(self):
+    def eraseSmallComponents(self, **kwargs):
         '''erase small components from the labeled image and create a binary image'''
-        return self.sdf.eraseSmallComponents()
+        return self.sdf.eraseSmallComponents(**kwargs)
         
     def eraseSmallestComponents(self, satelliteCrit:float=0.2, **kwargs) -> None:
         '''erase the smallest relative components from the labeled image'''
         return self.sdf.eraseSmallestComponents(satelliteCrit, **kwargs)
           
-    def eraseBorderComponents(self, margin:int) -> None:
+    def eraseBorderComponents(self, margin:int, **kwargs) -> None:
         '''remove any components that are too close to the edge'''
-        return self.sdf.eraseBorderComponents(margin)
+        return self.sdf.eraseBorderComponents(margin, **kwargs)
         
-    def eraseFullWidthComponents(self) -> None:
+    def eraseFullWidthComponents(self, **kwargs) -> None:
         '''remove components that are the full width of the image'''
-        return self.sdf.eraseFullWidthComponents()
+        return self.sdf.eraseFullWidthComponents(**kwargs)
         
-    def eraseLeftRightBorder(self) -> None:
+    def eraseLeftRightBorder(self, **kwargs) -> None:
         '''remove components that are touching the left or right border'''
-        return self.sdf.eraseLeftRightBorder()
+        return self.sdf.eraseLeftRightBorder(**kwargs)
         
-    def eraseTopBottomBorder(self) -> None:
+    def eraseTopBottomBorder(self, **kwargs) -> None:
         '''remove components that are touching the top or bottom border'''
-        return self.sdf.eraseTopBottomBorder()
-        
+        return self.sdf.eraseTopBottomBorder(**kwargs)
+     
+    def removeScragglies(self, **kwargs) -> None:
+        return self.sdf.removeScragglies(**kwargs)
         
     def largestObject(self) -> pd.Series:
         '''the largest object in the dataframe'''
         return self.sdf.largestObject()
-
-            
+     
     def reconstructMask(self, df:pd.DataFrame) -> np.array:
         '''construct a binary mask with all components labeled in the dataframe'''
         return self.sdf.reconstructMask(df)
@@ -313,62 +400,85 @@ class segmenterDF:
     def noDF(self) -> bool:
         return not hasattr(self, 'df') or len(self.df)==0
             
-    def selectComponents(self, goodpts:pd.Series) -> None:
+    def selectComponents(self, goodpts:pd.Series, checks:bool=True, **kwargs) -> None:
         '''erase any components that don't fall under criterion'''
+        if len(goodpts)==0:
+            # don't empty the dataframe
+            return
         for i in list(self.df[~goodpts].index):
-            self.labeledIm[self.labeledIm==i] = 0
+            if not checks or not self.df.loc[i, 'a']==self.df.a.max():
+                self.labeledIm[self.labeledIm==i] = 0
+            else:
+                # add this point back in
+                goodpts = goodpts|(self.df.index==i)
         self.df = self.df[goodpts] 
         self.resetStats()
             
-    def eraseSmallComponents(self):
+    def eraseSmallComponents(self, **kwargs):
         '''erase small components from the labeled image and create a binary image'''
         if self.noDF():
             return
         goodpts = (self.df.a>=self.acrit)
-        self.selectComponents(goodpts)
+        self.selectComponents(goodpts, **kwargs)
         
     def eraseSmallestComponents(self, satelliteCrit:float=0.2, **kwargs) -> None:
         '''erase the smallest relative components from the labeled image'''
         if self.noDF():
             return
         goodpts = (self.df.a>=satelliteCrit*self.df.a.max())
-        self.selectComponents(goodpts)
+        self.selectComponents(goodpts, **kwargs)
           
-    def eraseBorderComponents(self, margin:int) -> None:
+    def eraseBorderComponents(self, margin:int, **kwargs) -> None:
         '''remove any components that are too close to the edge'''
         if self.noDF():
             return
         goodpts = (self.df.x0>margin)&(self.df.y0>margin)&(self.df.x0+self.df.w<self.w-margin)&(self.df.y0+self.df.h<self.h-margin)
-        self.selectComponents(goodpts)
+        self.selectComponents(goodpts, **kwargs)
         
-    def eraseFullWidthComponents(self) -> None:
+    def eraseFullWidthComponents(self, margin:int=0, **kwargs) -> None:
         '''remove components that are the full width of the image'''
         if self.noDF():
             return
-        goodpts = (self.df.w<self.w)
-        self.selectComponents(goodpts)
+        goodpts = (self.df.w<self.w-margin)
+        self.selectComponents(goodpts, **kwargs)
         
-    def eraseLeftRightBorder(self) -> None:
+    def eraseLeftRightBorder(self, margin:int=1, **kwargs) -> None:
         '''remove components that are touching the left or right border'''
         if self.noDF():
             return
-        goodpts = ((self.df.x0>0)&(self.df.x0+self.df.w<(self.w)))
-        self.selectComponents(goodpts)
+        goodpts = ((self.df.x0>margin)&(self.df.x0+self.df.w<(self.w-margin)))
+        self.selectComponents(goodpts, **kwargs)
         
-    def eraseTopBottomBorder(self) -> None:
+    def eraseTopBottomBorder(self, **kwargs) -> None:
         '''remove components that are touching the top or bottom border'''
         if self.noDF():
             return
         goodpts = (self.df.y0>0)&(self.df.y0+self.df.h<self.h)
-        self.selectComponents(goodpts)
+        self.selectComponents(goodpts, **kwargs)
         
         
-    def largestObject(self) -> pd.Series:
+    def largestObject(self, **kwargs) -> pd.Series:
         '''the largest object in the dataframe'''
         if not self.success:
             raise ValueError('Segmenter failed. Cannot take largest object')
         return self.df[self.df.a==self.df.a.max()].iloc[0]
             
+    def removeScragglies(self, **kwargs) -> None:
+        '''if the largest object is smooth, remove anything with high roughness'''
+        if self.numComponents<=1:
+            return
+        for i in self.df.index:
+            mask = (self.labeledIm == i).astype("uint8") * 255 
+            cnt = getContours(mask)[0]
+            self.df.loc[i, 'roughness'] = contourRoughness(cnt)
+        if not self.df.idxmin()['roughness']==self.df.idxmax()['a']:
+            # smoothest object is not the largest object
+            return
+        if self.df.roughness.min()>0.5:
+            # smoothest object is pretty rough
+            return
+        goodpts = self.df.roughness<(self.df.roughness.min()+0.5)
+        self.selectComponents(goodpts, **kwargs)
 
     def getConnectedComponents(self) -> int:
         '''get connected components and filter by area, then create a new binary image without small components'''
@@ -386,10 +496,13 @@ class segmenterDF:
         self.resetStats()
         return 0  
 
+    def singleMask(self, i:int) -> np.array:
+        '''get a binary mask of a single component given as a row in df'''
+        return (self.labeledIm == i).astype("uint8") * 255
             
     def reconstructMask(self, df:pd.DataFrame) -> np.array:
         '''construct a binary mask with all components labeled in the dataframe'''
-        masks = [(self.labeledIm == i).astype("uint8") * 255 for i,row in df.iterrows()]
+        masks = [self.singleMask(i) for i in df.index]
         if len(masks)>0:
             componentMask = masks[0]
             if len(masks)>1:

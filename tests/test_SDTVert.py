@@ -35,13 +35,12 @@ LOGGERDEFINED = logs.openLog('test_SDTXS.py', False, level='DEBUG', exportLog=Tr
 class TestSDTXS(unittest.TestCase):
     '''test for correct print file labeling'''
     
-    def parameterize(self, folder:str='', file:str='', w:float=0, h:float=0, xc:float=0, yc:float=0, test:int=0, **kwargs):
+    def parameterize(self, folder:str='', file:str='', emptiness:float=0, x0:float=0, segments:int=0, test:int=0, **kwargs):
         self.folder = folder
         self.file = file
-        self.w = w
-        self.h = h
-        self.xc = xc
-        self.yc = yc
+        self.emptiness = emptiness
+        self.x0 = x0
+        self.segments = segments
         self.test = test
 
     def setUp(self):

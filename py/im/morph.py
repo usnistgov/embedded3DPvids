@@ -109,44 +109,145 @@ def floodFill(thresh:np.array) -> np.array:
     im_flood_fill_inv = cv.bitwise_not(im_flood_fill)
     return im_flood_fill_inv
 
+def labelHierarchy(hierarchy:np.array, cnt:np.array) -> pd.DataFrame:
+    '''put the hierarchy into a dataframe'''
+    hdf = pd.DataFrame(hierarchy[0], columns=['previous', 'next', 'child', 'parent'])
+    toplevel = hdf[(hdf.parent<0)]   # no parents
+    level1 = hdf[(hdf.parent>=0)]    # has parents
+    level2 = level1[level1.parent.isin(level1.index.tolist())]   # has grandparents
+    level3 = level2[level2.parent.isin(level2.index.tolist())]   # has great grandparents
+    hdf.loc[(toplevel.index), 'level'] = 0
+    hdf.loc[(level1.index), 'level'] = 1
+    hdf.loc[(level2.index), 'level'] = 2
+    hdf.loc[(level3.index), 'level'] = 3
+    hdf['area'] = [cv.contourArea(c) for c in cnt]
+    return hdf
+
+def displayHierarchy(thresh:np.array, hdf:pd.DataFrame, cnt:np.array) -> np.array:
+    '''add the hierarchy contours to the thresholded image'''
+    c2 = thresh.copy()
+    c2 = cv.cvtColor(c2, cv.COLOR_GRAY2BGR)
+    colors = {0:(19, 53, 242), 1: (46, 211, 240), 2:(15, 214, 81), 3:(230, 237, 31)}
+    for n in hdf.level.unique():
+        color = colors[n]
+        for i,row in hdf[hdf.level==n].iterrows():
+            if cv.contourArea(cnt[i])>50:
+                cv.drawContours(c2, [cnt[i]], -1, color, 2)
+    return c2
+
 def fillComponents(thresh:np.array, diag:int=0, leaveHollows:bool=True)->np.array:
     '''fill the connected components in the thresholded image https://www.programcreek.com/python/example/89425/cv.floodFill'''
     
     # fill in objects
-    im_flood_fill_inv = floodFill(thresh)
-    img_out = thresh | im_flood_fill_inv
+    thresh2 = thresh.copy()
+    im_flood_fill_inv = floodFill(thresh2)
+    img_out = thresh2 | im_flood_fill_inv
     if leaveHollows:
         # remove the inside of any bubbles inside objects
-        i2 = cv.bitwise_not(im_flood_fill_inv)
-        i2[-1, :] = 255
+        i2 = thresh2
+        i2[-1:, :] = 255
         cnt, hierarchy = cv.findContours(i2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        hdf = pd.DataFrame(hierarchy[0], columns=['previous', 'next', 'child', 'parent'])
-        toplevel = hdf[(hdf.parent<0)]   # no parents
-        level1 = hdf[(hdf.parent>=0)]    # has parents
-        level2 = level1[level1.parent.isin(level1.index.tolist())]   # has grandparents
-        level3 = level2[level2.parent.isin(level2.index.tolist())]   # has great grandparents
-        
+        hdf = labelHierarchy(hierarchy)
         im2 = thresh.copy()*0
         if diag>0:
-            c2 = thresh.copy()
-            c2 = cv.cvtColor(c2, cv.COLOR_GRAY2BGR)
-            hdf.loc[(toplevel.index), 'level'] = 0
-            hdf.loc[(level1.index), 'level'] = 1
-            hdf.loc[(level2.index), 'level'] = 2
-            hdf.loc[(level3.index), 'level'] = 3
-            for n in hdf.level.unique():
-                color = list(np.random.random(size=3) * 256)
-                for i,row in hdf[hdf.level==n].iterrows():
-                    if cv.contourArea(cnt[i])>50:
-                        cv.drawContours(c2, [cnt[i]], -1, color, 2)
-            imshow(c2)
-        for i in level3.index:
+            thresh2 = displayHierarchy(i2, hdf, cnt)
+        for i in (hdf[hdf.level==3]).index:
             if cv.contourArea(cnt[i])>50:
                 cv.drawContours(im2, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
         img_out = cv.subtract(img_out, im2)
     if diag>0:
-        imshow(thresh, im_flood_fill_inv, img_out, title='fillComponents')
+        if leaveHollows:
+            imshow(thresh, thresh2, im_flood_fill_inv, img_out, title='fillComponents')
+        else:
+            imshow(thresh, im_flood_fill_inv, img_out, title='fillComponents')
     return img_out
+
+def isReentrant(cnt:np.array) -> bool:
+    '''determine if the contour has its outer surface also inside of its inner surface, i.e. it is a U'''
+    if len(cnt)<100:
+        return False
+    M = cv.moments(cnt)
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
+    dist = cv.pointPolygonTest(cnt, (cx,cy), False)
+    return dist<0
+
+
+def maskContour(im:np.array, cnt:np.array, thickness:int=-1) -> float:
+    '''get the mean value inside the contour if thickness=-1, on the contour if thickness>0'''
+    if len(im.shape)==3:
+        im2 = normalize(cv.cvtColor(im, cv.COLOR_BGR2GRAY))
+    else:
+        im2 = im
+    mask = np.zeros((im.shape[0], im.shape[1]))
+    cv.drawContours(mask, [cnt], contourIdx=0, color=(255,255,255),thickness=thickness)  # fill in the contour
+    masked = np.ma.masked_where(mask==0, im2).compressed()
+    return masked
+
+
+def meanInsideContour(im:np.array, cnt:np.array, thickness:int=-1) -> float:
+    '''get the mean value inside the contour if thickness=-1, on the contour if thickness>0'''
+    if len(im)==0:
+        return 0
+    masked = maskContour(im, cnt, thickness)
+    return masked.mean().mean()
+
+def contrastOnContour(im:np.array, cnt:np.array, thickness:int=1) -> float:
+    '''get the contrast between average positive and negative values inside the contour if thickness=-1, on the contour if thickness>0'''
+    if len(im)==0:
+        return 0
+    masked = maskContour(im, cnt, thickness)
+    posvals = masked[masked>0]
+    if len(posvals)>0:
+        pos = posvals.mean().mean()
+    else:
+        pos = 0
+    negvals = masked[masked<0]
+    if len(negvals)>0:
+        neg = negvals.mean().mean()
+    else:
+        neg = 0
+    return pos-neg
+
+
+def fillByContours(thresh:np.array, im:np.array, amin:int=50, amax:int=5000
+                   , diag:int=0, conCrit:int=50, laplacian:np.array = [], **kwargs) -> np.array:
+    '''fill the components using the contours, where anything with a size between amin and amax doesn't get filled'''
+    i2 = thresh.copy()
+    i2[-1, :] = 255
+    cnt, hierarchy = cv.findContours(i2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    hdf = labelHierarchy(hierarchy, cnt)
+    imout = thresh.copy()
+    
+    level1pts = hdf[hdf.level==1]
+
+    # fill in tiny contours
+    for i in level1pts[(level1pts.area<amin)|(level1pts.area>amax)].index:
+        cv.drawContours(imout, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
+
+    for i in level1pts[(level1pts.area>=amin)&(level1pts.area<=amax)].index:
+        # p = cv.arcLength(cnt[i],True)
+        # p2 = cv.arcLength(cv.approxPolyDP(cnt[i], 1, True), True)  # perimeter of smoothed object
+
+        # mn = meanInsideContour(im, cnt[i])
+        mo = meanInsideContour(laplacian, cnt[i], thickness=1)
+        con = contrastOnContour(laplacian, cnt[i], thickness=2)
+        if diag>0:
+            a = level1pts.loc[i,'area']
+            print(a, mo, con)
+        if con<conCrit and mo>-5:
+            # fill it if it is chunky, or if it is rough
+            cv.drawContours(imout, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
+
+    for i in (hdf[hdf.level==3]).index:
+        if hdf.loc[i,'area']>50:
+            # empty this bubble
+            cv.drawContours(imout, cnt, contourIdx=i, color=(0,0,0),thickness=-1)
+    if diag>0:
+        im3 = displayHierarchy(i2, hdf, cnt)
+        imshow(thresh, imout, im3, titles=['fill: thresh', 'filled', 'contours'])
+    return imout
+    
 
 def removeBorderAndFill(thresh:np.array) -> np.array:
     '''remove the components touching the border and fill them in'''
@@ -316,5 +417,6 @@ def skeletonize(img:np.array, w:int=3) -> np.array:
             done = True
 
     return skel
+
 
     

@@ -11,6 +11,7 @@ import logging
 import pandas as pd
 import subprocess
 import time
+import traceback
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -81,11 +82,7 @@ def allIn(slist:List[str], s:str) -> bool:
 def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[], **kwargs) -> List[str]:
     '''Get a list of bottom level print folders in the top folder'''
     if isPrintFolder(topFolder):
-        if len(someIn)>0:
-            anyin = anyIn(someIn, topFolder)
-        else:
-            anyin = True
-        if allIn(tags, topFolder) and anyin:
+        if allIn(tags, topFolder) and anyIn(someIn, topFolder):
             folders = [topFolder]
         else:
             folders = []
@@ -106,16 +103,41 @@ def isStitch(file:str) ->bool:
     for st in allStFiles():
         if f'_{st}_' in file:
             return True
+        
+def searchFolder(topFolder:str, bottom:str)->str:
+    '''find the full path within the folder'''
+    for f in os.listdir(topFolder):
+        file = os.path.join(topFolder, f, bottom)
+        if os.path.exists(file):
+            return file
+    return ''
     
-
+def findFullFN(bn:str, topFolder:str) -> str:
+    '''given a basename, find the full file name'''
+    if not '_vstill_' in bn or not '_I_' in bn or not '_S_' in bn:
+        raise FileNotFoundError(f'Cannot find full file name for {bn}')
+    b, ext = os.path.splitext(bn)
+    spl = re.split('_', b)
+    vs = spl.index('vstill')
+    sbpname = '_'.join(spl[:vs])
+    i = spl.index('I')
+    s = spl.index('S')
+    testname = '_'.join(spl[i:s+3])
+    samplename = '_'.join(spl[i:s+2])
+    bottom = os.path.join(samplename, testname, sbpname, bn)
+    file = searchFolder(topFolder, bottom)
+    if os.path.exists(file):
+        return file
+    for j in [2,3]:
+        testname = '_'.join(spl[i:s+2]+[f'v{j}']+[spl[s+2]])
+        bottom = os.path.join(samplename, testname, sbpname, bn)
+        file = searchFolder(topFolder, bottom)
+        if os.path.exists(file):
+            return file
+    raise FileNotFoundError(f'Could not find {bn} in {topFolder}')
 
 #------------    
 
-
-
-
-
-    
 def checkFolders(topFolder:str) -> Tuple[list, list]:
     '''check the print folders in the top folder for extra files, mis-sorted files'''
     mismatch = []
@@ -213,7 +235,7 @@ class folderLoop:
     the function needs to have only one arg, folder, and all other variables need to go in kwargs
     folders could be either the top folder to recurse into, or a list of folders'''
     
-    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], **kwargs):
+    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, **kwargs):
         if type(folders) is list:
             # list of specific folders
             self.folders = folders
@@ -225,6 +247,7 @@ class folderLoop:
         self.mustMatch = mustMatch
         self.canMatch = canMatch
         self.kwargs = kwargs
+        self.printTraceback = printTraceback
         
     def runFolder(self, folder:str) -> None:
         '''run the function on one folder'''
@@ -245,7 +268,8 @@ class folderLoop:
         except Exception as e:
             self.errorList.append(folder)
             print(e)
-            traceback.print_exc()
+            if self.printTraceback:
+                traceback.print_exc()
 
         
     def run(self) -> list:

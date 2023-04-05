@@ -508,6 +508,8 @@ class nozData:
         elif hasattr(self, 'line_image'):
             frame = self.line_image
         else:
+            if not hasattr(self, 'vd'):
+                self.vd = vidData(self.printFolder)
             frame = self.vd.getFrameAtTime(1)
         
         self.nozMask = 255*np.ones((frame.shape[0], frame.shape[1]), dtype=np.uint8)
@@ -562,7 +564,7 @@ class nozData:
     #------------------------------------------------------------------------------------
         
         
-    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False, invert:bool=False, normalize:bool=True, bottomOnly:bool=False, **kwargs) -> np.array:
+    def maskNozzle(self, frame:np.array, dilate:int=0, ave:bool=False, invert:bool=False, normalize:bool=True, bottomOnly:bool=False, bottomDilate:int=0, **kwargs) -> np.array:
         '''block the nozzle out of the image. 
         dilate is number of pixels to expand the mask. 
         ave=True to use the background color, otherwise use white
@@ -585,10 +587,15 @@ class nozData:
             xR = int(self.xR)
         
         # cover nozzle with new color
+        yB = yB+bottomDilate
         if ave:
             # mask nozzle with whitest value
             nc = np.copy(frame)*0 # create mask
-            average = int(frame.max(axis=0).mean(axis=0))
+            average = frame.max(axis=0).mean(axis=0)
+            if len(s)==3:
+                average = [int(i) for i in average]
+            else:
+                average = int(average)
             if bottomOnly:
                 y0 = yB-10
             else:
@@ -600,7 +607,9 @@ class nozData:
             if 'crops' in kwargs:
                 nc = vc.imcrop(nc, crops)
             if bottomOnly:
-                nc[0:yB-10, xL-self.maskPadLeft:xR+self.maskPadRight]=0
+                nc[0:yB-1, xL-self.maskPadLeft:xR+self.maskPadRight]=0
+            else:
+                nc[0:yB, xL-self.maskPadLeft:xR+self.maskPadRight]=255
         
         # put the new mask on top
         nc = vm.dilate(nc, dilate)  
@@ -632,22 +641,48 @@ class nozData:
             imshow(im3, im2, edges, title='eraseSpillover', maxwidth=8)
         
     
-    def nearLines(self, im:np.array, l0:int, lf:int, diag:int=0, **kwargs):
+    def nearLines(self, im:np.array, l0:int, lf:int, diag:int=0, margin:int=5, **kwargs):
         '''get lines near the nozzle'''
         h,w = im.shape[:2]
-        xmin = l0-2
-        hcrit = 0.5*255
-        while xmin>0 and xmin>l0-20 and xmin<w and im[:, xmin].mean()>hcrit:
+        if l0>w or lf<0:
+            return l0, lf
+        
+        xmin0 = l0-2
+        xmax0 = lf+1
+        
+        xmin = xmin0
+        hcrit = 0.75*255    # first line needs to be very long, and proceeding lines can slant down
+        while xmin>0 and xmin>l0-margin and xmin<w and im[:, xmin].mean()>hcrit:
             xmin = xmin-1
-        xmax = lf+1
-        while xmax<w and xmax<lf+20 and xmax>0 and im[:, xmax].mean()>hcrit:
+            hcrit = 0.25*255
+        if xmin==l0-margin:
+            # we made it to the end and still hit points. don't crop
+            return l0, lf
+        
+        hcrit = 0.75*255
+        xmax = xmax0
+        while xmax<w and xmax<lf+margin and xmax>0 and im[:, xmax].mean()>hcrit:
             xmax = xmax+1
+            hcrit = 0.25*255
+        if xmax==lf+margin:
+            # we made it to the end and still hit points. don't crop
+            return l0, lf
         if diag>0:
             im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
             for x in [xmin, xmax]:
                 color = (0,0,255)
                 cv.line(im2,(int(x),int(0)),(int(x),int(h)),color,1)
             imshow(im, im2, title='eraseSpillover', maxwidth=6)
+        if xmin==xmin0:
+            # no change
+            xmin = l0
+        else:
+            xmin = xmin-1
+        if xmax==xmax0:
+            # no change
+            xmax = lf
+        else:
+            xmax = xmax+1
         return xmin, xmax
     
     def eraseSpillover(self, thresh:np.array, **kwargs) -> np.array:
@@ -667,7 +702,10 @@ class nozData:
         thresh[0:yB, xL2:xR2] = 0
         self.xL = self.xL + (xL2-xL)
         self.xR = self.xR + (xR2-xR)
-        self.nozCover[0:yB, self.xL:self.xR, :] = 255   # update the nozzle cover
+        if not hasattr(self, 'nozCover'):
+            self.createNozzleMask()
+        else:
+            self.nozCover[0:yB, self.xL:self.xR, :] = 255   # update the nozzle cover
         
         return thresh
     
@@ -689,6 +727,27 @@ class nozData:
             return x*self.pxpmm+nx, ny-y*self.pxpmm
         else:
             return (x-nx)/self.pxpmm, (ny-y)/self.pxpmm
+        
+    def dentHull(self, hull:list, crops:dict) -> list:
+        '''conform the contour to the nozzle'''
+        yB = int(self.yB-crops['y0'])
+        xL = int(self.xL-crops['x0'])
+        xR = int(self.xR-crops['x0'])
+        df = pd.DataFrame(hull[:,0] , columns=['x', 'y'])
+        if xL-10>df.x.max() or xL<df.x.min() or yB<df.y.min():
+            # all points are left or right of the left edge of the nozzle or below the nozzle
+            return hull
+        under = df[(df.x>xL-10)&(df.x<xR+10)&(df.y>yB)&(df.y<yB+10)]
+        if len(under)==0:
+            return hull
+        left = df[(df.x<xL)&(df.x>xL-10)&(df.y<yB)]
+        if len(left)==0:
+            i = under.index.min()
+        else:
+            # points go clockwise, so the under point will be after the left point
+            i = left.index.max()+1  # index of the transition point
+        hull = np.vstack([hull[:i, 0, :], np.array([xL, yB]), hull[i:, 0, :]])
+        return hull
 
 
         

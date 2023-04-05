@@ -41,19 +41,17 @@ pd.set_option("display.precision", 2)
 
 #----------------------------------------------
 
-
-
-
 class vertSegment(metricSegment):
     '''collects data about vertical segments'''
     
     def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
-    def dims(self, numLines:int=1) -> None:
+    def dims(self, numLines:int=1, largest:bool=True, getLDiff:bool=False) -> None:
         '''get the dimensions of the segments'''
-        print(numLines)
         df2 = self.segmenter.df.copy()
+        if len(df2)==0:
+            return
         
         if numLines==1:
             # take only components in line with the largest component
@@ -91,7 +89,7 @@ class vertSegment(metricSegment):
         # get combined mask of all objects in line
         self.componentMask = self.segmenter.reconstructMask(inline)
         # measure roughness, thickness, etc.
-        componentMeasures, cmunits = self.measureComponent(horiz=False, reverse=True, diag=max(0,self.diag-1), combine=(numLines>1), emptiness=True, atot=inline.a.sum())
+        componentMeasures, cmunits = self.measureComponent(horiz=False, reverse=True, diag=max(0,self.diag-1), combine=not largest, emptiness=True, atot=inline.a.sum())
         if len(componentMeasures)==0:
             return
         
@@ -104,7 +102,7 @@ class vertSegment(metricSegment):
         ret['vest'] = calcVest(co['h'], r)
         units['vest'] = 'px^3'
 
-        if numLines>1:
+        if numLines>1 and getLDiff:
             ret['ldiff'] = self.getLDiff(horiz=False)/self.h
             units['ldiff'] = 'h'
 
@@ -132,7 +130,7 @@ class vertSegment(metricSegment):
             im2 = cv.cvtColor(self.componentMask,cv.COLOR_GRAY2RGB)
         else:
             im2 = self.im.copy()
-        imgi = self.im.copy() 
+        imgi = self.im0.copy() 
         for im in [im2, imgi]:
             if hasattr(self, 'x0'):
                 cv.rectangle(im, (self.x0,self.y0), (self.x0+self.w,self.y0+self.h), (0,0,255), 2)
@@ -304,44 +302,52 @@ class vertSegmentSDT(vertSegment, segmentSDT):
                 if s in self.stats:
                     self.stats.pop(s)
 
-    
-    def measure(self) -> None:
-        '''measure vertical SDT line'''
+    def generateIm0(self):
+        '''generate the initial image'''
         self.getProgRow()
         self.nd.maskPadRight=30  # there is nothing on the right side of the nozzle, so just mask generously
         h,w,_ = self.im.shape
         self.maxlen = h
-        self.dilation = 3
+        self.nozDilation = 3
+        self.fillDilation = 0
+        self.grayBlur = 1
         self.nd.maskPad = 0
-        self.im = self.nd.subtractBackground(self.im, self.dilation)   # remove the background and the nozzle
+        self.im0 = self.im.copy()
         rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
         self.crop = vc.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
         self.crop = vc.convertCrop(self.im, self.crop)    # make sure everything is in bounds
+        self.im0 = vc.imcrop(self.im0, self.crop) 
+        
+    def segment(self) -> None:
+        '''segment the foreground'''
+        self.generateIm0()
+        self.im = self.nd.subtractBackground(self.im, self.nozDilation)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
-        if 'water' in self.pv.ink.base:
-            th = 140
+
+        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
+                                   , fillMode=fillMode.fillByContours, eraseMaskSpill=True, nozDilation=self.nozDilation
+                                   , nozData=self.nd, crops=self.crop, adaptive=[1,2]
+                                   , addNozzle=False, removeNozzle=True, removeSharp=True
+                                   , addNozzleBottom=True, fillTop=True, openBottom=True, grayBlur=self.grayBlur
+                                  , closing=self.fillDilation)
+        self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
+        self.segmenter.eraseLeftRightBorder(margin=1)   # remove components touching the left or right border
+        self.segmenter.removeScragglies()  # remove scraggly components
+        
+    
+    def measure(self) -> None:
+        '''measure vertical SDT line'''
+        if self.tag[2]=='d':
+            ln = self.lnum
         else:
-            th = 180
-        self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=th, diag=max(0, self.diag-1)
-                                   , removeBorder=False, eraseMaskSpill=True, dilation=self.dilation
-                                   , nozData=self.nd, crops=self.crop, adaptive=True, addNozzle=False
-                                   , addNozzleBottom=True, fillTop=True, openBottom=True)
-        # self.segmenter = segmenter(self.im, acrit=self.acrit, topthresh=200, diag=max(0, self.diag-1)
-        #                            , removeBorder=False, eraseMaskSpill=True, dilation=self.dilation
-        #                            , nozData=self.nd, crops=self.crop, adaptive=False, addNozzle=False
-        #                            , addNozzleBottom=True, fillTop=True)
-        self.segmenter.eraseFullWidthComponents() # remove glue or air
-        # self.segmenter.emptyVertSpaces()
+            ln = self.lnum
+        self.segment()
         if not self.segmenter.success:
             if self.diag>0:
                 logging.warning(f'Segmenter failed on {self.file}')
             self.display()
             return
-        if self.tag[2]=='d':
-            ln = self.lnum-1
-        else:
-            ln = self.lnum
-        self.dims(numLines=ln)
+        self.dims(numLines=ln, largest=False, getLDiff=('o' in self.tag))
         for s in ['y0', 'yc', 'yf']:
             self.stats.pop(s)
             self.units.pop(s)
@@ -363,7 +369,38 @@ class vertSegmentSDT(vertSegment, segmentSDT):
         self.display()
 
         
-    
+def exportVertCrops(folder:str, overwrite:bool=False) -> None:
+    pfd = fh.printFileDict(folder)
+    pfd.sort()
+    for file in pfd.vstill:
+        vs = vertSegmentSDT(file, measure=False)
+        vs.exportCrop(overwrite=overwrite)
+        
+def exportAllVertCrops(topFolder, overwrite:bool=False, **kwargs) -> None:
+    '''create cropped images for all files in folder, hierarchically'''
+    fl = fh.folderLoop(topFolder, exportVertCrops, overwrite=overwrite, mustMatch='disturbVert', **kwargs)
+    return fl.run()
+
+def exportVertSegments(folder:str, overwrite:bool=False) -> None:
+    print(folder)
+    pfd = fh.printFileDict(folder)
+    pfd.sort()
+    if len(pfd.vstill)>0 and len(pfd.vstill)==len(pfd.Usegment):
+        return
+    nd = nozData(folder, pfd=pfd)
+    pv = printVals(folder, pfd = pfd, fluidProperties=False)
+    pg  = getProgDimsPV(pv)
+    for file in pfd.vstill:
+        vs = vertSegmentSDT(file, measure=False, pfd=pfd, nd=nd, pv=pv, pg=pg)
+        if not os.path.exists(vs.segmentFN()):
+            vs.measure()
+            vs.exportSegment(overwrite=overwrite)
+        
+def exportAllVertSegments(topFolder, overwrite:bool=False, **kwargs) -> None:
+    '''create segmented images for all files in folder, hierarchically'''
+    fl = fh.folderLoop(topFolder, exportVertSegments, overwrite=overwrite, mustMatch='disturbVert', **kwargs)
+    return fl.run()
+        
 def vertDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
     return vertSegmentDisturb(file, **kwargs).values()
 

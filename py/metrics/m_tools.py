@@ -21,6 +21,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from im.imshow import imshow
 from tools.plainIm import *
+from tools.config import cfg
 
 # logging
 logger = logging.getLogger(__name__)
@@ -39,6 +40,9 @@ def openImageInPaint(folder:str, st:str, i:int) -> None:
     file = stitchFile(folder, st, i)
     if not os.path.exists(file):
         return
+    openInPaint(file)
+    
+def openInPaint(file):
     subprocess.Popen([cfg.path.paint, file]);
 
 
@@ -155,7 +159,18 @@ def calcVest(h:float, r:float) -> float:
         vest = 4/3*np.pi*r**2*(h/2) # ellipsoid
     return vest
     
-    
+def getContours(mask:np.array) -> np.array:
+    '''get all the contours'''
+    contours = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    if int(cv.__version__[0])>=4:
+        contours = contours[0]
+    else:
+        contours = contours[1]
+    return contours
 
 
+def contourRoughness(cnt:np.array) -> float:
+    '''measure the roughness of the contour'''
+    hull = cv.convexHull(cnt)
+    return cv.arcLength(cnt,True)/cv.arcLength(hull,True)-1 
 

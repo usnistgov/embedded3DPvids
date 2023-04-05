@@ -59,10 +59,16 @@ class multiPlotsSDT(multiPlots):
     def getTag(self, name:str, overlay:dict, ss:str) -> list:
         '''get the lines to search for and the overlay shape'''
         if name.endswith('1'):
-            tag = [f'l2w{ss}', f'l2d{ss}']
+            if 'x' in name:
+                tag = [f'l2w{ss}', f'l2d{ss}']
+            else:
+                tag = [f'l2w1{ss}', f'l2d1{ss}']
             overlay['shape'] = '2circles'
         elif name.endswith('2'):
-            tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d{ss}']
+            if 'x' in name:
+                tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d{ss}']
+            else:
+                tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d2{ss}']
             overlay['shape'] = '2circles'
         elif name.endswith('3'):
             tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2w3{ss}']
@@ -156,14 +162,18 @@ class multiPlotsSDT(multiPlots):
 
             
     def plot(self, name:str, showFig:bool=False, export:bool=True,  **kwargs):
-        '''plot the values for name (e.g. horiz, xs_+y, xs_+z, or vert)'''
+        '''plot the values for name (e.g. HOx1)'''
         
         kwargs2 = {**self.kwargs.copy(), **kwargs.copy()}
         obj2file = fh.SDT2FileDict()
         if not name in obj2file:
             raise ValueError(f'Unknown object requested: {name}')
         file = obj2file[name]
-        for ss in ['o1', '']:
+        if 'x' in name:
+            s2 = ''
+        else:
+            s2 = 'p3'
+        for ss in ['o1', s2]:
             allIn = [file]
             overlay = {'dx':-0.7, 'dy':-0.7}
             tag = self.getTag(name, overlay, ss)

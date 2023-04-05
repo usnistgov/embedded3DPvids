@@ -78,5 +78,11 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
             ax.imshow(im, cmap='Greys')
     if 'title' in kwargs:
         # put title on figure
-        axlist[0].set_title(kwargs['title'])
+        if len(args)>1:
+            axlist[0].set_title(kwargs['title'])
+        else:
+            ax.set_title(kwargs['title'])
+    if 'titles' in kwargs:
+        for i,t in enumerate(kwargs['titles']):
+            axlist[i].set_title(t)
     f.tight_layout()

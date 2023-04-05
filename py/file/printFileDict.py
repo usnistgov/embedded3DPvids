@@ -65,6 +65,9 @@ class printFileDict:
         self.still=[]
         self.stitch=[]
         self.vstill=[]
+        self.MLsegment = []
+        self.Usegment = []
+        self.vcrop = []
         self.vid = []
         self.meta = []
         self.timeSeries = []
@@ -328,6 +331,12 @@ class printFileDict:
             if 'Basler camera' in fname:
                 # raw still
                 self.still.append(ffull)
+            elif 'vcrop' in fname:
+                self.vcrop.append(ffull)
+            elif 'MLsegment' in fname:
+                self.MLsegment.append(ffull)
+            elif 'Usegment' in fname:
+                self.Usegment.append(ffull)
             elif fn.isVidStill(ffull):
                 self.vstill.append(ffull)
             else: 
