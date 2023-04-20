@@ -226,10 +226,6 @@ def fillByContours(thresh:np.array, im:np.array, amin:int=50, amax:int=5000
         cv.drawContours(imout, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
 
     for i in level1pts[(level1pts.area>=amin)&(level1pts.area<=amax)].index:
-        # p = cv.arcLength(cnt[i],True)
-        # p2 = cv.arcLength(cv.approxPolyDP(cnt[i], 1, True), True)  # perimeter of smoothed object
-
-        # mn = meanInsideContour(im, cnt[i])
         mo = meanInsideContour(laplacian, cnt[i], thickness=1)
         con = contrastOnContour(laplacian, cnt[i], thickness=2)
         if diag>0:
@@ -246,6 +242,20 @@ def fillByContours(thresh:np.array, im:np.array, amin:int=50, amax:int=5000
     if diag>0:
         im3 = displayHierarchy(i2, hdf, cnt)
         imshow(thresh, imout, im3, titles=['fill: thresh', 'filled', 'contours'])
+    return imout
+
+def fillTiny(thresh:np.array, acrit:int=50) -> np.array:
+    '''fill the components using the contours, where anything with a size between amin and amax doesn't get filled'''
+    i2 = thresh.copy()
+    i2[-1, :] = 255
+    cnt, hierarchy = cv.findContours(i2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    hdf = labelHierarchy(hierarchy, cnt)
+    imout = thresh.copy()
+    level1pts = hdf[hdf.level==1]
+
+    # fill in tiny contours
+    for i in level1pts[(level1pts.area<acrit)].index:
+        cv.drawContours(imout, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
     return imout
     
 

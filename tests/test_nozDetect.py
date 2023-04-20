@@ -44,7 +44,7 @@ class TestNozDetect(unittest.TestCase):
     
     def setUp(self):
         self.vd = nt.nozData(self.folder)
-        self.vd.detectNozzle(diag=1, suppressSuccess=True)
+        self.vd.detectNozzle(diag=1, suppressSuccess=True, export=False, overwrite=True)
     
     def test_xL(self):
         errmess = f'text_xL failed on {self.folder}, expected-actual = {self.xL-self.vd.xL}'

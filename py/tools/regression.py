@@ -54,6 +54,8 @@ def polyMultiFit(X:np.array, y:np.array, order, intercept:Union[float,str]) -> d
 
 def lr(X:np.array, y:np.array, intercept:Union[float,str]) -> dict:
     '''linear regression from numpy arrays'''
+    if len(y)<5:
+        return {}
     if type(intercept) is str:
         regr = LinearRegression().fit(X,y)
     else:
@@ -81,11 +83,14 @@ def linearReg(x:list, y:list, intercept:Union[float, str]='') -> dict:
     return lr(X,y,intercept)
     
 
-def regPD(df:pd.DataFrame, xcols:List[str], ycol:str, order:int=1, intercept:Union[float,str]='') -> dict:
+def regPD(df:pd.DataFrame, xcols:List[str], ycol:str, order:int=1, intercept:Union[float,str]='', log:bool=False) -> dict:
     '''linear regression from pandas dataset'''
     df2 = df.dropna(subset = xcols+[ycol]) # remove any NaNs from the columns of interest
     y = df2[ycol]
     X = df2[xcols]
+    if log and y.min()>0:
+        y = np.log(y)
+        X = np.log(X)
     if order==1:
         return lr(X,y,intercept)
     else:

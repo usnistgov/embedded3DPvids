@@ -18,7 +18,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from f_tools import *
-import fileNames as fn
+import file_names as fn
 from levels import labelLevels
 
 
@@ -147,7 +147,7 @@ class printFileDict:
                 
     def findSummary(self) -> str:
         for f1 in os.listdir(self.printFolder):
-            if f1.endswith('.csv') and 'Summary' in f1:
+            if f1.endswith('.csv') and 'summary' in f1.lower():
                 ffull = os.path.join(self.printFolder, f1)
                 self.summary = ffull
                 return ffull
@@ -155,7 +155,7 @@ class printFileDict:
     
     def findMeasure(self) -> str:
         for f1 in os.listdir(self.printFolder):
-            if f1.endswith('.csv') and 'Measure' in f1:
+            if f1.endswith('.csv') and 'measure' in f1.lower():
                 ffull = os.path.join(self.printFolder, f1)
                 self.measure = ffull
                 return ffull
@@ -272,12 +272,7 @@ class printFileDict:
         '''get the full path name of the sbp points csv'''
         file = self.sbpFile()
         return file.replace('.sbp', '.csv')
-
-    
-
-    
-
-                
+       
     def sortVid(self, ffull:str, fname:str='', spl:list=[], sbp:dict={}) -> None:
         '''label an avi video'''
         if len(fname)==0:
@@ -298,11 +293,11 @@ class printFileDict:
                 self.timeSeries.append(ffull)
             elif 'speeds' in fname or 'meta' in fname:
                 self.meta.append(ffull)
-            elif 'Failure' in fname:
-                self.failure = ffull
-            elif 'Summary' in fname:
+            elif 'failure' in fname.lower():
+                self.failures = ffull
+            elif 'summary' in fname.lower():
                 self.summary = ffull
-            elif 'Measure' in fname:
+            elif 'measure' in fname.lower():
                 self.measure = ffull
                 setattr(self, self.deconstructFileName(ffull), ffull)
             else:
@@ -358,7 +353,6 @@ class printFileDict:
         
     def sortFiles(self, folder:str):
         '''sort and label files in the given folder'''
-        
         sbp = fn.allSBPFiles() 
         for f1 in os.listdir(folder):
             ffull = os.path.join(folder, f1)
@@ -386,6 +380,33 @@ class printFileDict:
         self.sortFiles(self.printFolder)
         self.getPrintType()
         self.getDate()
+        
+    def findVstill(self) -> None:
+        self.vstill = []
+        for f1 in os.listdir(self.printFolder):
+            if 'vstill' in f1 and 'png' in f1:
+                ffull = os.path.join(self.printFolder, f1)
+                self.vstill.append(ffull)
+    
+    def findMLsegment(self) -> None:
+        self.MLsegment = []
+        folder = os.path.join(self.printFolder, 'MLsegment')
+        if not os.path.exists(folder):
+            return
+        for f1 in os.listdir(folder):
+            if 'MLsegment' in f1 and 'png' in f1:
+                ffull = os.path.join(folder, f1)
+                self.MLsegment.append(ffull)
+                
+    def findUsegment(self) -> None:
+        self.Usegment = []
+        folder = os.path.join(self.printFolder, 'Usegment')
+        if not os.path.exists(folder):
+            return
+        for f1 in os.listdir(folder):
+            if 'Usegment' in f1 and 'png' in f1:
+                ffull = os.path.join(folder, f1)
+                self.Usegment.append(ffull)
         
     def printAll(self) -> None:
         '''print all values'''

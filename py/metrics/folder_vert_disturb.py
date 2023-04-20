@@ -19,16 +19,8 @@ import copy
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
-import im.crop as vc
-import im.morph as vm
-from im.segment import *
-from im.imshow import imshow
-from tools.plainIm import *
-from val.v_print import *
-from vid.noz_detect import nozData
-from m_tools import *
-from m_folder import *
-from m_vert_file import vertSDTMeasure, vertSDTTestFile
+from folder_disturb import *
+from file_vert_disturb import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -40,32 +32,22 @@ pd.set_option("display.precision", 2)
 
 #----------------------------------------------
 
-
-class vertDisturbMeasures(disturbMeasures):
+class folderVertDisturb(folderDisturb):
     '''for a vertDisturb measure, measure the disturbed lines'''
     
-    def __init__(self, folder:str, overwrite:bool=False, **kwargs) -> None:
-        super().__init__(folder, overwrite=overwrite, **kwargs)
+    def __init__(self, folder:str, **kwargs) -> None:
+        super().__init__(folder, **kwargs)
+        if not 'disturbVert' in os.path.basename(self.folder):
+            raise ValueError(f'Wrong folderDisturb class called for {self.folder}')
     
     def measureFolder(self) -> None:
         '''measure all cross-sections in the folder and export table'''
-        if not 'disturbVert' in os.path.basename(self.folder):
-            return 1
-        self.fn = self.pfd.newFileName('vertMeasure', '.csv')
-
-        if 'lines' in self.kwargs:
-            lines = self.kwargs['lines']
-        else:
-            lines = [f'l{i}{s}{s2}' for i in range(4) for s in ['w', 'd'] for s2 in ['', 'o']]
-        self.measure(lines, vertDisturbMeasure)
+        self.measure(fileVertDisturb)
 
 
     def summarize(self) -> Tuple[dict,dict]:
         '''summarize vertical measurements in the folder and export table'''
         errorRet = {},{}
-        if not 'disturbVert' in os.path.basename(self.folder):
-            return errorRet
-
         r = self.summaryHeader()
         if r==0:
             return self.summary, self.summaryUnits
@@ -129,17 +111,4 @@ class vertDisturbMeasures(disturbMeasures):
         lists = {**aves, **disps}
         self.convertValuesAndExport(ucombine, lists)
         return self.summary, self.summaryUnits
-    
-def vertDisturbMeasureSummarize(topFolder:str, overwrite:bool=False, **kwargs) -> Tuple[dict, dict]:
-    return vertDisturbMeasures(topFolder, overwrite=overwrite, **kwargs).summarize()
-
-def vertDisturbSummariesRecursive(topFolder:str, overwrite:bool=False, **kwargs) -> None:
-    '''recursively go through folders'''
-    s = summaries(topFolder, vertDisturbMeasureSummarize, overwrite=overwrite, **kwargs)
-    return s.out, s.units
-    
-def vertDisturbSummaries(topFolder:str, exportFolder:str, overwrite:bool=False, **kwargs) -> None:
-    '''measure all cross-sections in the folder and export table'''
-    s = summaries(topFolder, vertDisturbMeasureSummarize, overwrite=overwrite, **kwargs)
-    s.export(os.path.join(exportFolder, 'vertDisturbSummaries.csv'))
     

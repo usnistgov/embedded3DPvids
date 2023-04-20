@@ -107,6 +107,14 @@ def crop0f(h:int, w:int, crops:dict) -> Tuple[dict, dict]:
         out['yf'], pad['yf'] = cropf(h, crops['yf'], out['y0'])
     return out, pad
 
+def convertCropHW(h:int, w:int, crops:Union[Dict, int])->dict:
+    if type(crops) is int:
+        return cropEdge(h,w,d)
+    elif 'dx' in crops and 'dy' in crops:
+        return cropTBLR(h,w,crops)
+    else:
+        return crop0f(h,w,crops)[0]
+
 
 def convertCrop(im:np.array, crops:Union[Dict, int]) -> dict:
     '''convert the given crop dimensions to coordinates that will definitely fit in the image'''
@@ -114,13 +122,8 @@ def convertCrop(im:np.array, crops:Union[Dict, int]) -> dict:
         h,w = im.shape[0:2]
     else:
         return {}
-
-    if type(crops) is int:
-        return cropEdge(h,w,d)
-    elif 'dx' in crops and 'dy' in crops:
-        return cropTBLR(h,w,crops)
-    else:
-        return crop0f(h,w,crops)[0]
+    return convertCropHW(h,w,crops)
+    
         
     
 def convertCropPad(im:np.array, crops:Union[Dict, int]) -> Tuple[dict, dict]:

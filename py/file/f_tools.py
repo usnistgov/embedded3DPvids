@@ -283,3 +283,25 @@ def sbpPath(topFolder:str, name:str) -> str:
                     return s
     # didn't find any file
     return ''
+
+def listDirs(folder:str) -> List[str]:
+    '''List of directories in the folder'''
+    return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
+
+def anyIn(slist:List[str], s:str) -> bool:
+    '''bool if any of the strings in slist are in s'''
+    if len(slist)==0:
+        return True
+    for si in slist:
+        if si in s:
+            return True
+    return False
+
+def allIn(slist:List[str], s:str) -> bool:
+    '''bool if all of the strings are in s'''
+    if len(slist)==0:
+        return True
+    for si in slist:
+        if not si in s:
+            return False
+    return True

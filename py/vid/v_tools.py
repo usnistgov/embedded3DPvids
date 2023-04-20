@@ -246,7 +246,7 @@ class vidData:
         return df
             
             
-    def exportStills(self, prefixes:list=[], overwrite:bool=False, **kwargs) -> None:
+    def exportStills(self, prefixes:list=[], overwrite:bool=False, diag:int=1, **kwargs) -> None:
         '''export stills for all times in the progdims table'''
         self.getProgDims()
  
@@ -273,33 +273,37 @@ class vidData:
             if not os.path.exists(fn) or overwrite:
                 frame = self.getFrameAtTime(row['tpic'], (overwrite and i==0))   # this also exports video stats on the first loop if overwriting
                 cv.imwrite(fn, frame)
-                logging.info(f'Exported {fn}')
-            if 'p3' in name:
-                fn2 = fn.replace('p3', '')
-                if os.path.exists(fn2):
-                    os.remove(fn2)
-                    logging.info(f'Removed {fn2}')
+                if diag>0:
+                    logging.info(f'Exported {fn}')
             
 #----------------------------------------------
 
-def exportStills(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> None:
-    pdim = getProgDims(folder)
-    pdim.exportAll(overwrite=overwriteDims)
-    vd = vidData(folder)
-    vd.exportStills(overwrite=overwrite, **kwargs)
+class stillsExporter(fh.folderLoop):
+    '''for exporting stills from a video. folders is either a list of folders or the top folder. fileMetricFunc is a class definition for a fileMetric object. overwrite=True to overwrite images.'''
+    
+    def __init__(self, folders:Union[str, list], overwritePics:bool=False, overwriteDims:bool=False, exportDiag:int=0, **kwargs):
+        super().__init__(folders, self.folderFunc, **kwargs)
+        self.overwritePics = overwritePics
+        self.overwriteDims = overwriteDims
+        self.exportDiag = exportDiag
 
-def exportStillsRecursive(folder:str, overwrite:bool=False, overwriteDims:bool=False, **kwargs) -> list:
-    '''export stills of key lines from videos'''
-    fl = fh.folderLoop(folder, exportStills, overwrite=overwrite, overwriteDims=overwriteDims, **kwargs)
-    return fl.run()
+    def folderFunc(self, folder, **kwargs) -> None:
+        '''the function to run on a single folder'''
+        pdim = getProgDims(folder)
+        pdim.exportAll(overwrite=self.overwriteDims)
+        vd = vidData(folder)
+        vd.exportStills(overwrite=self.overwritePics, diag=self.exportDiag, **kwargs)
+        
+        
+class setManualStillTime(fh.folderLoop):
+    '''for exporting stills from a video. folders is either a list of folders or the top folder. fileMetricFunc is a class definition for a fileMetric object. overwrite=True to overwrite images.'''
+    
+    def __init__(self, folders:Union[str, list], **kwargs):
+        super().__init__(folders, self.folderFunc, **kwargs)
 
-def setManualStillTimeFolder(folder:str, dstart:float=0, **kwargs) -> None:
-    vd = vidData(folder)
-    vd.dstart_manual = dstart
-    vd.dstart = dstart
-    vd.exportStills(overwrite=True, **kwargs)
-
-def setManualStillTime(folder:str, dstart:float, **kwargs) -> list:
-    '''export stills of key lines from videos'''
-    fl = fh.folderLoop(folder, setManualStillTimeFolder, dstart=dstart, **kwargs)
-    return fl.run()
+    def folderFunc(self, folder:str, dstart:float=0, **kwargs) -> None:
+        '''manually adjust the start time for collecting stills for this folder'''
+        vd = vidData(folder)
+        vd.dstart_manual = dstart
+        vd.dstart = dstart
+        vd.exportStills(overwrite=True, **kwargs)

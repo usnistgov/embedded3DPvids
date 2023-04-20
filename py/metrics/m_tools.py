@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(currentdir))
 from im.imshow import imshow
 from tools.plainIm import *
 from tools.config import cfg
+from m_stats import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -32,30 +33,14 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 pd.set_option("display.precision", 2)
 pd.set_option('display.max_rows', 500)
 
-
 #----------------------------------------------
-
-def openImageInPaint(folder:str, st:str, i:int) -> None:
-    '''open the image in paint. this is useful for erasing smudges or debris that are erroneously detected by the algorithm as filaments'''
-    file = stitchFile(folder, st, i)
-    if not os.path.exists(file):
-        return
-    openInPaint(file)
     
 def openInPaint(file):
+    '''open the file in MS paint'''
     subprocess.Popen([cfg.path.paint, file]);
 
-
-
-def sem(l:list) -> float:
-    l = np.array(l)
-    l = l[~np.isnan(l)]
-    if len(l)==0:
-        return np.nan
-    return np.std(l)/np.sqrt(len(l))
-    
-
 def ppdist(p1:list, p2:list) -> float:
+    '''distance between 2 points'''
     d = 0
     for i in range(len(p1)):
         d = d + (float(p2[i])-float(p1[i]))**2
@@ -99,8 +84,6 @@ def bounds(row:list) -> Tuple[int,int]:
     first = row.index(255)
     return first,last
 
-
-
 def meanBounds(chunk:np.array, rows:bool=True) -> Tuple[float,float]:
     '''get average bounds across rows or columns'''
     if not rows:
@@ -111,16 +94,11 @@ def meanBounds(chunk:np.array, rows:bool=True) -> Tuple[float,float]:
     x0 = np.mean(b[:,0])
     xf = np.mean(b[:,1])
     return x0,xf
-
-
-
-        
+   
 def closestIndex(val:float, l1:list) -> int:
     '''index of closest value in list l1 to value val'''
     l2 = [abs(x-val) for x in l1]
     return l2.index(min(l2))
-
-
         
 def difference(do:pd.Series, wo:pd.Series, s:str) -> float:
     '''get difference between values'''
@@ -129,27 +107,7 @@ def difference(do:pd.Series, wo:pd.Series, s:str) -> float:
     else:
         raise ValueError('No value detected')
         
-def convertValue(key:str, val:list, units_in:dict, pxpmm:float, units_out:dict, vals_out:dict) -> Tuple:
-    '''convert the values from px to mm'''
-    uke = units_in[key]
-    if uke=='px':
-        c = 1/pxpmm
-        u2 = 'mm'
-    elif uke=='px^2':
-        c = 1/pxpmm**2
-        u2 = 'mm^2'
-    elif uke=='px^3':
-        c = 1/pxpmm**3
-        u2 = 'mm^3'
-    else:
-        c = 1
-        u2 = uke
-    units_out[key] = u2
-    units_out[f'{key}_SE'] = u2
-    units_out[f'{key}_N'] = ''
-    vals_out[key] = np.mean(val)*c
-    vals_out[f'{key}_SE'] = sem(val)*c
-    vals_out[f'{key}_N'] = len(val)
+
     
 def calcVest(h:float, r:float) -> float:
     '''estimate the volume of an object, assuming it is a cylinder with spherical end caps'''
@@ -159,9 +117,9 @@ def calcVest(h:float, r:float) -> float:
         vest = 4/3*np.pi*r**2*(h/2) # ellipsoid
     return vest
     
-def getContours(mask:np.array) -> np.array:
+def getContours(mask:np.array, mode:int=cv.CHAIN_APPROX_SIMPLE) -> np.array:
     '''get all the contours'''
-    contours = cv.findContours(mask,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+    contours = cv.findContours(mask,cv.RETR_TREE,mode)
     if int(cv.__version__[0])>=4:
         contours = contours[0]
     else:
@@ -173,4 +131,3 @@ def contourRoughness(cnt:np.array) -> float:
     '''measure the roughness of the contour'''
     hull = cv.convexHull(cnt)
     return cv.arcLength(cnt,True)/cv.arcLength(hull,True)-1 
-

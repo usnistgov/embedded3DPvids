@@ -39,6 +39,7 @@ class fluidVals:
         self.surfactant = ''
         self.surfactantWt = ''
         self.dye = ''
+        self.ftype=ftype
         if fluid[0]=='M':
             self.var = 'w% silica'
             self.val = fluid[1:]
@@ -219,8 +220,8 @@ class fluidVals:
     def constants(self, v:float, diam:float, sigma:float) -> None:
         '''find shear rate, viscosity during printing, capillary number.
         v is in mm/s, diam is in mm, sigma is in mJ/m^2'''
-        self.v = v                                              # mm/s
-        self.rate = v/diam                                      # 1/s
+        self.v = v  # mm/s
+        self.rate = v/diam                                      # 1/s (approximation, gives scaling, but shear rate actually spatially varies b/c of non-Newtonian)
         if self.properties:
             self.visc0 = self.visc(self.rate)                       # Pa*s
             self.CaInv = sigma/(self.visc0*self.v)                  # capillary number ^-1

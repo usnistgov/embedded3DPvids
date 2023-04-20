@@ -18,81 +18,18 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
-from fileNames import *
-from printFileDict import *
+from file_names import *
+from print_file_dict import *
 from levels import *
+from folder_loop import *
+from print_folders import *
 
 
 # logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-
 #----------------------------------------------
-
-def isSubFolder(folder:str) -> bool:
-    '''determine if the folder is a subfolder'''
-    if sampleInName(folder) and dateInName(folder):
-        return True
-    else:
-        return False
-
-def subFolder(folder:str) -> str:
-    '''name of the subfolder'''
-    if isSubFolder(folder):
-        return folder
-    else:
-        levels = labelLevels(folder)
-        return levels.subFolder
-    
-def getPrintFolder(folder:str, **kwargs) -> str:
-    if 'levels' in kwargs:
-        return kwargs['levels'].printFolder()
-    
-    if isPrintFolder(folder):
-        return folder
-    
-    levels = labelLevels(folder)
-    return levels.printFolder()
- 
-    
-def listDirs(folder:str) -> List[str]:
-    '''List of directories in the folder'''
-    return [os.path.join(folder, f) for f in os.listdir(folder) if os.path.isdir(os.path.join(folder, f)) ]
-
-def anyIn(slist:List[str], s:str) -> bool:
-    '''bool if any of the strings in slist are in s'''
-    if len(slist)==0:
-        return True
-    for si in slist:
-        if si in s:
-            return True
-    return False
-
-def allIn(slist:List[str], s:str) -> bool:
-    '''bool if all of the strings are in s'''
-    if len(slist)==0:
-        return True
-    for si in slist:
-        if not si in s:
-            return False
-    return True
-    
-def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[], **kwargs) -> List[str]:
-    '''Get a list of bottom level print folders in the top folder'''
-    if isPrintFolder(topFolder):
-        if allIn(tags, topFolder) and anyIn(someIn, topFolder):
-            folders = [topFolder]
-        else:
-            folders = []
-    else:
-        folders = []
-        dirs = listDirs(topFolder)
-        for d in dirs:
-            folders = folders+printFolders(d, tags=tags, someIn=someIn)
-    return folders
-
 
 def isStitch(file:str) ->bool:
     '''determine if the file is a stitched image'''
@@ -226,58 +163,3 @@ def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
         display(df[df['BasVideo']==0])
         display(df[df['BasStills']==0])
     return df
-
-#--------------------------------
-# looping functions
-
-class folderLoop:
-    '''loops a function over all printFolders in the topFolder. 
-    the function needs to have only one arg, folder, and all other variables need to go in kwargs
-    folders could be either the top folder to recurse into, or a list of folders'''
-    
-    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, **kwargs):
-        if type(folders) is list:
-            # list of specific folders
-            self.folders = folders
-        else:
-            # top folder, recurse
-            self.topFolder = folders
-            self.folders = printFolders(folders)
-        self.func = func
-        self.mustMatch = mustMatch
-        self.canMatch = canMatch
-        self.kwargs = kwargs
-        self.printTraceback = printTraceback
-        
-    def runFolder(self, folder:str) -> None:
-        '''run the function on one folder'''
-        if not isPrintFolder(folder):
-            return
-        
-        # check that the folder matches all keys
-        if not allIn(self.mustMatch, folder):
-            return
-        
-        if not anyIn(self.canMatch, folder):
-            return
-
-        try:
-            self.func(folder, **self.kwargs)
-        except KeyboardInterrupt as e:
-            raise e
-        except Exception as e:
-            self.errorList.append(folder)
-            print(e)
-            if self.printTraceback:
-                traceback.print_exc()
-
-        
-    def run(self) -> list:
-        '''apply the function to all folders'''
-        self.errorList = []
-        for folder in self.folders:
-            self.runFolder(folder)
-        return self.errorList
-
-        
-    

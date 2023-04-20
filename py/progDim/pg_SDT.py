@@ -32,6 +32,11 @@ class progDimsSDT(progDim):
     '''for programmed dimensions of single double triple prints'''
     
     def __init__(self, printFolder:str, pv:printVals, **kwargs):
+        if 'XS' in printFolder:
+            self.numOtimes = 2
+        else:
+            self.numOtimes = 8
+        self.numPtimes = 5
         super().__init__(printFolder, pv, **kwargs)
         
     def getOvershoots(self) -> pd.DataFrame:
@@ -76,9 +81,9 @@ class progDimsSDT(progDim):
             self.wnum = 3
             self.dnum = 0
         if xs:
-            s3list = ['', 'o1', 'o2']
+            s3list = [''] + [f'o{i}' for i in range(1, self.numOtimes+1)]
         else:
-            s3list = ['p1', 'p2', 'p3', 'p4', 'p5', 'o1', 'o2']
+            s3list = [f'p{i}' for i in range(1, self.numPtimes+1)] + [f'o{i}' for i in range(1, self.numOtimes+1)]
         self.progDims.name = [f'l{i}{s2}{s3}' for i in range(self.numLines) for s2 in self.ll for s3 in s3list] 
         
     def vLongLines(self, moveDir:str, diag:bool=False) -> None:
@@ -249,7 +254,7 @@ class progDimsSDT(progDim):
         # find the pic time
         if 'p' in cha:
             # this is an in-progress line
-            frac = 0.1 + (int(cha[-1])-1)*0.2
+            frac = 0.1 + (int(cha[-1])-1)/self.numPtimes
         else:
             frac = 0.5
         tpic = line['t0']+line['dprog']*frac/line['speed']
@@ -265,24 +270,32 @@ class progDimsSDT(progDim):
                 self.progDims.loc[row,key] = val
             
     def labelObserveLine(self, cha:str, otimes:pd.DataFrame, oi:int) -> int:
-        '''label a single observe line. 
+        '''label a group of observe pics
         j is the group number
         cha is the full name of the line, e.g. l1w1o2
         k is the o
         '''
-        tpic = otimes.iloc[oi]['time']
-        row = (self.progDims['name']==cha)
-        self.progDims.loc[row,'tpic'] = tpic
-
+        tpic1 = otimes.iloc[oi]['time']
+        oi = oi+1
+        tpic2 = otimes.iloc[oi]['time']
+        oi = oi+1
+        
         # get the position where the image is taken
-        lines = self.progPos[(self.progPos.t0<tpic)&(self.progPos.tf>=tpic)]
+        lines = self.progPos[(self.progPos.t0<tpic1)&(self.progPos.tf>=tpic1)]
         if len(lines)==0:
             display(self.progPos)
             raise ValueError(f'Could not find observe line in progPos: {tpic}')
         line = lines.iloc[0]
-        for cs in ['x', 'y', 'z']:
-            self.progDims.loc[row,f'{cs}pic'] = line[f'{cs}t']
-        oi+=1
+        
+        for i in range(1, self.numOtimes+1):
+            cha2 = cha.replace('o1', f'o{str(i)}')
+            frac = (i-1)/(self.numOtimes-1)
+            tpic = tpic1 + (tpic2-tpic1)*frac
+            row = (self.progDims['name']==cha2)
+            self.progDims.loc[row,'tpic'] = tpic
+            for cs in ['x', 'y', 'z']:
+                self.progDims.loc[row,f'{cs}pic'] = line[f'{cs}t']
+        
         return oi
     
     def labelSublist(self, j:int, ss:str, i:int, oi:int, lines:pd.DataFrame, otimes:pd.DataFrame) -> Tuple[int,int]:
@@ -307,7 +320,7 @@ class progDimsSDT(progDim):
         for cha in names:
             if not 'o' in cha:
                 self.labelProgLine(line, j, cha, gfl)
-            else:
+            elif 'o1' in cha:
                 oi = self.labelObserveLine(cha, otimes, oi)  
         return i, oi
     
@@ -315,7 +328,7 @@ class progDimsSDT(progDim):
     def getPrimaryLines(self, c:str, pg:pd.DataFrame):
         '''get the list of printed lines that have this character, only taking one in-progress write line per written line'''
         if c=='o':
-            return pg[pg.name.str.contains('o')]
+            return pg[(pg.name.str.contains('o1'))|(pg.name.str.contains(f'o{self.numOtimes}'))]
         else:
             p1 = pg[(pg.name.str.contains(c))&(~(pg.name.str.contains('o')))]
             p1p = p1[p1.name.str.contains('p3')]

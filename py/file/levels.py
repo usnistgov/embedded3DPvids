@@ -37,7 +37,7 @@ class labelLevels:
             raise ValueError(f'File does not exist: {file}')
     
         levels = {}
-        bottom = findBottom(file)
+        bottom = self.findBottom(file)
 
         # bottom is now a bottom level file
         if os.path.isdir(bottom):

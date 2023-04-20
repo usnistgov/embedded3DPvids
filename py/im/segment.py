@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(currentdir))
 from imshow import imshow
 from morph import *
 from m_tools import contourRoughness, getContours
+from tools.timeCounter import timeObject
 
 # logging
 logger = logging.getLogger(__name__)
@@ -36,12 +37,12 @@ class fillMode:
     fillByContours = 3
     
 
-class segmenter:
+class segmenter(timeObject):
     '''for thresholding and segmenting images'''
     
     def __init__(self, im:np.array, acrit:float=2500, diag:int=0
                  , fillMode:int=fillMode.removeBorder, eraseMaskSpill:bool=False, closeTop:bool=True
-                 , nozDilation:int=0, closing:int=0, grayBlur:int=3, removeSharp:bool=False
+                 , closing:int=0, grayBlur:int=3, removeSharp:bool=False
                  , leaveHollows:bool=True, **kwargs):
         self.im = im
         self.w = self.im.shape[1]
@@ -53,7 +54,6 @@ class segmenter:
         self.closeTop = closeTop
         self.closing = closing
         self.kwargs = kwargs
-        self.nozDilation = nozDilation
         self.leaveHollows = leaveHollows
         self.removeSharp = removeSharp
         self.grayBlur = grayBlur
@@ -174,7 +174,7 @@ class segmenter:
     def closeVerticalTop(self, im:np.array, close:bool=True, cutoffTop:float=0.01, closeBottom:bool=False, **kwargs) -> np.array:
         '''if the image is of a vertical line, close the top'''
         if im.shape[0]<im.shape[1]*2:
-            return
+            return im
 
         # cut off top 3% of image
         if cutoffTop>0:
@@ -189,7 +189,7 @@ class segmenter:
         top = np.where(np.array([sum(x) for x in im])>0) 
 
         if len(top[0])==0:
-            return 
+            return im
         imtop = top[0][0] # first position in y where black
         im = self.closeHorizLine(im, imtop, close)
         if closeBottom:
@@ -214,7 +214,7 @@ class segmenter:
         '''add the nozzle in black back in for filling'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, dilate=self.nozDilation, bottomOnly=bottomOnly)   
+        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, bottomOnly=bottomOnly)   
         h,w = thresh.shape
         thresh[0, :] = 0   # clear out the top row
         thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
@@ -284,9 +284,8 @@ class segmenter:
         '''remove the black nozzle from the image'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops, dilate=self.nozDilation, bottomDilate=2))  # remove the nozzle again
-#         if self.eraseMaskSpill:
-#             setattr(self, s, self.nd.eraseSpillover(getattr(self, s), crops=self.crops, diag=self.diag-1))  # erase any extra nozzle that is in the image
+        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops))  
+        # remove the nozzle again
             
             
     def segmentInterfaces(self, addNozzle:bool=True, addNozzleBottom:bool=False, **kwargs) -> np.array:
@@ -296,13 +295,6 @@ class segmenter:
         removeBorder=True to remove border components from the thresholded image'''
         self.getGray()
         self.threshes(**kwargs)  # threshold
-        if self.eraseMaskSpill:
-            xl = self.nd.xL
-            xr = self.nd.xR
-            self.thresh = self.nd.eraseSpillover(self.thresh, crops=self.crops, diag=self.diag-1)
-            if not xl==self.nd.xL or not xr==self.nd.xR:
-                self.gray = self.nd.maskNozzle(self.gray, ave=True, crops=self.crops, dilate=self.nozDilation)
-                self.threshes(**kwargs)  # re-threshold with new boundaries  
         if addNozzle:
             self.addNozzle()    # add the nozzle to the thresholded image
         if addNozzleBottom:
@@ -353,17 +345,28 @@ class segmenter:
         return self.sdf.noDF(df)
 
             
-class segmenterDF:
+class segmenterDF(timeObject):
     '''holds labeled components for an image'''
     
     def __init__(self, filled:np.array, acrit:float=100, diag:int=0):
         self.acrit = acrit
         self.filled = filled
+        self.trustLargest = 0
         self.success = False
         self.w = self.filled.shape[1]
         self.h = self.filled.shape[0]
         self.diag = diag
         self.getConnectedComponents()
+        
+    def display(self):
+        if self.diag<1:
+            return
+        if not hasattr(self, 'imML'):
+            return
+        imdiag = cv.cvtColor(self.filled, cv.COLOR_GRAY2BGR)
+        imdiag[(self.exc==255)] = [0,0,255]
+        imshow(self.imML, self.imU, self.dif, imdiag, titles=['ML', 'Unsupervised', 'Difference'])
+        return
     
     def getDataFrame(self):
         '''convert the labeled segments to a dataframe'''
@@ -399,6 +402,46 @@ class segmenterDF:
             
     def noDF(self) -> bool:
         return not hasattr(self, 'df') or len(self.df)==0
+    
+    def touchingBorder(self, row:pd.Series, margin:int=5):
+        '''determine if the object is touching the border'''
+        if row['x0']<margin:
+            return True
+        if row['x0']+row['w']>self.w-margin:
+            return True
+        if row['y0']<margin:
+            return True
+        if row['y0']+row['h']>self.h-margin:
+            return True
+    
+    def mainComponent(self, margin:int=5, pcrit:int=20) -> int:
+        '''the index of the largest, most centrally located component'''
+        largest = self.largestObject()
+        if type(largest) is int:
+            return -1
+        if self.trustLargest==1:
+            return largest.name
+        if self.trustLargest==-1:
+            return -1
+        if self.touchingBorder(largest):
+            # this object is close to border
+            mask = self.singleMask(largest.name)
+            contours = getContours(mask, mode=cv.CHAIN_APPROX_NONE)
+            if len(contours)>0:
+                contours = contours[0][:,0]
+                xmin = len(contours[contours[:,0]==min(contours[:,0])])
+                xmax = len(contours[contours[:,0]==max(contours[:,0])])
+                ymin = len(contours[contours[:,1]==min(contours[:,1])])
+                ymax = len(contours[contours[:,1]==max(contours[:,1])])
+                if xmin>pcrit or xmax>pcrit or ymin>pcrit or ymax>pcrit:
+                    return -1
+                else:
+                    self.trustLargest = 1
+                    return largest.name
+            else:
+                return -1
+        else:
+            return largest.name
             
     def selectComponents(self, goodpts:pd.Series, checks:bool=True, **kwargs) -> None:
         '''erase any components that don't fall under criterion'''
@@ -406,7 +449,7 @@ class segmenterDF:
             # don't empty the dataframe
             return
         for i in list(self.df[~goodpts].index):
-            if not checks or not self.df.loc[i, 'a']==self.df.a.max():
+            if not checks or not i==self.mainComponent():
                 self.labeledIm[self.labeledIm==i] = 0
             else:
                 # add this point back in
@@ -419,6 +462,13 @@ class segmenterDF:
         if self.noDF():
             return
         goodpts = (self.df.a>=self.acrit)
+        self.selectComponents(goodpts, **kwargs)
+        
+    def eraseLargeComponents(self, acrit:int, **kwargs):
+        '''erase large components from the labeled image'''
+        if self.noDF():
+            return
+        goodpts = (self.df.a<=acrit)
         self.selectComponents(goodpts, **kwargs)
         
     def eraseSmallestComponents(self, satelliteCrit:float=0.2, **kwargs) -> None:
@@ -449,18 +499,25 @@ class segmenterDF:
         goodpts = ((self.df.x0>margin)&(self.df.x0+self.df.w<(self.w-margin)))
         self.selectComponents(goodpts, **kwargs)
         
-    def eraseTopBottomBorder(self, **kwargs) -> None:
+    def eraseTopBottomBorder(self, margin:int=0, **kwargs) -> None:
         '''remove components that are touching the top or bottom border'''
         if self.noDF():
             return
-        goodpts = (self.df.y0>0)&(self.df.y0+self.df.h<self.h)
+        goodpts = (self.df.y0>margin)&(self.df.y0+self.df.h<self.h-margin)
+        self.selectComponents(goodpts, **kwargs)
+        
+    def eraseTopBorder(self, margin:int=0, **kwargs) -> None:
+        '''remove components that are touching the top or bottom border'''
+        if self.noDF():
+            return
+        goodpts = (self.df.y0>margin)
         self.selectComponents(goodpts, **kwargs)
         
         
     def largestObject(self, **kwargs) -> pd.Series:
         '''the largest object in the dataframe'''
-        if not self.success:
-            raise ValueError('Segmenter failed. Cannot take largest object')
+        if len(self.df)==0:
+            return []
         return self.df[self.df.a==self.df.a.max()].iloc[0]
             
     def removeScragglies(self, **kwargs) -> None:
@@ -510,8 +567,61 @@ class segmenterDF:
                     componentMask = cv.add(componentMask, mask)
             
         else:
-            return np.zeros(self.gray.shape).astype(np.uint8)
+            return np.zeros(self.filled.shape).astype(np.uint8)
         return componentMask
+    
+    def componentIsIn(self, mask:np.array) -> bool:
+        '''determine if the component shown in the mask overlaps with the existing image'''
+        both = cv.bitwise_and(mask, self.filled)
+        return both.sum().sum()>0
+    
+    def commonMask(self, sdf, onlyOne:bool=False) -> np.array:
+        '''get the mask of all components that overlap with the segments in sdf, another segmenterDF object'''
+        mask = np.zeros(self.filled.shape).astype(np.uint8)
+        if not hasattr(self, 'df'):
+            return mask
+        for i in self.df.index:
+            m = self.singleMask(i)
+            if sdf.componentIsIn(m):
+                mask = cv.add(mask, m)
+        return mask
+
+
+class segmentCombiner(timeObject):
+    '''combine segmentation from ML model and unsupervised model'''
+    
+    def __init__(self, imML:np.array, imU:np.array, acrit:int, rErode:int=5, rDilate:int=10, diag:int=0):
+        super().__init__()
+        sML = segmenterDF(imML, acrit=acrit) # ML DF
+        sU = segmenterDF(imU, acrit=acrit) # unsupervised DF
+        sMLm = sML.commonMask(sU)         # parts from ML that are also in unsupervised
+        sUm = sU.commonMask(sML)          # parts from unsupervised that are also in ML
+        both = cv.bitwise_and(sMLm, sUm)  # parts that are in both
+        tot = cv.add(sMLm, sUm)           # parts that are in either, but with overlapping components
+
+        MLadd = cv.subtract(sMLm, sUm)   # parts that are in ML but not U
+        if MLadd.sum().sum()>0:
+            e2 = segmenterDF(MLadd, acrit=0)
+            e2.eraseTopBorder(margin=5, checks=False)               # remove parts from the ML image that are touching the top edge
+            if hasattr(e2, 'labelsBW'):       # ML model has tendency to add reflection at top
+                MLadd = e2.labelsBW
+        dif = cv.subtract(sUm, sMLm)
+        Uadd = dilate(erode(dif, rErode),rDilate)   # parts that are in U but not ML, opened
+        Uexc = cv.bitwise_and(tot, Uadd)
+        if Uexc.sum().sum()>0:
+            e1 = segmenterDF(Uexc, acrit=0)
+            e1.eraseLargeComponents(1000, checks=False)
+            if hasattr(e1, 'labelsBW'):
+                Uexc = e1.labelsBW
+        exc = cv.add(MLadd, Uexc)
+        filled = cv.add(both, exc)
+        filled = fillTiny(filled, acrit=50)
+        segmenter = segmenterDF(filled, acrit=acrit, diag=diag)
+        segmenter.imML = imML
+        segmenter.imU = imU
+        segmenter.exc = exc
+        segmenter.dif = dif
+        self.segmenter = segmenter
         
     
 #----------------------------------------------------------
@@ -610,5 +720,8 @@ class segmenterSingle(segmenter):
             else:
                 attempt = attempt+1
         return self.filled, self.markers, self.finalAt
+    
+    
+
         
     

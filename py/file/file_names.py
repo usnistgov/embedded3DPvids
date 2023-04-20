@@ -24,12 +24,8 @@ from f_tools import *
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-
 #----------------------------------------------
 
-
-    
 def allSBPFiles():
     return {**singleDisturbSBPfiles(), **SDTSBPfiles(), **tripleLineSBPfiles(), **singleLineSBPfiles()}
 
