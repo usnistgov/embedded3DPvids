@@ -117,17 +117,4 @@ def calcVest(h:float, r:float) -> float:
         vest = 4/3*np.pi*r**2*(h/2) # ellipsoid
     return vest
     
-def getContours(mask:np.array, mode:int=cv.CHAIN_APPROX_SIMPLE) -> np.array:
-    '''get all the contours'''
-    contours = cv.findContours(mask,cv.RETR_TREE,mode)
-    if int(cv.__version__[0])>=4:
-        contours = contours[0]
-    else:
-        contours = contours[1]
-    return contours
 
-
-def contourRoughness(cnt:np.array) -> float:
-    '''measure the roughness of the contour'''
-    hull = cv.convexHull(cnt)
-    return cv.arcLength(cnt,True)/cv.arcLength(hull,True)-1 

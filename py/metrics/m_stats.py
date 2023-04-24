@@ -71,6 +71,7 @@ def pooledSE(vals:list, ses:list, ns:list) -> Tuple[float, float, int]:
     n = np.sum(ns)
     if not len(vals)==len(ses) or not len(ses)==len(ns):
         raise ValueError(f'Mismatched array lengths in pooledSE: vals {len(vals)}, SE {len(ses)}, N {len(ns)}')
+
     if len(ses)>0:
         a = np.sum([ns[i]*(np.sqrt(ns[i])*ses[i])**2 for i in range(len(vals))])/np.sum(ns)
         b = np.sum([ns[i]**2*(vals[i]-vals[i+1])**2 for i in range(len(vals)-1)])/np.sum([ns[i]**2 for i in range(len(vals))])
@@ -96,9 +97,9 @@ def pooledSEDF(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
             else:
                 raise ValueError(f'Cannot determine N for {var}')
     df2 = df[[var, sevar, nvar]].dropna()
-    vals = df2[var]
-    ses = df2[sevar]
-    ns = df2[nvar]
+    vals = list(df2[var])
+    ses = list(df2[sevar])
+    ns = list(df2[nvar])
     return pooledSE(vals, ses, ns)
 
 def tossBigSE(df:pd.DataFrame, column:str, quantile:float=0.9):

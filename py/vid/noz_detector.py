@@ -106,17 +106,18 @@ class nozDetector:
         self.nozwidthMin = 0.75 # mm
         self.nozWidthMax = 1.05 # mm
         
-    def defineCritValsImage(self, nd, crops:dict, margin:int=20, **kwargs) -> None:
+    def defineCritValsImage(self, nd, crops:dict, xmargin:int=20, ymargin:int=20, **kwargs) -> None:
         '''define crit vals, where this is a cropped image and we already have approximate nozzle position'''
         self.crops = crops.copy()
         x0 = crops['x0']
         y0 = crops['y0']
-        self.xLmin = nd.xL-x0-margin # px
-        self.xLmax = nd.xL-x0+margin
-        self.xRmin = nd.xR-x0-margin
-        self.xRmax = nd.xR-x0+margin
-        self.yBmin = nd.yB-y0-margin
-        self.yBmax = nd.yB-y0+margin
+        self.xLmin = nd.xL-x0-xmargin # px
+        self.xLmax = nd.xL-x0+xmargin
+        self.xRmin = nd.xR-x0-xmargin
+        self.xRmax = nd.xR-x0+xmargin
+        self.yBmin = nd.yB-y0-ymargin
+        self.yBmax = nd.yB-y0+ymargin
+
     
     def thresholdNozzle(self, frame:np.array) -> None:
         '''convert the image into an edge image'''
@@ -269,7 +270,7 @@ class nozDetector:
             
     
     
-    def detectNozzle0(self, frame:np.array, diag:int=0, suppressSuccess:bool=False, overwrite:bool=False, export:bool=True) -> None:
+    def detectNozzle0(self, frame:np.array, diag:int=0, suppressSuccess:bool=False, overwrite:bool=False, export:bool=True, **kwargs) -> None:
         '''find the bottom corners of the nozzle. suppressSuccess=True to only print diagnostics if the run fails'''
         self.thresholdNozzle(frame)    # threshold the nozzle
         self.nozzleLines()            # edge detect and Hough transform to get nozzle edges as lines
@@ -284,6 +285,8 @@ class nozDetector:
             
     def detectNozzle1(self, frame:np.array, diag:int=0, margin:int=5, **kwargs) -> None:
         '''just detect the nozzle for this one frame, with error handling'''
+        
+        
         if 'xf' in self.crops:
             # crop the frame to just the ROI
             x0 = self.xLmin

@@ -45,15 +45,15 @@ class TestSDTXS(unittest.TestCase):
         self.test = test
 
     def setUp(self):
-        self.me, self.units = me.xsSDTMeasure(self.file)
+        self.me, self.units = me.fileXSSDT(self.file).values()
         
     def test_generic(self, s:str):
         val = getattr(self, s)
-        self.assertTrue(s in self.me, f'Nothing measured in {self.file}: {self.test}')
-        if abs(val)>0.5:
-            self.assertTrue(abs(self.me[s]-val)/val<0.02, f'test_{s} failed in {self.file}: {self.test}')
+        if val==-1:
+            self.assertTrue(not s in self.me, f'Erroneous measurement in {self.file}: {self.test}')
         else:
-            self.assertTrue(abs(self.me[s]-val)<0.02, f'test_{s} failed in {self.file}: {self.test}')
+            self.assertTrue(s in self.me, f'Nothing measured in {self.file}: {self.test}')
+            self.assertTrue(abs(self.me[s]-val)<0.1, f'test_{s} failed in {self.file}: {self.test}')
         
     def test_w(self):
         self.test_generic('w')

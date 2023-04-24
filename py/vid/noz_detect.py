@@ -154,6 +154,9 @@ class nozData(timeObject):
         except ValueError as e:
             return 
         else:
+            nd1 = detector.nd.nozDims()
+            if nd1['xL']>self.nd.xL:
+                detector.nd.setDims({'xL':self.nd.xL})
             self.nd = detector.nd
         
         

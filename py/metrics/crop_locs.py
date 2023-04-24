@@ -51,6 +51,8 @@ class cropLocs:
         if os.path.exists(self.fn) and not overwrite:
             self.df,_ = plainIm(self.fn, ic=0)
         else:
+            if len(self.pfd.vstill)==0:
+                self.pfd.findVstill()
             self.df = pd.DataFrame({'vstill':self.pfd.vstill})
         self.units = {'vstill':'', 'x0':'px', 'xf':'px', 'y0':'px', 'yf':'px'}
             
