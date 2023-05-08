@@ -77,7 +77,7 @@ class filler:
         if not hasattr(self, 'ch'):
             i2 = self.thresh.copy()
             i2[-1, :] = 255
-            self.ch = contourH(i2, mode=cv.CHAIN_APPROX_SIMPLE)
+            self.ch = co.contourH(i2, mode=cv.CHAIN_APPROX_SIMPLE)
             self.ch.labelHierarchy()
 
     def removeHollows(self) -> np.array:
@@ -115,7 +115,7 @@ class filler:
         img_floodfill = cv.floodFill(pad, mask, (0,0), 0, (5), (0), flags=8)[1] # floodfill outer white border with black
         self.thresh = img_floodfill[1:h-1, 1:w-1]  # remove border
 
-    def fillByContours(self, amin:int=50, amax:int=5000, conCrit:int=50, moCrit:int=-5, **kwargs) -> np.array:
+    def fillByContours(self, amin:int=50, amax:int=5000, conCrit:int=50, moCrit:int=-10, **kwargs) -> np.array:
         '''fill the components using the contours, where anything with a size between amin and amax doesn't get filled'''
         self.initializeContours()
         self.filled = self.thresh.copy()
@@ -145,7 +145,6 @@ class filler:
         if self.diag>0:
             contourLabels = self.ch.display()
             imshow(self.thresh, self.filled, contourLabels, titles=['fill: thresh', 'filled', 'contours'])
-        return imout
     
     def fillTiny(self, acrit:int=50, **kwargs) -> np.array:
         '''fill the components using the contours, where anything with a size between amin and amax doesn't get filled'''
@@ -155,6 +154,6 @@ class filler:
         level1pts = hdf[hdf.level==1]
 
         # fill in tiny contours
-        for i in level1pts[(level1pts.area<self.acrit)].index:
+        for i in level1pts[(level1pts.area<acrit)].index:
             self.ch.fillContour(self.filled, i)
         

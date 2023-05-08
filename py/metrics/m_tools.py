@@ -3,6 +3,7 @@
 
 # external packages
 import os, sys
+import magic
 import traceback
 import logging
 import pandas as pd
@@ -117,4 +118,15 @@ def calcVest(h:float, r:float) -> float:
         vest = 4/3*np.pi*r**2*(h/2) # ellipsoid
     return vest
     
-
+def get_image_size(file_path):
+    """
+    Return (width, height) for a given img file content - no external
+    dependencies except the os and struct modules from core
+    """
+    if not os.path.exists(file_path):
+        return 0,0
+    t = magic.from_file(file_path)
+    v = re.search('(\d+) x (\d+)', t).groups()
+    w = int(v[0])
+    h = int(v[1])
+    return w,h

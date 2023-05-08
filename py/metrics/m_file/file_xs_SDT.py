@@ -34,8 +34,6 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     
 pd.set_option("display.precision", 2)
 
-
-
 #----------------------------------------------
 
 def xsSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
@@ -48,7 +46,7 @@ def xsSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
 class fileXSSDT(fileXS, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=200, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=300, **kwargs):
         self.numLines = int(re.split('_', os.path.basename(file))[1])
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
@@ -98,27 +96,14 @@ class fileXSSDT(fileXS, fileSDT):
         
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
-        if not self.hasIm:
-            h = 590
-            w = 790
+        if '_1_' in os.path.basename(self.folder):
+            rc = {'relative':True, 'w':200, 'h':250, 'wc':100, 'hc':180}
         else:
-            h,w = self.im.shape[:2]
-        self.importCrop()
-        if len(self.crop)==0 or overwrite:
-            # generate a new crop value
-            if '_1_' in os.path.basename(self.folder):
-                rc = {'relative':True, 'w':200, 'h':250, 'wc':100, 'hc':180}
+            if 'o' in self.tag:
+                rc = {'relative':True, 'w':300, 'h':500, 'wc':100, 'hc':400}
             else:
-                if 'o' in self.tag:
-                    rc = {'relative':True, 'w':300, 'h':500, 'wc':100, 'hc':400}
-                else:
-                    rc = {'relative':True, 'w':300, 'h':350, 'wc':100, 'hc':200}
-            # rc = {'relative':True, 'w':800, 'h':800, 'wc':400, 'hc':400}
-            self.crop = vc.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
-            self.crop = vc.convertCropHW(h,w, self.crop)    # make sure everything is in bounds
-            self.cl.changeCrop(self.file, self.crop)
-            if export:
-                self.cl.export()
+                rc = {'relative':True, 'w':300, 'h':350, 'wc':100, 'hc':200}
+        self.makeCrop(rc, export=export, overwrite=overwrite)
                 
     def segment(self) -> None:
         '''segment the foreground'''
@@ -130,13 +115,18 @@ class fileXSSDT(fileXS, fileSDT):
                                    , topthresh=th
                                    , fillMode=fi.fillMode.removeBorder
                                    , nozData=self.nd, crops=self.crop
-                                   , removeNozzle=True, segmentMode=[sMode.threshold]
+                                   , nozMode=nozMode.full
+                                   , segmentMode=[sMode.threshold]
+                                   , trimNozzle=(not 'o' in self.tag)
                                    )
+        
         self.segmenter.eraseBorderComponents(10)
     
     def measure(self) -> None:
         '''measure cross-section of single disturbed line'''
-        # imshow(self.im)
+        if self.checkWhite(val=254):
+            # white image
+            return
         self.initialize()
         self.getCrop(overwrite=True)
         if self.diag>0:
@@ -144,9 +134,12 @@ class fileXSSDT(fileXS, fileSDT):
         if not 'o' in self.tag:
             self.generateIm0()
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, ymargin=3)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=1, right=5, bottom=2)
-        self.im = vc.imcrop(self.im, self.crop)
-        self.segment()
+        self.padNozzle(left=1, right=30, bottom=2)       # cover the nozzle, with some extra wiggle room
+        self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
+        self.segment()                                   # segment the image
+        self.findIntendedCoords()                        # find where the object should be
+        self.findIntendedPx()
+        self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
         if not self.segmenter.success:
             if self.diag>0:
                 logging.warning(f'Segmenter failed on {self.file}')
@@ -160,9 +153,7 @@ class fileXSSDT(fileXS, fileSDT):
             return
         self.adjustForCrop(self.stats, self.crop)   # px, full image
         self.makeRelative()     # mm, relative to nozzle
-        self.findIntendedCoords() 
-        if self.diag>0:
-            self.findIntendedPx()
+        
         self.findDisplacement()  # dEst, relative to intended coords
         self.renameY()
         self.display()

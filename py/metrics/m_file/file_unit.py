@@ -151,7 +151,10 @@ class unitTester:
         '''overwrite the value in the csv file with the current values'''
         row, d, cols = self.runTest(i, diag=1)
         for c in cols:
-            self.testList.loc[i, c] = d[c]
+            if c in d:
+                self.testList.loc[i, c] = d[c]
+            else:
+                self.testList.loc[i, c] = -1
         if export:
             self.exportTestList()
         

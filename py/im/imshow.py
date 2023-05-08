@@ -21,6 +21,12 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 ####### DISPLAY TOOLS
 
+def hideSpines(ax):
+    ax.spines['bottom'].set_color('white')
+    ax.spines['top'].set_color('white') 
+    ax.spines['right'].set_color('white')
+    ax.spines['left'].set_color('white')
+
 def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perRow:int=6, maxwidth:float=20, **kwargs) -> None:
     '''displays cv image(s) in jupyter notebook using matplotlib'''
     aspect = args[0].shape[0]/args[0].shape[1]
@@ -50,14 +56,14 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
                 ax.get_xaxis().set_visible(axesVisible)
                 ax.get_yaxis().set_visible(axesVisible)
                 ax.set_aspect(aspect)
-                ax.spines['bottom'].set_color('white')
-                ax.spines['top'].set_color('white') 
-                ax.spines['right'].set_color('white')
-                ax.spines['left'].set_color('white')
+                hideSpines(ax)
         for i, im in enumerate(args):
             if type(im) is str:
-                axlist[i].text(0.1,0.1,im, family='Monospace', linespacing=2)
+                # this is text
+                axlist[i].text(0,0,im, family='Monospace', linespacing=2)
+                axlist[i].set_axis_off()
             else:
+                # this is an image
                 if len(im.shape)>2:
                     # color
                     axlist[i].imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))
@@ -66,11 +72,14 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
                     axlist[i].imshow(im, cmap='Greys')
                 if numbers:
                     axlist[i].text(0,0,str(i))
+                    
             
     else:
+        # 1 image
         ax = axarr
         ax.get_xaxis().set_visible(axesVisible)
         ax.get_yaxis().set_visible(axesVisible)
+        hideSpines(ax)
         im = args[0]
         if len(im.shape)>2:
             ax.imshow(cv.cvtColor(im, cv.COLOR_BGR2RGB))

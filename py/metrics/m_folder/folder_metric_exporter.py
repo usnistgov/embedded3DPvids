@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 from crop_locs import *
 from m_file.file_metric import *
+from m_folder.folder_size_check import *
 from file.file_handling import *
 
 # logging
@@ -44,27 +45,42 @@ class cropExporter(folderFileLoop):
         self.overwrite=overwrite
         self.fileMetricFunc = fileMetricFunc
         self.exportDiag = exportDiag
+        self.getCL = False
         
     def fileFunc(self, file:str, **kwargs):
         '''crop and export a single file'''
+        getFile = True
         if not self.overwrite:
-            folder = os.path.basename(file)
+            folder = os.path.dirname(file)
             bn = os.path.basename(file)
             file2 = os.path.join(folder, 'crop', bn.replace('vstill', 'vcrop'))
             if os.path.exists(file2):
-                return
-
+                getFile = False
         vs = self.fileMetricFunc(file, measure=False, **kwargs)
         vs.getCrop(export=False)
-        vs.exportCrop(overwrite=self.overwrite, diag=self.exportDiag)
+        if getFile:
+            vs.exportCrop(overwrite=self.overwrite, diag=self.exportDiag)
         
     def folderFunc(self, folder, **kwargs):
         '''the function to run on a single folder'''
+        print(folder)
         pfd = fh.printFileDict(folder)
         pfd.findVstill()
         cl = cropLocs(folder, pfd=pfd)
+        if not 'x0' in cl.df or cl.df.isnull().sum()['x0']:
+            self.getCL = True
+        else:
+            self.getCL = False
+        if not self.getCL:
+            pfd.findVcrop()
+            if len(pfd.vstill)==len(pfd.vcrop):
+                # already exported all crops
+                return
+        nd = nozData(folder, pfd=pfd)
+        pv = printVals(folder, pfd = pfd, fluidProperties=False)
+        pg  = getProgDimsPV(pv)
         for file in pfd.vstill:
-            self.runFile(file, pfd=pfd, cl=cl)
+            self.runFile(file, pfd=pfd, cl=cl, pg=pg, pv=pv, nd=nd)
         cl.export(overwrite=self.overwrite)
         
         
@@ -88,9 +104,12 @@ class cropLocExporter(folderFileLoop):
         cl = cropLocs(folder, pfd=pfd)
         if not self.overwrite and 'xf' in cl.df and not cl.df.xf.isnull().values.any():
             return
+        nd = nozData(folder, pfd=pfd)
+        pv = printVals(folder, pfd = pfd, fluidProperties=False)
+        pg  = getProgDimsPV(pv)
         pfd.findVstill()
         for file in pfd.vstill:
-            self.runFile(file, pfd=pfd, cl=cl)
+            self.runFile(file, pfd=pfd, cl=cl, pg=pg, pv=pv, nd=nd)
         cl.export(overwrite=self.overwrite)
 
 
@@ -130,5 +149,20 @@ class segmentExporter(folderFileLoop):
         pg  = getProgDimsPV(pv)
         cl = cropLocs(folder, pfd=pfd)
         for file in pfd.vstill:
-            self.runFile(file, pfd=pfd, nd=nd, pv=pv, pg=pg, cl=cl, **kwargs)            
+            self.runFile(file, pfd=pfd, nd=nd, pv=pv, pg=pg, cl=cl, **kwargs)   
+            
+            
+class sizeCheckerExporter(folderFileLoop):
+    '''for exporting segmented images. folders is either a list of folders or the top folder. fileMetricFunc is a class definition for a fileMetric object. overwrite=True to overwrite segmented images.'''
+    
+    def __init__(self, folders:Union[str, list], fileMetricFunc, newCropFolder:str, exportDiag:int=0, **kwargs):
+        super().__init__(folders, **kwargs)
+        self.exportDiag = exportDiag
+        self.newCropFolder = newCropFolder
+        self.fileMetricFunc = fileMetricFunc
+        
+    def folderFunc(self, folder:str, **kwargs) -> None:
+        '''create all segmented images in the folder'''
+        sz = sizeChecker(folder, diag=self.exportDiag)
+        sz.correct(self.newCropFolder, self.fileMetricFunc)
             

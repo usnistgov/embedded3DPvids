@@ -23,6 +23,7 @@ sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 import file.file_handling as fh
 from im.imshow import imshow
+from plainIm import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -39,15 +40,16 @@ pd.set_option('display.max_rows', 500)
 def convertFilesToBW(folder:str, diag:bool=False) -> None:
     '''convert all the files in the folder to black and white'''
     for f in os.listdir(folder):
-        ffull = os.path.join(folder, f)
-        im = cv.imread(ffull)
-        im = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
-        _,im = cv.threshold(im, 120, 255, cv.THRESH_BINARY)
-        im[im==255]=1
-        if diag:
-            print(im.shape, np.unique(im), im[0,0])
-        else:
-            cv.imwrite(ffull, im)
+        if not 'Thumbs' in f:
+            ffull = os.path.join(folder, f)
+            im = cv.imread(ffull)
+            im = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+            _,im = cv.threshold(im, 120, 255, cv.THRESH_BINARY)
+            im[im==255]=1
+            if diag:
+                print(im.shape, np.unique(im), im[0,0], f)
+            else:
+                cv.imwrite(ffull, im)
             
 def removeOme(folder:str):
     '''remove .ome from all of the file names'''
@@ -67,10 +69,15 @@ class segmentCompare:
         self.images = {}
         self.df = pd.DataFrame({'bn':os.listdir(self.segFolder)})
         
+    def export(self, fn:str):
+        '''export dataframe to file'''
+        plainExp(fn, self.df, {}, index=False)
+        
     def compare(self):
         '''iterate through all images in the segmentation folder and compare them to the current code'''
         for i in self.df.index:
-            self.compareFile(i)
+            if '.png' in self.df.loc[i]['bn']:
+                self.compareFile(i)
             
     def getSegIdeal(self, i:int, bn:str) -> np.array:
         '''get the manually segmented image'''
@@ -95,12 +102,23 @@ class segmentCompare:
     
     def getSegMachine(self, i:int, bn:str) -> np.array:
         '''get the ML segmented image from a folder'''
-        fn = os.path.join(self.serverFolder, bn)
+        fn = fh.findFullFN(bn, self.serverFolder)
         if not os.path.exists(fn):
             self.df.loc[i, 'result'] = 'MLNotFound'
             return []
-        segReal = cv.imread(fn, cv.IMREAD_GRAYSCALE)
-        return segReal
+        fn = os.path.join(os.path.dirname(fn), 'MLsegment', bn.replace('vstill', 'MLsegment'))
+        seg = cv.imread(fn, cv.IMREAD_GRAYSCALE)
+        return seg
+    
+    def getSegU(self, i:int, bn:str) -> np.array:
+        '''get the unsupervised segmented image from a folder'''
+        fn = fh.findFullFN(bn, self.serverFolder)
+        if not os.path.exists(fn):
+            self.df.loc[i, 'result'] = 'UNotFound'
+            return []
+        fn = os.path.join(os.path.dirname(fn), 'Usegment', bn.replace('vstill', 'Usegment'))
+        seg = cv.imread(fn, cv.IMREAD_GRAYSCALE)
+        return seg
     
     def getOrig(self, bn:str) -> np.array:
         '''get the original image'''
@@ -120,7 +138,10 @@ class segmentCompare:
         
         if type(self.func) is str:
             # get the file from the folder
-            segReal = self.getSegMachine(i, bn)
+            if self.func=='ML':
+                segReal = self.getSegMachine(i, bn)
+            elif self.func=='U':
+                segReal = self.getSegU(i,bn)
         else:
             # segment the file
             segReal = self.getSegReal(i, bn, diag=diag, **kwargs)
@@ -230,45 +251,74 @@ class trainingGenerator:
                 return self.randomFile()
         return file
     
-def moveMLResult(file:str, serverFolder:str, diag:int=1) -> None:
-    '''move the segmented machine learning file into the folder'''
-    origname = file.replace('vcrop', 'vstill')
-    origname = origname.replace('.ome','')
-    bn = os.path.basename(origname)
-    fn = fh.findFullFN(bn, serverFolder)
-    if not os.path.exists(fn):
-        raise FileNotFoundError(f'Cannot find folder for {file}')
-    folder = os.path.dirname(fn)
-    segfolder = os.path.join(folder, 'MLsegment')
-    if not os.path.exists(segfolder):
-        os.mkdir(segfolder)
-    newname = os.path.join(segfolder, bn.replace('vstill', 'MLsegment'))
-    shutil.copyfile(file, newname)
-    if diag>0:
-        logging.info(f'copied file to {newname}')
+class resultMover:
     
-def moveMLResults(segFolder:str, serverFolder:str, diag:int=1) -> list:
-    '''move all of the segmented images from segFolder into the appropriate folders in serverFolder'''
-    error = []
-    for file in os.listdir(segFolder):
-        try:
-            moveMLResult(os.path.join(segFolder, file), serverFolder, diag=diag)
-        except FileNotFoundError:
-            error.append(file)
-    return error
+    def __init__(self, segFolder:str, serverFolder:str, diag:int=1, timing:int=100):
+        self.segFolder = segFolder
+        self.serverFolder = serverFolder
+        self.diag = diag
+        self.timing = timing
+        self.error = []
+        self.printi = -1
+        self.copied = 0
+        self.files = [os.path.join(self.segFolder, f) for f in os.listdir(self.segFolder)]
+        self.numFiles = len(self.files)
+        if self.diag>0:
+            logging.info(f'Copying {self.numFiles} files in {self.segFolder}')
+        self.already = 0
+        self.moveMLResults()
+        
+    def moveMLResult(self, file:str) -> None:
+        '''move the segmented machine learning file into the folder'''
+        origname = file.replace('vcrop', 'vstill')
+        origname = origname.replace('.ome','')
+        bn = os.path.basename(origname)
+        fn = fh.findFullFN(bn, self.serverFolder)
+        if not os.path.exists(fn):
+            self.error.append(fn)
+            return
+        folder = os.path.dirname(fn)
+        segfolder = os.path.join(folder, 'MLsegment')
+        if not os.path.exists(segfolder):
+            os.mkdir(segfolder)
+        newname = os.path.join(segfolder, bn.replace('vstill', 'MLsegment'))
+        if os.path.exists(newname):
+            self.already+=1
+        else:
+            shutil.copyfile(file, newname)
+            if self.diag>1:
+                logging.info(f'copied {os.path.basename(newname)}')
+            self.copied+=1
+        if file in self.error:
+            self.error.remove(file)
+        self.printi+=1
+        if self.diag>0 and self.printi%self.timing==0:
+            logging.info(f'Copied {self.copied}, already {self.already}, total {self.numFiles}')
+
+    def moveMLResults(self):
+        '''move all of the segmented images from segFolder into the appropriate folders in serverFolder'''
+        for file in self.files:
+            try:
+                self.moveMLResult(file)
+            except FileNotFoundError:
+                self.error.append(file)
+        if self.diag>0:
+            logging.info(f'Finished copying, failed on {len(self.error)} files')
 
 def copyToMLInputFolder(cropFolder:str, topFolder:str, mustMatch:list=[], reg:str='.*') -> None:
-    '''copy any files that match the regex in folders that match mustMatch to the cropFolder'''   
+    '''copy any files that match the regex in folders that match mustMatch to the cropFolder that don't already have ML'''   
     newfolder = cropFolder
     for f in fh.printFolders(topFolder, mustMatch=mustMatch):
         crop = os.path.join(f, 'crop')
         if os.path.exists(crop):
             for f1 in os.listdir(crop):
-                if re.match(reg, f1):
-                    newname = os.path.join(newfolder, f1)
-                    if not os.path.exists(newname):
-                        shutil.copyfile(os.path.join(crop, f1), newname)
-                        print(newname)
+                mlfn = os.path.join(f, 'MLsegment', os.path.basename(f1).replace('vcrop', 'MLsegment'))
+                if not os.path.exists(mlfn):
+                    if re.match(reg, f1):
+                        newname = os.path.join(newfolder, f1)
+                        if not os.path.exists(newname):
+                            shutil.copyfile(os.path.join(crop, f1), newname)
+                            print(newname)
                         
 def splitIntoSubFolders(cropFolder:str, size:int=500) -> None:
     '''split the folder into equally sized subfolders for uploading'''

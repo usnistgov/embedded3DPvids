@@ -32,7 +32,7 @@ LOGGERDEFINED = logs.openLog('test_SDTXS.py', False, level='DEBUG', exportLog=Tr
 #----------------------------------------------
 
 
-class TestSDTXS(unittest.TestCase):
+class TestSDTVert(unittest.TestCase):
     '''test for correct print file labeling'''
     
     def parameterize(self, folder:str='', file:str='', emptiness:float=0, x0:float=0, segments:int=0, test:int=0, **kwargs):

@@ -107,7 +107,7 @@ class contourH:
         '''get the mean value inside the contour if thickness=-1, on the contour if thickness>0'''
         if len(self.thresh)==0:
             return 0
-        masked = self.maskContour(thresh, i, thickness)
+        masked = self.maskContour(im, i, thickness)
         return masked.mean().mean()
         
     def display(self) -> np.array:

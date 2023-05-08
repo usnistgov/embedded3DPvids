@@ -40,7 +40,6 @@ class fileVert(fileMetric):
         
     def dims(self, numLines:int=1, largest:bool=True, getLDiff:bool=False) -> None:
         '''get the dimensions of the segments'''
-        self.initializeTimeCounter('fileVert')
         df2 = self.segmenter.df.copy()
         if len(df2)==0:
             return
@@ -84,7 +83,7 @@ class fileVert(fileMetric):
         else:
             self.componentMask = self.segmenter.labelsBW.copy()
         # measure roughness, thickness, etc.
-        componentMeasures, cmunits = self.measureComponent(horiz=False, reverse=True, diag=max(0,self.diag-1), combine=not largest, emptiness=True, atot=inline.a.sum())
+        componentMeasures, cmunits = self.measureComponent(horiz=False, reverse=True, diag=max(0,self.diag-1), combine=not largest, emptiness=True)
         if len(componentMeasures)==0:
             return
         
@@ -110,7 +109,7 @@ class fileVert(fileMetric):
         if not hasattr(self, 'nd') or not hasattr(self, 'crop') or 'o' in self.name:
             return
         # get displacements
-        disps = self.displacement('z', distancemm*self.nd.pxpmm)
+        disps = self.displacement('z', distancemm*self.nd.pxpmm, diag=self.diag-1)
         dispunits = dict([[ii, 'px'] for ii in disps])
         self.stats = {**self.stats, **disps}
         self.units = {**self.units, **dispunits}

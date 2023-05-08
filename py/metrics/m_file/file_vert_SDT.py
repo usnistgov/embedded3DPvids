@@ -103,33 +103,8 @@ class fileVertSDT(fileVert, fileSDT):
                     
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
-        if not self.hasIm:
-            h = 590
-            w = 790
-        else:
-            h,w = self.im.shape[:2]
-        self.importCrop()
-        if len(self.crop)==0 or overwrite:
-            # generate a new crop value
-            rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
-            # rc = {'relative':True, 'w':800, 'h':800, 'wc':400, 'hc':400}
-            self.crop = vc.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
-            self.crop = vc.convertCropHW(h,w, self.crop)    # make sure everything is in bounds
-            self.cl.changeCrop(self.file, self.crop)
-            if export:
-                self.cl.export()
-        
-    def segment(self) -> None:
-        '''segment the foreground'''
-        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
-                                   , fillMode=fillMode.fillByContours
-                                   , nozData=self.nd, crops=self.crop, segmentMode=[sMode.adaptive, sMode.kmeans]
-                                   , addNozzle=False, removeSharp=True
-                                   , addNozzleBottom=True, fillTop=True, openBottom=True, grayBlur=self.grayBlur
-                                  , closing=self.fillDilation)
-        self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
-        self.segmenter.eraseLeftRightBorder(margin=1)   # remove components touching the left or right border
-        self.segmenter.removeScragglies()  # remove scraggly components
+        rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
+        self.makeCrop(rc, export=export, overwrite=overwrite)
         
     def generateSegment(self, overwrite:bool=False):
         '''generate a new segmentation'''
@@ -140,32 +115,30 @@ class fileVertSDT(fileVert, fileSDT):
         self.componentMask = self.segmenter.labelsBW.copy()
         self.exportSegment(overwrite=overwrite)
         
-    def reconcileImportedSegment(self):
-        '''reconcile the difference between the imported segmentation files'''
-        if hasattr(self, 'MLsegment'):
-            self.MLsegment = self.nd.maskNozzle(self.MLsegment, crops=self.crop, invert=True)
-            if hasattr(self, 'Usegment'):
-                self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
-                self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1).segmenter
-            else:
-                self.generateSegment(overwrite=False)
-                self.Usegment = self.componentMask
-                self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1).segmenter
-        elif hasattr(self, 'Usegment'):
-            self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
-            self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+    def segment(self) -> None:
+        '''segment the foreground'''
+        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
+                                   , fillMode=fi.fillMode.fillByContours
+                                   , nozData=self.nd, crops=self.crop
+                                   , segmentMode=[sMode.adaptive, sMode.kmeans]
+                                   , nozMode=nozMode.bottom, removeSharp=True
+                                   , fillTop=True, openBottom=True, grayBlur=self.grayBlur
+                                  , closing=self.fillDilation)
+        self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
+        self.segmenter.eraseLeftRightBorder(margin=1)   # remove components touching the left or right border
+        self.segmenter.removeScragglies()  # remove scraggly components
 
-    
     def measure(self) -> None:
         '''measure vertical SDT line'''
         self.initialize()
         self.getCrop(overwrite=True)
+        
         # get the real nozzle position and pad it
         if not 'o' in self.tag:
             self.generateIm0()
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2)  # find the nozzle in the image and use that for future masking
         self.padNozzle(left=1, right=30, bottom=2)
-
+        self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
         if self.overrideSegment:
             self.generateSegment(overwrite=True)
         else:
@@ -179,7 +152,7 @@ class fileVertSDT(fileVert, fileSDT):
                 logging.warning(f'Segmenter failed on {self.file}')
             self.display()
             return
-        self.dims(numLines=self.lnum, largest=False, getLDiff=('o' in self.tag and not 'w1' in self.tag))
+        self.dims(numLines=self.lnum, largest=False, getLDiff=('o' in self.tag and not ('w1' in self.tag or 'd1' in self.tag)))
         for s in ['y0', 'yc', 'yf']:
             self.stats.pop(s)
             self.units.pop(s)

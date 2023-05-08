@@ -106,7 +106,7 @@ class nozDetector:
         self.nozwidthMin = 0.75 # mm
         self.nozWidthMax = 1.05 # mm
         
-    def defineCritValsImage(self, nd, crops:dict, xmargin:int=20, ymargin:int=20, **kwargs) -> None:
+    def defineCritValsImage(self, nd, crops:dict, xmargin:int=20, ymargin:int=20, yCropMargin:int=20, xCropMargin:int=20, **kwargs) -> None:
         '''define crit vals, where this is a cropped image and we already have approximate nozzle position'''
         self.crops = crops.copy()
         x0 = crops['x0']
@@ -117,6 +117,9 @@ class nozDetector:
         self.xRmax = nd.xR-x0+xmargin
         self.yBmin = nd.yB-y0-ymargin
         self.yBmax = nd.yB-y0+ymargin
+        self.xLCrop = nd.xL-x0-xCropMargin
+        self.xRCrop = nd.xR-x0+xCropMargin
+        self.yBCrop = nd.yB-y0+yCropMargin
 
     
     def thresholdNozzle(self, frame:np.array) -> None:
@@ -257,11 +260,11 @@ class nozDetector:
         '''check that nozzle values are within expected bounds'''
         # check values
         if self.nd.xL<self.xLmin or self.nd.xL>self.xLmax:
-            raise ValueError(f'Detected left corner is outside of expected bounds: {self.nd.xL}')
+            raise ValueError(f'Detected left corner is outside of expected bounds: {self.nd.xL} ({self.xLmin}, {self.xLmax})')
         if self.nd.xR<self.xRmin or self.nd.xR>self.xRmax:
-            raise ValueError(f'Detected right corner is outside of expected bounds: {self.nd.xR}')
+            raise ValueError(f'Detected right corner is outside of expected bounds: {self.nd.xR} ({self.xRmin}, {self.xRmax})')
         if self.nd.yB<self.yBmin or self.nd.yB>self.yBmax:
-            raise ValueError(f'Detected bottom edge is outside of expected bounds: {self.nd.yB}')
+            raise ValueError(f'Detected bottom edge is outside of expected bounds: {self.nd.yB} ({self.yBmin}, {self.yBmax})')
         nozwidth = self.nd.nozWidth()
         if nozwidth<self.nozwidthMin:
             raise ValueError(f'Detected nozzle width is too small: {nozwidth} mm')
@@ -285,12 +288,11 @@ class nozDetector:
             
     def detectNozzle1(self, frame:np.array, diag:int=0, margin:int=5, **kwargs) -> None:
         '''just detect the nozzle for this one frame, with error handling'''
-        
-        
-        if 'xf' in self.crops:
+        if hasattr(self, 'yBCrop'):
             # crop the frame to just the ROI
-            x0 = self.xLmin
-            frame = frame[0:self.yBmax+1, x0:self.xRmax+1]
+            x0 = self.xLCrop
+            
+            frame = frame[0:self.yBCrop+1, x0:self.xRCrop+1]
             self.defineHoughParams(max_line_gap=50)
             self.xLmin = self.xLmin-x0+margin # px
             self.xLmax = self.xLmax-x0+margin # px
@@ -302,7 +304,7 @@ class nozDetector:
         except ValueError as e:
             self.np.drawDiagnostics(diag) # show diagnostics
             raise e
-        
+
         if 'xf' in self.crops:
             self.nd.adjustForCrop(self.crops)
 

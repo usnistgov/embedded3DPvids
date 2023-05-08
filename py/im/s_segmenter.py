@@ -35,6 +35,11 @@ class sMode:
     adaptive = 1
     kmeans = 2
     
+class nozMode:
+    none = 0
+    full = 1
+    bottom = 2
+    
 
 class segmenter(timeObject):
     '''for thresholding and segmenting images'''
@@ -42,7 +47,9 @@ class segmenter(timeObject):
     def __init__(self, im:np.array, acrit:float=2500, diag:int=0
                  , fillMode:int=fi.fillMode.removeBorder, eraseMaskSpill:bool=False, closeTop:bool=True
                  , closing:int=0, grayBlur:int=3, removeSharp:bool=False
-                 , leaveHollows:bool=True, **kwargs):
+                 , nozMode:int=nozMode.full
+                 , trimNozzle:bool=False, addRightEdge:bool=False, addLeftEdge:bool=False
+                 , leaveHollows:bool=True, complete:bool=True, **kwargs):
         self.im = im
         self.w = self.im.shape[1]
         self.h = self.im.shape[0]
@@ -55,17 +62,24 @@ class segmenter(timeObject):
         self.kwargs = kwargs
         self.leaveHollows = leaveHollows
         self.removeSharp = removeSharp
+        self.nozMode=nozMode
+        self.trimNozzle0 = trimNozzle
+        self.addRightEdge = addRightEdge
+        self.addLeftEdge = addLeftEdge
         self.grayBlur = grayBlur
+        self.kwargs = kwargs
         if 'nozData' in kwargs:
             self.nd = kwargs['nozData']
         if 'crops' in kwargs:
             self.crops = kwargs['crops']
-        self.segmentInterfaces(**kwargs)
-        self.makeDF()
+        self.segmentInterfaces()
+        if complete:
+            self.fill()
+            self.complete()
+        
         
     def __getattr__(self, s):
-        if s in ['success', 'df', 'labeledIm', 'numComponents', 'labelsBW']:
-            return getattr(self.sdf, s)
+        return getattr(self.sdf, s)
             
     def makeDF(self):
         if hasattr(self, 'filled'):
@@ -200,17 +214,36 @@ class segmenter(timeObject):
             im = self.closeHorizLine(im, imbot, close)
         return im 
     
-    def closeFullBorder(self, im:np.array) -> np.array:
+    def closeFullBorder(self, im:np.array, val:int=255) -> np.array:
         '''put a white border around the whole image'''
         if len(im.shape)>2:
-            zero = [0,0,0]
+            zero = [val, val, val]
         else:
-            zero = 255
+            zero = val
         im2 = im.copy()
         im2[0, :] = zero
         im2[-1, :] = zero
         im2[:, 0] = zero
         im2[:,-1] = zero
+        return im2
+    
+    def closeBorder(self, im:np.array, side:str, val:int=255, pos:int=0) -> np.array:
+        '''put a white border around the whole image'''
+        if len(im.shape)>2:
+            zero = [val, val, val]
+        else:
+            zero = val
+        im2 = im.copy()
+        if side=='-y':
+            im2[pos, 2:-2] = zero
+        elif side=='+y':
+            im2[-(pos+1), 2:-2] = zero
+        elif side=='-x':
+            im2[2:-2, pos] = zero
+        elif side=='+x':
+            im2[2:-2,-(pos+1)] = zero
+        else:
+            raise ValueError(f'Unexpected side value {side} passed to closeBorder. Should be -y, +y, -x, or +x')
         return im2
         
     def addNozzle(self, bottomOnly:bool=False) -> None:
@@ -273,8 +306,7 @@ class segmenter(timeObject):
 
         if self.diag>1:
             imshow(gX, tot, filled, self.filled, title='emptyVertSpaces')
-        self.filled = filled
-        self.makeDF()   
+        self.filled = filled  
         
     def removeNozzle(self, s:str='filled') -> None:
         '''remove the black nozzle from the image'''
@@ -284,55 +316,41 @@ class segmenter(timeObject):
         # remove the nozzle again
             
             
-    def segmentInterfaces(self, addNozzle:bool=True, addNozzleBottom:bool=False, **kwargs) -> np.array:
+    def segmentInterfaces(self) -> None:
         '''from a color image, segment out the ink, and label each distinct fluid segment. 
         acrit is the minimum component size for an ink segment
         removeVert=True to remove vertical lines from the thresholded image
         removeBorder=True to remove border components from the thresholded image'''
         self.getGray()
-        self.threshes(**kwargs)  # threshold
-        if addNozzle:
+        self.threshes(**self.kwargs)  # threshold
+        if self.nozMode==nozMode.full:
             self.addNozzle()    # add the nozzle to the thresholded image
-        if addNozzleBottom:
+        elif self.nozMode==nozMode.bottom:
             self.addNozzle(bottomOnly=True)
-        self.fillParts(**kwargs)    # fill components
+        if self.addRightEdge:
+            self.thresh = self.closeBorder(self.thresh, '+x', val=255)
+        if self.addLeftEdge:
+            self.thresh = self.closeBorder(self.thresh, '-x', val=255)
+            
+    def fill(self):
+        '''fill the thresholded image'''
+        self.fillParts(**self.kwargs)    # fill components
+        
+            
+    def complete(self):
+        '''remove elements that were added in, and label components'''
+        if self.addRightEdge:
+            self.filled = self.closeBorder(self.filled, '+x', val=0)
+        if self.addLeftEdge:
+            self.filled = self.closeBorder(self.filled, '-x', val=0)   
         self.removeNozzle() # remove the nozzle again
-    
+        if self.trimNozzle0:
+            self.trimNozzle()
+        self.makeDF()
         
-    def eraseSmallComponents(self, **kwargs):
-        '''erase small components from the labeled image and create a binary image'''
-        return self.sdf.eraseSmallComponents(**kwargs)
-        
-    def eraseSmallestComponents(self, satelliteCrit:float=0.2, **kwargs) -> None:
-        '''erase the smallest relative components from the labeled image'''
-        return self.sdf.eraseSmallestComponents(satelliteCrit, **kwargs)
-          
-    def eraseBorderComponents(self, margin:int, **kwargs) -> None:
-        '''remove any components that are too close to the edge'''
-        return self.sdf.eraseBorderComponents(margin, **kwargs)
-        
-    def eraseFullWidthComponents(self, **kwargs) -> None:
-        '''remove components that are the full width of the image'''
-        return self.sdf.eraseFullWidthComponents(**kwargs)
-        
-    def eraseLeftRightBorder(self, **kwargs) -> None:
-        '''remove components that are touching the left or right border'''
-        return self.sdf.eraseLeftRightBorder(**kwargs)
-        
-    def eraseTopBottomBorder(self, **kwargs) -> None:
-        '''remove components that are touching the top or bottom border'''
-        return self.sdf.eraseTopBottomBorder(**kwargs)
-     
-    def removeScragglies(self, **kwargs) -> None:
-        return self.sdf.removeScragglies(**kwargs)
-        
-    def largestObject(self) -> pd.Series:
-        '''the largest object in the dataframe'''
-        return self.sdf.largestObject()
-     
-    def reconstructMask(self, df:pd.DataFrame) -> np.array:
-        '''construct a binary mask with all components labeled in the dataframe'''
-        return self.sdf.reconstructMask(df)
-    
-    def noDF(self) -> bool:
-        return self.sdf.noDF(df)
+    def trimNozzle(self, xcrit:int=5) -> None:
+        '''trim the nozzle out of the segmented image'''
+        y = 0
+        while y<len(self.filled) and self.filled[y, :].sum()/255<xcrit:
+            self.filled[y,:] = 0
+            y = y+1

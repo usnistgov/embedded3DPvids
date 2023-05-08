@@ -59,7 +59,7 @@ class folderVertSDT(folderSDT):
         # dependent variables for observe images. use different measurements for w1 and all other lines
         ovars = ['x0', 'w', 'h', 'xf', 'xc', 'segments', 'ldiff', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']
         ovars1 = ['x0', 'w', 'h', 'xf', 'xc', 'segments', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']   # for the 1st line
-        opairvars = ['x0', 'w', 'h', 'xf', 'xc', 'segments', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']     # for pairs of observe lines
+        opairvars = ['x0', 'w', 'h', 'xf', 'xc', 'segments', 'ldiff', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']     # for pairs of observe lines
         # dependent variables for progress images. use different measurements for w1 and all other lines
         pvars = ['x0', 'dx0', 'dxf', 'space_a', 'space_at', 'dxprint', 'segments']
         pvars1 = ['x0', 'dxprint', 'segments']

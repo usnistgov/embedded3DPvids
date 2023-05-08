@@ -88,8 +88,9 @@ class fileSDT(fileDisturb):
         self.units['pname'] = ''
         
     
-    def cropIm(self):
-        self.im = self.nd.subtractBackground(self.im)   # remove the background and the nozzle
+    def cropIm(self, background:bool=True):
+        if background:
+            self.im = self.nd.subtractBackground(self.im)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
     
                 
@@ -97,9 +98,9 @@ class fileSDT(fileDisturb):
         '''expand the nozzle'''
         self.nd.padNozzle(left=left, right=right, bottom=bottom)
         
-    def addToTraining(self, trainFolder:str=r'singleDoubleTriple\trainingVert', s:str='componentMask', openPaint:bool=False):
+    def addToTraining(self, trainFolder:str=r'singleDoubleTripleML\trainingVert', s:str='componentMask', openPaint:bool=False):
         '''add the original image and the segmented image to the training dataset'''
-        folder = os.path.join(cfg.path.fig, trainFolder)
+        folder = os.path.join(cfg.path.server, trainFolder)
         fnorig = os.path.join(folder, 'orig', self.title)
         cv.imwrite(fnorig, self.im0)
         fnseg = os.path.join(folder, 'segmented', self.title)

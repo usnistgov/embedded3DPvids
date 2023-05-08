@@ -147,7 +147,7 @@ class nozDims:
     def nozCover(self, padLeft:int=0, padRight:int=0, padBottom:int=0, val:int=255, y0:int=0, color:bool=False, **kwargs) -> np.array:
         '''get a mask that covers the nozzle'''
         if type(val) is list:
-            mask = np.zeros((self.h, self.w), dtype="uint8")
+            mask = np.zeros((self.h, self.w, len(val)), dtype="uint8")
         else:
             mask = np.zeros((self.h, self.w), dtype="uint8")
         if y0<0:
@@ -164,6 +164,7 @@ class nozDims:
     
     def dentHull(self, hull:list, crops:dict) -> list:
         '''conform the contour to the nozzle'''
+        
         yB = int(self.yB-crops['y0'])
         xL = int(self.xL-crops['x0'])
         xR = int(self.xR-crops['x0'])
@@ -171,18 +172,35 @@ class nozDims:
         if xL-10>df.x.max() or xL<df.x.min() or yB<df.y.min():
             # all points are left or right of the left edge of the nozzle or below the nozzle
             return hull
-        under = df[(df.x>xL-1)&(df.x<xR+1)&(df.y>yB-1)]
-        if len(under)==0:
+        right = df[(df.y<yB)&(df.x>xR)]
+        under = df[(df.x<=xR)&(df.x>=xL)&(df.y>=yB)&(df.y<yB+10)]
+        ru = pd.concat([right, under])
+        if len(ru)==0:
             return hull
-        left = df[(df.x<xL+1)&(df.x>xL-10)&(df.y<yB)]
+        left = df[df.x<xL]
+        leftu = df[(df.x<xL+1)&(df.x>xL-10)&(df.y<yB)]
         if len(left)==0:
-            i = under.index.min()
+            u1 = ru[ru.y<ru.y.min()+5]         # highest point on right/under
+            u2 = u1[u1.x==u1.x.min()].iloc[0] # leftmost point at highest point
+            i = int(u2.name)
         else:
             # points go clockwise, so the under point will be after the left point
-            i = left.index.max()+1  # index of the transition point
-        xL = max(hull[i-1, 0, 0],xL)
-        # if i<len(hull):
-        #     yB = hull[i, 0, 1]
-        hull = np.vstack([hull[:i, 0, :], np.array([xL, yB]), hull[i:, 0, :]])
-        return hull
+            # i = left.index.max()+1  # index of the transition point
+            i = left[left.x==left.x.max()].index.max()+1
+            xL = max(hull[i-1, 0, 0],xL)
+        if len(leftu)==0:
+            # include left point at nozzle and bottom left corner
+            pt = np.array([[xL, hull[i-1, 0, 1]], [xL, yB]])
+        else:
+            # include just bottom left corner
+            pt = np.array([[xL, yB]])
+        if len(right)>0:
+            # points to the right of the nozzle. include bottom right corner
+            pt = np.concatenate((pt, np.array([[xR, yB], [xR, right.y.min()]])))
+        hull2 = np.vstack([hull[:i, 0, :], pt, hull[i:, 0, :]])
+        if cv.contourArea(hull2)>cv.contourArea(hull):
+            # new contour has larger area, so dent was in the wrong direction. just return the original hull
+            return hull
+        else:
+            return hull2
         

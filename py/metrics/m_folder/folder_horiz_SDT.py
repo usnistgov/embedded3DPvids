@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data and summarizing stills of single line SDTed horiz for a whole folder'''
+'''Functions for collecting data and summarizing stills of single line xs for a whole folder'''
 
 # external packages
 import os, sys
@@ -34,76 +34,68 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 class folderHorizSDT(folderSDT):
-    '''for a horizSDT folder, measure the SDT lines
-        export a table of values (Measure)
-        export a list of failed files (Failures)
-        export a row of summary values (Summary)'''
+    '''for a horizSDT folder, measure the disturbed lines'''
     
     def __init__(self, folder:str, **kwargs) -> None:
         super().__init__(folder, **kwargs)
-        if not 'SDTDisturb' in os.path.basename(self.folder):
-            raise ValueError(f'Wrong folderMetric class called for {self.folder}')
-    
+        if not 'disturbHoriz' in os.path.basename(self.folder):
+            raise ValueError(f'Wrong folderSDT class called for {self.folder}')
+        
     def measureFolder(self) -> None:
         '''measure all cross-sections in the folder and export table'''
         self.measure(fileHorizSDT)
 
-    
-    def summarize(self) -> Tuple[dict,dict]:
-        '''summarize measurements in the folder and export table'''
-        errorRet = {},{}
+    #-----------------------------------------------------------------
+    # summaries
+
+    def summarize(self, **kwargs) -> Tuple[dict,dict]:
+        '''summarize xsical measurements in the folder and export table'''
         r = self.summaryHeader()
         if r==0:
-            return self.summary, self.summaryUnits
+            return self.summary, self.summaryUnits, self.failures
         elif r==2:
-            return errorRet
+            return pd.DataFrame([]), {}, pd.DataFrame([])
+  
+        # dependent variables for observe images. use different measurements for w1 and all other lines
+        ovars = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']
+        ovars1 = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']   # for the 1st line
+        opairvars = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']     # for pairs of observe lines
+        # dependent variables for progress images. use different measurements for w1 and all other lines
+        pvars = ['yBot', 'segments', 'roughness', 'emptiness', 'dy0l', 'dy0lr', 'dyfl', 'dyflr', 'space_l', 'space_b']
+        pvars1 = ['yBot', 'dy0l', 'dyfl', 'dyflr']
+        ppairvars = ['yBot']   # for pairs of progress lines
+        tunits = self.pg.progDimsUnits['tpic']
+        
+        # average observed values
+        for single in self.singles():
+            if 'o' in single:
+                if '1' in single:
+                    dv = ovars1
+                else:
+                    dv = ovars
+            else:
+                if '1' in single and not 'd' in single:
+                    dv = pvars1
+                else:
+                    dv = pvars
+            self.addSingle(single, dv)     
+            
+            # get slopes
+            if 'o' in single:
+                for var in dv:
+                    self.addSlopes(single, var, tunits, rcrit=0)
+                    
+        # changes between pairs
+        for pair in self.pairs():
+            if 'p' in pair[0] or 'p' in pair[1]:
+                dv = ppairvars
+            else:
+                dv = opairvars
+            self.addPair(dv, pair)                 
 
-        # find changes between observations
-        aves = {}
-        aveunits = {}
-        for num in range(4):
-            wodf = self.df[self.df.line==f'HOh_l{num}wo']
-            dodf = self.df[self.df.line==f'HOh_l{num}do']
-            if len(wodf)==1 and len(dodf)==1:
-                wo = wodf.iloc[0]
-                do = dodf.iloc[0]
-                for s in ['segments', 'roughness']:
-                    try:
-                        addValue(aves, aveunits,f'delta_{s}', difference(do,wo,s), self.du[s])
-                    except:
-                        pass
-                for s in ['totlen', 'meanT']:
-                    try:
-                        addValue(aves, aveunits,f'delta_{s}_n', difference(do,wo,s)/wo[s], '')
-                    except:
-                        pass
-                for s in ['yc']:
-                    try:
-                        addValue(aves, aveunits, f'delta_{s}_n', difference(do, wo, s)/self.pxpmm/self.pv.dEst, 'dEst')
-                    except ValueError:
-                        pass
+        self.convertValuesAndExport()
+        
+        if self.diag>0:
+            self.printAll()
 
-        # find displacements
-        disps = {}
-        dispunits = {}
-        dlist = ['dy0l', 'dy0r', 'dy0lr', 'space_b']
-        for num in range(4):
-            wdf = self.df[self.df.line==f'HOh_l{num}w']
-            ddf = self.df[self.df.line==f'HOh_l{num}d']
-            for s in dlist:
-                for vdf in [wdf,ddf]:
-                    if len(vdf)>0:
-                        v = vdf.iloc[0]
-                        if hasattr(v, s):
-                            sii = str(v.line)[-1]
-                            si = f'{sii}_{s}'
-                            if not si in ['w_dy0r', 'w_dy0lr', 'w_space_b']:
-                                val = v[s]/self.pxpmm/self.pv.dEst
-                                addValue(disps, dispunits, si, val, 'dEst')
-
-        ucombine = {**aveunits, **dispunits} 
-        lists = {**aves, **disps}
-        self.convertValuesAndExport(ucombine, lists)
-        return self.summary, self.summaryUnits
-
-    
+        return self.summary, self.summaryUnits, self.failures

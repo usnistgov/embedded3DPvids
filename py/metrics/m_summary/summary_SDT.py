@@ -93,9 +93,38 @@ class summarySDT(summaryMetric):
             if not s in c:
                 c.append(s)
         print('\033[1mDependents:\033[0m ', ', '.join(c))
-        table = pd.DataFrame({'wp':dict([[i, f'X_w{i}p'] for i in range(3)]), 'wo':dict([[i, f'X_w{i}o'] for i in range(3)]), 'dw/dt':dict([[i, f'dXdt_w{i}o'] for i in range(3)]), 'wrelax':dict([[i, f'delta_X_w{i}relax'] for i in range(3)]), 'write':dict([[i, f'delta_X_write{i}'] for i in range(1,3)]), 'dp':dict([[i, f'X_d{i}p'] for i in range(2)]), 'do':dict([[i, f'X_d{i}o'] for i in range(2)]), 'dd/dt':dict([[i, f'dXdt_d{i}o'] for i in range(2)]), 'drelax':dict([[i, f'delta_X_d{i}relax'] for i in range(2)]), 'disturb':dict([[i, f'delta_X_disturb{i}'] for i in range(2)])})
-        table.fillna('', inplace=True)
-        display(table.T)
+        d1 = {'wp':dict([[i, f'X_w{i}p'] for i in range(1,4)])
+                , 'wo':dict([[i, f'X_w{i}o'] for i in range(1,4)])}
+        if self.type!='xs':
+            d1['dw/dt']=dict([[i, f'dXdt_w{i}o'] for i in range(1,4)])
+        d1 = {**d1, **{'wrelax':dict([[i, f'delta_X_w{i}relax'] for i in range(1,4)])
+                    , 'write':dict([[i, f'delta_X_write{i}'] for i in range(1,3)])
+                    , 'dp':dict([[i, f'X_d{i}p'] for i in range(1,3)])
+                    , 'do':dict([[i, f'X_d{i}o'] for i in range(1,3)])}}
+        if self.type!='xs':
+            d1['dd/dt']=dict([[i, f'dXdt_d{i}o'] for i in range(1,3)])
+        d1 = {**d1,**{'drelax':dict([[i, f'delta_X_d{i}relax'] for i in range(1,3)])
+                    , 'disturb':dict([[i, f'delta_X_disturb{i}'] for i in range(1,3)])}}          
+        
+        self.keyTable = pd.DataFrame(d1)
+        self.keyTable.fillna('', inplace=True)
+        self.keyTable = self.keyTable.T
+        display(self.keyTable)
+        
+    def keyTableVar(self, yvar:str) -> None:
+        kt = self.keyTable.copy()
+        cols = self.keyTable.columns
+        for i,row in self.keyTable.iterrows():
+            for col in cols:
+                val = row[col]
+                if len(val)>0:
+                    v2 = val.replace('X', yvar)
+                    if v2 in self.ss:
+                        kt.loc[i,col] = v2
+                    else:
+                        kt.loc[i,col] = ''
+        display(kt)
+                
         
 
     def addRatios(self, ss:pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -141,11 +170,48 @@ class summarySDT(summaryMetric):
         else:
             var = spl[0]
         if self.type=='vert':
-            varlist = {'x0':'$x_{left}$', 'dxprint':'x shift under nozzle', 'segments':'segments', 'w':'width', 'h':'length', 'xf':'$x_{right}$', 'xc':'$x_{center}$', 'roughness':'roughness', 'emptiness':'emptiness', 'meanT':'ave thickness', 'stdevT':'stdev thickness', 'minmaxT':'thickness variation', 'ldiff':'left shrinkage', 'dx0dt':'left edge shift/time', 'dwdt':'widening/time', 'dhdt':'lengthening/time', 'dxfdt':'$\Delta x_{right}$/time', 'dxcdt':'$\Delta x_{center}$/time', 'dsegmentsdt':'rupturing/time', 'dldiffdt':'evening/time', 'droughnessdt':'roughening/time', 'demptinessdt':'emptying/time', 'dmeanTdt':'thickening/time', 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
-            if var in varlist:
-                out = out + varlist[var]
-            else:
-                out = out + var
+            varlist = {'x0':'$x_{left}$', 'xf':'$x_{right}$', 'xc':'$x_{center}$'
+                       , 'dxprint':'x shift under nozzle'
+                       , 'segments':'segments', 'w':'width', 'h':'length'
+                       , 'roughness':'roughness', 'emptiness':'emptiness'
+                       , 'meanT':'ave thickness', 'stdevT':'stdev thickness'
+                       , 'minmaxT':'thickness variation', 'ldiff':'left shrinkage'
+                       , 'dx0dt':'left edge shift/time', 'dxfdt':'$\Delta x_{right}$/time', 'dxcdt':'$\Delta x_{center}$/time'
+                       , 'dwdt':'widening/time', 'dhdt':'lengthening/time'
+                       , 'dsegmentsdt':'rupturing/time', 'dldiffdt':'evening/time'
+                       , 'droughnessdt':'roughening/time', 'demptinessdt':'emptying/time'
+                       , 'dmeanTdt':'thickening/time', 'dstdevTdt':'d(stdev thickness)/dt'
+                       , 'dminmaxTdt':'d(thickness variation)/time'}            
+        elif self.type=='xs':
+            varlist = {'yBot':'$y_{bottom}$', 'xLeft':'$x_{left}$'
+                       , 'segments':'segments', 'aspect':'h/w'
+                       , 'xshift':'right-heaviness', 'yshift':'bottom-heaviness'
+                       , 'area':'area', 'yTop':'$y_{top}$', 'xRight':'$x_{right}$'
+                       , 'xc':'$x_{center}$', 'yc':'$y_{center}$'
+                       , 'w':'width', 'h':'height'
+                       , 'emptiness':'emptiness', 'roughness':'roughness'
+                       , 'aspectI':'h/w/intended'}
+        elif self.type=='horiz':
+            varlist = {'yBot':'$y_{bottom}$', 'yTop':'$y_{top}$', 'yc':'$y_{center}$'
+                       , 'segments':'segments', 'w':'length', 'h':'height'
+                       , 'roughness':'roughness', 'emptiness':'emptiness'
+                       , 'meanT':'ave thickness', 'stdevT':'stdev thickness', 'minmaxT':'thickness variation'
+                       , 'ldiff':'left shrinkage'
+                       , 'dy0l':'$y_{top}$ shift behind/under',  'dyfl':'$y_{bottom}$ shift behind/under'
+                       , 'dy0lr':'$y_{top}$ shift behind/ahead', 'dyflr':'$y_{bot}$ shift behind/ahead'
+                       , 'space_l':'vert space behind/nozzle', 'space_b':'space under/nozzle'
+                       , 'dsegmentsdt':'rupturing/time'
+                       , 'dyBotdt':'$\Delta y_{bot}$/time', 'dyTopdt':'$\Delta y_{top}$/time'
+                       , 'dwdt':'lengthening/time', 'dhdt':'widening/time'
+                       , 'dycdt':'y shift/time', 'droughnessdt':'roughening/time'
+                       , 'demptiness/dt':'emptying/time', 'dmeanTdt':'thickening/time'
+                       , 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
+        else:
+            varlist = {}
+        if var in varlist:
+            out = out + varlist[var]
+        else:
+            out = out + var
         return out
  
             
@@ -156,13 +222,7 @@ class summarySDT(summaryMetric):
         commas = True to use commas, otherwise use periods'''
         if s in self.depVars():
             if self.type=='xs':
-                varlist = {'delta_aspect':'$\Delta$ XS height/width'
-                           , 'delta_xshift':'$\Delta$ XS right heaviness'
-                           , 'delta_yshift':'$\Delta$ XS bottom heaviness'
-                           , 'delta_h_n':'$\Delta$ XS height/original height'
-                           , 'delta_w_n':'$\Delta$ XS width/original width'
-                           , 'delta_xc_n':'XS right shift/$d_{est}$'
-                           }
+                return self.depVarSpl(s)
             elif self.type=='vert' or self.type=='horiz':
                 return self.depVarSpl(s)
         elif s.endswith('Ratio') or s.endswith('Prod'):

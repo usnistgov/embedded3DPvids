@@ -28,6 +28,7 @@ import file.file_handling as fh
 from vid.noz_detect import *
 from tools.timeCounter import timeObject
 import tools.regression as reg
+from folder_size_check import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ pd.set_option('display.max_rows', 500)
 
 
 #----------------------------------------------
- 
+    
 
 class folderMetric(timeObject):
     '''for a folder, measure all images
@@ -106,8 +107,13 @@ class folderMetric(timeObject):
         self.cl = cropLocs(self.folder, pfd=self.pfd)
         for file in files.values():
             self.nd.resetDims()
-            m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl, diag=self.diag-1, **self.kwargs).values()
-            self.du = {**self.du, **u}
+            try:
+                m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl, diag=self.diag-1, **self.kwargs).values()
+                self.du = {**self.du, **u}
+            except KeyboardInterrupt as e:
+                raise e
+            except Exception as e:
+                failures.append(file)
             if len(m['line'])<1:
                 failures.append(file)
             out.append(m)
@@ -115,6 +121,7 @@ class folderMetric(timeObject):
         self.failures = pd.DataFrame({'file':failures})
         plainExp(self.failfn, self.failures, {'file':''})
         plainExp(self.fn, self.df, self.du)
+        self.cl.export()
         return 0
     
     def importMeasure(self):
@@ -124,8 +131,8 @@ class folderMetric(timeObject):
             return
         if not hasattr(self, 'pfd'):
             self.pfd = fh.printFileDict(self.folder)
-        if os.path.exists(self.pfd.measure) and not self.overwriteMeasure:
-            self.df, self.du = plainIm(self.pfd.measure, ic=0)
+        if os.path.exists(self.fn) and not self.overwriteMeasure:
+            self.df, self.du = plainIm(self.fn, ic=0)
             self.df.line.fillna('', inplace=True)
         else:
             self.measureFolder()
@@ -248,12 +255,15 @@ class folderMetric(timeObject):
         # get average values
         lines = self.dflines(lineName)
         for var in dv:
-            self.addValues(f'{var}_{lineName}', list(lines[var].dropna()), self.du[var])
+            if var in lines:
+                self.addValues(f'{var}_{lineName}', list(lines[var].dropna()), self.du[var])
             
     def addSlopes(self, lineName:str, yvar:str, tunits:str, rcrit:float=0.9) -> None:
         '''for each line group, get the slope over time and add the slope to the results dict list and units dict. only get slopes if regression is good'''
         lines = self.dflines(lineName)
         varname = f'd{yvar}dt_{lineName}'
+        if not yvar in self.du:
+            return
         uu = self.du[yvar]
         unit = f'{uu}/{tunits}' 
         for gname, df in lines.groupby(['gname']):
@@ -279,22 +289,23 @@ class folderMetric(timeObject):
             df2 = lines2[lines2.gname==gname]
             for var in dv:
                 # iterate over all dependent variables
-                m1, se1, n1 = msen(df1[var])   # mean and standard error of line 1
-                m2, se2, n2 = msen(df2[var])   # mean and standard error of line 2
-                dm = m2-m1
-                dmse = np.sqrt((se1**2+se2**2)/2)
-                n = n1+n2
-                name = f'delta_{var}_{nm}'
-                if name in self.aves:
-                    self.aves[name].append(dm)
-                    self.sems[name].append(dmse)
-                    self.ns[name].append(n)
-                else:
-                    self.aves[name] = [dm]
-                    self.sems[name] = [dmse]
-                    self.ns[name] = [n]
-                    self.aveunits[name] = self.du[var]
-                    self.depVars.append(name)
+                if var in df1:
+                    m1, se1, n1 = msen(df1[var])   # mean and standard error of line 1
+                    m2, se2, n2 = msen(df2[var])   # mean and standard error of line 2
+                    dm = m2-m1
+                    dmse = np.sqrt((se1**2+se2**2)/2)
+                    n = n1+n2
+                    name = f'delta_{var}_{nm}'
+                    if name in self.aves:
+                        self.aves[name].append(dm)
+                        self.sems[name].append(dmse)
+                        self.ns[name].append(n)
+                    else:
+                        self.aves[name] = [dm]
+                        self.sems[name] = [dmse]
+                        self.ns[name] = [n]
+                        self.aveunits[name] = self.du[var]
+                        self.depVars.append(name)
                     
 
     def printAll(self):
@@ -302,13 +313,14 @@ class folderMetric(timeObject):
         print(self.folder)
         df = pd.DataFrame()
         for var in self.depVars:
-            val = self.summary[var]
-            se = self.summary[f'{var}_SE']
-            n = self.summary[f'{var}_N']
-            units = self.summaryUnits[var]
-            df.loc[var, 'value'] = '{:5.4f}'.format(val)
-            df.loc[var, 'SE'] = '{:5.4f}'.format(se)
-            df.loc[var, 'N'] = n
-            df.loc[var, 'units'] = units
+            if var in self.summary:
+                val = self.summary[var]
+                se = self.summary[f'{var}_SE']
+                n = self.summary[f'{var}_N']
+                units = self.summaryUnits[var]
+                df.loc[var, 'value'] = '{:5.4f}'.format(val)
+                df.loc[var, 'SE'] = '{:5.4f}'.format(se)
+                df.loc[var, 'N'] = n
+                df.loc[var, 'units'] = units
         display(df)
         

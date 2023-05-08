@@ -55,6 +55,8 @@ class cropLocs:
                 self.pfd.findVstill()
             self.df = pd.DataFrame({'vstill':self.pfd.vstill})
         self.units = {'vstill':'', 'x0':'px', 'xf':'px', 'y0':'px', 'yf':'px'}
+        self.df0 = self.df.copy()
+        self.changed = False
             
     def getCrop(self, file:str) -> dict:
         '''get the crop dimensions from the file'''
@@ -85,10 +87,12 @@ class cropLocs:
             raise ValueError(f'Cannot find {file} in cropLocs')
         i = (row.iloc[0]).name
         for key,val in crop.items():
+            if not self.changed and (not key in self.df or pd.isna(self.df.loc[i,key])):
+                self.changed = True
             self.df.loc[i,key] = val
             
     def export(self, overwrite:bool=False):
         '''export the values to file'''
-        if os.path.exists(self.fn) and not overwrite:
+        if not self.changed and os.path.exists(self.fn) and not overwrite:
             return
         plainExp(self.fn, self.df, self.units)

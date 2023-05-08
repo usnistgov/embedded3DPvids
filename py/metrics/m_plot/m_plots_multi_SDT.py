@@ -54,15 +54,17 @@ class yvarlines(multiPlot):
     
     def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, zvar:str, llist:list=[1,2,3]
                  , plist=['wp', 'wo', 'dwdt', 'wrelax', 'write', 'dp', 'do', 'dddt', 'drelax', 'disturb']
-                 , mode:str='scatter', **kwargs):
+                 , mode:str='scatter', yideal:dict={}, **kwargs):
         self.xvar = xvar
         self.yvar = yvar
         self.zvar = zvar
         self.llist = llist
         self.plist = plist
+        self.legendMade = False
         self.ms = ms
         self.ss = ss.copy()
         self.mode = mode
+        self.yideal = yideal
         self.getRC()
         if 'sharex' in kwargs:
             self.sharex = kwargs['sharex']
@@ -75,6 +77,7 @@ class yvarlines(multiPlot):
         self.ss.sort_values(by=zvar, inplace=True)
         self.legendVals = self.ss[zvar].unique()
         super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, **kwargs)
+        self.groupPCols()
         self.plots()
         
     def getRC(self) -> None:
@@ -92,7 +95,7 @@ class yvarlines(multiPlot):
                 self.sharey = 'col'
             else:
                 self.sharey = True
-        elif len(self.plist)==1:
+        elif len(self.plist)==1 and not len(self.llist)==1:
             self.transpose = True   # flip rows and columns because we only have one item in llist
             cols = len(self.llist)
             rows = 1
@@ -109,6 +112,19 @@ class yvarlines(multiPlot):
                 self.sharey = True
         self.rows = rows
         self.cols = cols
+        
+    def groupPCols(self):
+        '''group dependent variable columns by type'''
+        if not self.sharey:
+            return
+        g = [['wp', 'wo', 'dp', 'do'], ['dwdt', 'dddt'], ['wrelax', 'drelax'], ['write', 'disturb']]
+        for gi in g:
+            lcommon = list(set(gi).intersection(set(self.plist)))  # for each group, find the variables that are in this plot
+            if len(lcommon)>1:
+                i0 = self.plist.index(lcommon[0])   # get index of first column
+                for l in lcommon[1:]:
+                    i = self.plist.index(l)   # get index of 2nd column
+                    self.axs[0,i].get_shared_y_axes().join(self.axs[0,i0], self.axs[0,i])  # share the y axes for these columns
         
     def getYvar(self, l:int, p:int) -> str:
         '''get the yvar for this l value and p value'''
@@ -132,45 +148,64 @@ class yvarlines(multiPlot):
             else:
                 raise ValueError(f'Could not determine variable for {l}, {p}')
         return yvar
-
+    
+    def makeLegend(self, i:int, j:int, kwargs:dict) -> None:
+        '''turn an axis into a legend'''
+        if not self.legendMade:
+            self.objs[i,j] = scatterPlot(self.ms, self.ss, justLegend=True, **kwargs)
+            self.legendMade = True
+            self.axlabels.remove((i,j))
+            if i>0:
+                self.axs[0,self.cols-1].get_legend().remove()
+        else:
+            self.fig.delaxes(self.axs[i,j])
+        
+    
+    def scatterPlot(self, i:int, j:int, y:str, p:str, killWritten:bool=True) -> None:
+        kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'zvar':self.zvar
+                                     , 'ax':self.axs[i,j], 'fig':self.fig
+                                     , 'plotType':self.plotType, 'legendVals':self.legendVals}}
+        if not y in self.ss:
+            self.makeLegend(i,j,kwargs)
+            return   
+        self.ys[i,j]=y
+        if type(self.yideal) is dict:
+            if p in self.yideal:
+                kwargs['yideal'] = self.yideal[p]
+        else:
+            kwargs['yideal'] = self.yideal.yideal(y)
+        self.objs[i,j] = scatterPlot(self.ms, self.ss
+                                 , yvar=y
+                                 , set_xlabel=True, set_ylabel=False
+                                 , legend=(i==0 and j==self.cols-1)
+                                 , legendloc='right'   
+                                 , **kwargs)
+        
+    def gridPlot(self, func, i:int, j:int, y:str, p:str, killWritten:bool=True) -> None:
+        '''either a mesh plot or a contour plot'''
+        kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'yvar':self.zvar
+                                         , 'ax':self.axs[i,j], 'fig':self.fig
+                                         , 'plotType':self.plotType, 'legendVals':self.legendVals}}
+        if not y in self.ss:
+            self.fig.delaxes(self.axs[i,j])
+            return 
+        self.ys[i,j]=y
+        self.objs[i,j] = func(self.ms, self.ss
+                                 , zvar=y
+                                 , set_xlabel=(i==self.rows-1), set_ylabel=True
+                                 , legend=True
+                                 , legendloc='top'
+                                 , **kwargs)
     
     def plot(self, i:int, j:int, y:str, p:str, killWritten:bool=True) -> None:
         '''make a single plot'''
         if self.mode=='scatter':
-            kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'zvar':self.zvar
-                                         , 'ax':self.axs[i,j], 'fig':self.fig
-                                         , 'plotType':self.plotType, 'legendVals':self.legendVals}}
-            if not y in self.ss:
-                if i==0 and j==self.cols-1:
-                    # turn this into a legend
-                    self.objs[i,j] = scatterPlot(self.ms, self.ss, justLegend=True, **kwargs)
-                    self.axlabels.remove((i,j))
-                else:
-                    self.fig.delaxes(self.axs[i,j])
-                return   
-            self.ys[i,j]=y
-            if 'yideal' in kwargs and type(kwargs['yideal'] is dict) and p in kwargs['yideal']:
-                kwargs['yideal'] = kwargs['yideal'][p]
-            self.objs[i,j] = scatterPlot(self.ms, self.ss
-                                     , yvar=y
-                                     , set_xlabel=True, set_ylabel=False
-                                     , legend=(i==0 and j==self.cols-1)
-                                     , legendloc='right'   
-                                     , **kwargs)
+            self.scatterPlot(i,j,y,p,killWritten)
         elif self.mode=='mesh':
-            kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'yvar':self.zvar
-                                         , 'ax':self.axs[i,j], 'fig':self.fig
-                                         , 'plotType':self.plotType, 'legendVals':self.legendVals}}
-            if not y in self.ss:
-                self.fig.delaxes(self.axs[i,j])
-                return 
-            self.ys[i,j]=y
-            self.objs[i,j] = meshPlot(self.ms, self.ss
-                                     , zvar=y
-                                     , set_xlabel=(i==self.rows-1), set_ylabel=True
-                                     , legend=True
-                                     , legendloc='top'
-                                     , **kwargs)
+            self.gridPlot(meshPlot, i,j,y,p,killWritten)
+        elif self.mode=='contour':
+            self.gridPlot(contourPlot, i,j,y,p,killWritten)
+            
         
     def pTitle(self, y:str, killWritten:bool) -> str:
         '''title for a y variable type'''
@@ -205,11 +240,13 @@ class yvarlines(multiPlot):
         if i>=self.rows or j>=self.cols:
             return
         if self.mode=='scatter':
-            if self.plotType=='paper':
-                rotation = 90
-            else:
-                rotation = 0
-            self.axs[i,j].set_ylabel(pl, fontsize=self.fs, rotation=rotation)
+            kwargs = {}
+            if not self.plotType=='paper':
+                kwargs['rotation'] = 0
+            self.axs[i,j].set_ylabel(pl, fontsize=self.fs, **kwargs)
+            if not self.plotType=='paper':
+                self.axs[i,j].yaxis.set_label_coords(-.3, .5)
+
         else:
             ll = self.axs[i,j].yaxis.get_label().get_text()
             self.axs[i,j].set_ylabel(f'{pl}\n{ll}', fontsize=self.fs)

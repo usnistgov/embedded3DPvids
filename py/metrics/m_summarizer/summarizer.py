@@ -194,5 +194,10 @@ class failureTest:
         file = self.file(i)
         openInPaint(file)  # from m_tools
         
+    def openFolderInPaint(self, fostr:str) -> None:
+        ffiles = self.bad[self.bad.fostr==fostr]
+        for i,_ in ffiles.iterrows():
+            self.openPaint(i)
+        
     def export(self):
         plainExp(self.failureFile, self.df, {}, index=False)

@@ -130,7 +130,9 @@ class fileHorizDisturb(fileHoriz, fileDisturb):
         else:
             bt = 90
             
-        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0,self.diag-1), cutoffTop=0, topthresh=bt, removeBorder=False, nozData=self.nd, crops=self.crop, eraseMaskSpill=True)
+        self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0,self.diag-1)
+                                   , cutoffTop=0, topthresh=bt, removeBorder=False
+                                   , nozData=self.nd, crops=self.crop, eraseMaskSpill=True)
         if not self.segmenter.success:
             return
         self.segmenter.eraseFullWidthComponents()

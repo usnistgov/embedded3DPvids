@@ -48,7 +48,7 @@ class background:
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']  # print file dict
         else:
-            self.pfd = printFileDict(printFolder)
+            self.pfd = fh.printFileDict(printFolder)
         if 'fs' in kwargs:
             self.fs = kwargs['fs']
         else:

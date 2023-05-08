@@ -49,6 +49,18 @@ pd.set_option('display.max_rows', 500)
 
 #----------------------------------------------
 
+def whiteoutFile(file:str, val:int=255) -> None:
+    '''white out the whole file'''
+    if not os.path.exists(file):
+        return
+    im = cv.imread(file)
+    if len(im.shape)==3:
+        im[:,:,:] = val
+    else:
+        im[:,:] = val
+    cv.imwrite(file, im)
+    ff = file.replace(cfg.path.server, '')
+    logging.info(f'Whited out {ff}')
 
 
 
@@ -78,8 +90,23 @@ class fileMetric(timeObject):
         self.im = cv.imread(self.file)
         self.hasIm = True
         
+    def imDims(self):
+        '''image dimensions'''
+        if not self.hasIm:
+            h = 590
+            w = 790
+        else:
+            h,w = self.im.shape[:2]
+        return h,w
+        
     def values(self) -> Tuple[dict,dict]:
         return self.stats, self.units
+    
+    def dropVariables(self, l:list):
+        for s in l:
+            if s in self.stats:
+                self.stats.pop(s)
+                self.units.pop(s)
     
     def statText(self, cols:int=1) -> str:
         out = ''
@@ -129,11 +156,40 @@ class fileMetric(timeObject):
             if self.pg.progDims.a.sum()==0:
                 logging.warning(f'Empty area in {self.folder}. Redoing progDims')
                 self.pg.exportAll(overwrite=True)
+    
+    #------------------------------           
+    
+    def importCrop(self):
+        '''import the crop dimensions from the file'''
+        if hasattr(self, 'crop'):
+            return
+        if not hasattr(self, 'cl'):
+            self.getCropLocs()
+        self.crop = self.cl.getCrop(self.file)
                 
     def getCropLocs(self):
         '''get the crop locations'''
         self.cl = cropLocs(self.folder, pfd=self.pfd)
         
+    def exportCropDims(self, **kwargs):
+        '''calculate crop dimensions and export'''
+        self.initialize()
+        self.getCrop(**kwargs)
+        
+    def makeCrop(self, rc:dict, export:bool=True, overwrite:bool=False) -> None:
+        '''get the crop dimensions and export'''
+        self.importCrop()
+        if len(self.crop)==0 or overwrite:
+            # generate a new crop value
+            h,w = self.imDims()
+            self.crop = vc.relativeCrop(self.pg, self.nd, self.tag, rc)  # get crop position based on the actual line position
+            self.crop = vc.convertCropHW(h,w, self.crop)    # make sure everything is in bounds
+            self.cl.changeCrop(self.file, self.crop)
+            if export:
+                self.cl.export()
+                
+    #------------------------------
+                
     def subFN(self, subFolder:str, title:str) -> str:
         '''get the filename of a file that goes into a subfolder'''
         cropfolder = os.path.join(self.folder, subFolder)
@@ -141,11 +197,6 @@ class fileMetric(timeObject):
             os.mkdir(cropfolder)
         fnorig = os.path.join(cropfolder, self.title.replace('vstill', title))
         return fnorig
-    
-    def exportCropDims(self, **kwargs):
-        '''calculate crop dimensions and export'''
-        self.initialize()
-        self.getCrop(**kwargs)
         
     def exportImage(self, att:str, subFolder:str, title:str, overwrite:bool=False, diag:int=2, **kwargs) -> None:
         '''export an image stored as attribute att to a subfolder subFolder with the new title title'''
@@ -164,14 +215,45 @@ class fileMetric(timeObject):
         if hasattr(self, 'crop'):
             self.im0 = vc.imcrop(self.im0, self.crop) 
             
+        
+    def reconcileImportedSegment(self, **kwargs):
+        '''reconcile the difference between the imported segmentation files'''
+        if hasattr(self, 'MLsegment'):
+            self.MLsegment = self.nd.maskNozzle(self.MLsegment, crops=self.crop, invert=True)
+            if hasattr(self, 'Usegment'):
+                self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
+                if self.Usegment.sum().sum()==0:
+                    self.segmenter = segmenterDF(self.MLsegment, acrit=self.acrit)
+                elif self.MLsegment.sum().sum()==0:
+                    self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+                else:
+                    self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
+            else:
+                self.generateSegment(overwrite=False)
+                self.Usegment = self.componentMask
+                self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
+        elif hasattr(self, 'Usegment'):
+            self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
+            self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+            
     def importSegmentation(self) -> None:
         '''import any pre-segmented images'''
         s = self.segmentFN()
         if os.path.exists(s):
             self.Usegment = cv.imread(s, cv.IMREAD_GRAYSCALE)
+            h,w = self.Usegment.shape
+            if not h==self.crop['yf']-self.crop['y0'] or not w==self.crop['xf']-self.crop['x0']:
+                raise ValueError(f'{self.file}: Usegment is wrong shape')
+            self.importedImages = True
         m = self.MLFN()
         if os.path.exists(m):
             self.MLsegment = cv.imread(m, cv.IMREAD_GRAYSCALE)
+            h,w = self.MLsegment.shape
+            if not h==self.crop['yf']-self.crop['y0'] or not w==self.crop['xf']-self.crop['x0']:
+                raise ValueError(f'{self.file}: MLsegment is wrong shape')
+            self.importedImages = True
+        if self.diag>0:
+            print(f'Usegment: {os.path.exists(s)}, MLsegment: {os.path.exists(m)}')
         
     def exportCrop(self, **kwargs) -> None:
         '''add the cropped image to the folder for machine learning'''
@@ -188,14 +270,8 @@ class fileMetric(timeObject):
     def exportSegment(self, **kwargs) -> None:
         '''add the cropped image to the folder for machine learning'''
         self.exportImage('componentMask', 'Usegment', 'Usegment', **kwargs)
-        
-    def importCrop(self):
-        '''import the crop dimensions from the file'''
-        if hasattr(self, 'crop'):
-            return
-        if not hasattr(self, 'cl'):
-            self.getCropLocs()
-        self.crop = self.cl.getCrop(self.file)
+    
+    #------------------------------
         
     def disableFile(self):
         '''draw big black boxes over everything so you can't measure anything off this file'''
@@ -221,7 +297,9 @@ class fileMetric(timeObject):
             return
         self.Usegment = self.MLsegment
         self.exportImage('Usegment', 'Usegment', 'Usegment', overwrite=True)
-        
+      
+    #------------------------------
+
     def renameY(self) -> None:
         '''rename y variables to clarify what is top and bottom'''
         
@@ -279,7 +357,7 @@ class fileMetric(timeObject):
         
     def makeMM(self, d:dict, u:dict) -> Tuple[dict, dict]:
         '''convert measurements to mm'''
-        for power, l in {1:['w', 'h', 'meanT', 'dxprint', 'dx0', 'dxf', 'space_a', 'space_at'], 2:['area'], 3:['vest', 'vintegral', 'vleak']}.items():
+        for power, l in {1:['w', 'h', 'meanT', 'dxprint', 'dx0', 'dxf', 'space_a', 'space_at', 'dy0l', 'dy0lr', 'dyfr', 'space_l', 'space_b', 'dy0r', 'dyfl', 'dyflr', 'space_r'], 2:['area'], 3:['vest', 'vintegral', 'vleak']}.items():
             if power==1:
                 u2 = 'mm'
             else:
@@ -308,9 +386,13 @@ class fileMetric(timeObject):
             w2 = w1
         l = self.progRows.l.max() # length of longest line written so far
         return rc1, rc2, w1, w2, l
-    
-    
-
+        
+    def checkWhite(self, val:int=254) -> bool:
+        '''check if the image is all white'''
+        if len(self.im.shape)==2:
+            return self.im.sum().sum()>np.product(self.im.shape)*val
+        else:
+            return self.im.sum().sum().sum()>np.product(self.im.shape)*val
         
     #------------------------------------
     
@@ -357,6 +439,15 @@ class fileMetric(timeObject):
 
         return roughness
     
+    def getEmptiness(self, emptiness:bool=True) -> float:
+        '''measure the empty space inside of the segment'''
+        if emptiness and hasattr(self, 'hull'):
+            ha = cv.contourArea(self.hull)
+            atot = cv.contourArea(self.cnt)
+            return 1-(atot/ha)     # how much of the middle of the component is empty
+        else:
+            return 0
+    
     def getLDiffPoints(self, horiz:bool=False) -> Tuple[pd.DataFrame, pd.DataFrame]:
         '''get the left and right points in the simplified convex hull'''
         df1 = pd.DataFrame(self.hull2[:, 0, :], columns=['x', 'y'])
@@ -364,6 +455,8 @@ class fileMetric(timeObject):
             midx = (df1.x.max()+df1.x.min())/2
             left = df1[df1.x<=midx]
             right = df1[df1.x>midx]
+            if len(left)<2 or len(right)<2:
+                return [],[]
             bot = pd.concat([left[left.y==left.y.max()], right[right.y==right.y.max()]])
             top = pd.concat([left[left.y==left.y.min()], right[right.y==right.y.min()]])
             return bot, top
@@ -376,6 +469,8 @@ class fileMetric(timeObject):
             return left, right
         
     def getLURU(self, left:pd.DataFrame, right:pd.DataFrame, horiz:bool) -> Tuple[int, int]:
+        if len(left)<2 or len(right)<2:
+            return 0,0
         if horiz:
             lu = len(left.x.unique())
             ru = len(right.x.unique())
@@ -451,14 +546,6 @@ class fileMetric(timeObject):
         else:
             leaks = []
         return sums, leaks
-    
-    def getEmptiness(self, atot:float, emptiness:bool=True) -> float:
-        '''measure the empty space inside of the segment'''
-        if emptiness and hasattr(self, 'hull'):
-            ha = cv.contourArea(self.hull)
-            return 1-(atot/ha)     # how much of the middle of the component is empty
-        else:
-            return 0
         
     def measureVolumes(self, sums:list, leaks:list) -> Tuple[float, float]:
         '''measure the volumes of the part and the leak'''
@@ -483,7 +570,7 @@ class fileMetric(timeObject):
         return meant, stdev, minmax
 
         
-    def measureComponent(self, horiz:bool=True, reverse:bool=False, emptiness:bool=True, atot:float=0, combine:bool=False, diag:int=0) -> Tuple[dict,dict]:
+    def measureComponent(self, horiz:bool=True, reverse:bool=False, emptiness:bool=True, combine:bool=False, diag:int=0) -> Tuple[dict,dict]:
         '''measure parts of a segmented fluid. 
         horiz = True to get variation along length of horiz line. False to get variation along length of vertical line.
         scale is the scaling of the stitched image compared to the raw images, e.g. 0.33 
@@ -497,12 +584,12 @@ class fileMetric(timeObject):
         out = self.getContour(combine=combine)
         if out<0:
             return errorRet
-        roughness = self.getRoughness(diag=max(0,diag-1), combine=combine)
+        roughness = self.getRoughness(diag=max(0,diag-1))
         sums = self.sumsAndWidths(horiz)
         if len(sums)==0:
             return errorRet
         sums, leaks = self.limitLen(sums, reverse)
-        empty = self.getEmptiness(atot, emptiness)
+        empty = self.getEmptiness(emptiness)
         vest, vleak = self.measureVolumes(sums, leaks)
         meant, stdev, minmax = self.measureWidths(sums)
         units = {'roughness':'', 'emptiness':'', 'meanT':'px', 'stdevT':'meanT', 'minmaxT':'meanT', 'vintegral':'px^3', 'vleak':'px^3'}
@@ -572,7 +659,7 @@ class fileMetric(timeObject):
         crop = self.crop
         
         dd = {}
-        bot = nd.yB - crop['y0']   
+        bot = nd.yB - crop['y0']
         dd['bot'] = bot
         dd['left'] = nd.xL - crop['x0']  
         if hasattr(nd, 'ndGlobal'):

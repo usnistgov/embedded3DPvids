@@ -99,7 +99,7 @@ class folderSDT(folderMetric):
                 # 2 write, 1 disturb
                 out = out + [[f'{ll}o{on}' for on in [1,2]]+[f'{ll}relax'] for ll in ['w1', 'w2', 'd2']]   # compare observation 1 and 2 for write and disturb
                 out = out + [[f'w1o1', f'w2o1', 'write2']]   # compare write 1 observation 1 to write 2 observation 1
-                out = out + [[f'w2o2', f'd2o1', 'disturb1']]   # compare write 2 observation 2 to disturb observation 1
+                out = out + [[f'w2o2', f'd2o1', 'disturb2']]   # compare write 2 observation 2 to disturb observation 1
             elif '_3_' in os.path.basename(self.folder):
                 # 3 write
                 out = out + [[f'{ll}o{on}' for on in [1,2]]+[f'{ll}relax'] for ll in ['w1', 'w2', 'w3']]   # compare observation 1 and 2 for write and disturb

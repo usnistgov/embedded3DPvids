@@ -132,4 +132,5 @@ class meshPlot(metricPlot):
             cbar = plt.colorbar(self.sc, label=vs, location = self.legendloc, ax=self.ax, fraction=0.046, pad=0.04)
             cbar.ax.tick_params(labelsize=self.fs)
         self.setSquare()
+        self.fixTicks()
         # self.ax.set_title(vs, fontsize=self.fs)

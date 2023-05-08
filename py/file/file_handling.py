@@ -59,19 +59,24 @@ def findFullFN(bn:str, topFolder:str) -> str:
     sbpname = '_'.join(spl[:vs])
     i = spl.index('I')
     s = spl.index('S')
-    testname = '_'.join(spl[i:s+3])
-    samplename = '_'.join(spl[i:s+2])
-    bottom = os.path.join(samplename, testname, sbpname, bn)
+    d = -1
+    while not len(spl[d])==6 and abs(d)>=len(spl):
+        d = d-1
+    testname = '_'.join(spl[i:d-1])   # include day
+    samplename = '_'.join(spl[i:s+2]) # just I_XXX_S_XXX
+    bottom = os.path.join(samplename, testname, sbpname, bn)   # e.g. I_XXX_S_XXX/I_XXX_S_XXX_230101/disturbblahblah/*vstill*.png
     file = searchFolder(topFolder, bottom)
     if os.path.exists(file):
         return file
-    for j in [2,3]:
-        testname = '_'.join(spl[i:s+2]+[f'v{j}']+[spl[s+2]])
-        bottom = os.path.join(samplename, testname, sbpname, bn)
-        file = searchFolder(topFolder, bottom)
-        if os.path.exists(file):
-            return file
-    raise FileNotFoundError(f'Could not find {bn} in {topFolder}')
+    else:
+        for j in [2,3]:
+            testname = '_'.join(spl[i:s+2]+[f'v{j}']+[spl[s+2]])
+            bottom = os.path.join(samplename, testname, sbpname, bn)
+            file = searchFolder(topFolder, bottom)
+            if os.path.exists(file):
+                return file 
+        raise FileNotFoundError(f'Could not find {bn} in {topFolder}')
+
 
 #------------    
 

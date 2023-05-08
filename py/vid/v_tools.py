@@ -165,9 +165,9 @@ class vidData:
             self.dstart = max(self.duration-self.maxT,0)+1.25
         elif self.frameError=='sh':
             self.dstart = 0
-            self.rawPicTimes()   # determine if the raw pic times match the progDims times and shift dstart if they are off
             shift = max(0, ((300/self.collectionFrameRate)-1)/10)
             self.dstart = self.dstart-shift
+            self.rawPicTimes()   # determine if the raw pic times match the progDims times and shift dstart if they are off
         else:
             self.dstart = 0
         
@@ -241,7 +241,7 @@ class vidData:
             return {'raw':[round(x,2) for x in times], 'calc':[round(x,2) for x in calc]}
         diffe = times-calc
         if self.frameError=='sh':
-            self.dstart = 1.25 + round(diffe.mean(), 2)
+            self.dstart = self.dstart + round(diffe.mean(), 2)
         df = pd.DataFrame({'raw':[round(x,2) for x in times], 'calc':[round(x,2) for x in calc], 'diffo':[round(x,2) for x in diffe]})
         return df
             

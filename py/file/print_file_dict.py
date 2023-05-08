@@ -407,6 +407,16 @@ class printFileDict:
             if 'Usegment' in f1 and 'png' in f1:
                 ffull = os.path.join(folder, f1)
                 self.Usegment.append(ffull)
+                
+    def findVcrop(self) -> None:
+        self.vcrop = []
+        folder = os.path.join(self.printFolder, 'crop')
+        if not os.path.exists(folder):
+            return
+        for f1 in os.listdir(folder):
+            if 'vcrop' in f1 and 'png' in f1:
+                ffull = os.path.join(folder, f1)
+                self.vcrop.append(ffull)
         
     def printAll(self) -> None:
         '''print all values'''

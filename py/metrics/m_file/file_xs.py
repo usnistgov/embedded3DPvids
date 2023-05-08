@@ -116,19 +116,11 @@ class fileXS(fileMetric):
             for s in ['x0', 'xf', 'y0', 'yf']:
                 io[s] = int(self.nozPx[s]/self.scale)
             cv.rectangle(imgi, (io['x0'],io['yf']), (io['xf'],io['y0']), (0,0,0), 1)   # bounding box of nozzle
-        if self.diag>1 and hasattr(self, 'componentMask'):
-            # show the roughness as well
-            cm = self.componentMask.copy()
-            cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
-            if hasattr(self, 'hull'):
-                cv.drawContours(cm, [self.hull], -1, (110, 245, 209), 6)
-            if hasattr(self, 'hull2'):
-                cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 6)
-            if hasattr(self, 'cnt'):
-                cv.drawContours(cm, self.cnt, -1, (186, 6, 162), 6)
-            imshow(imgi, im2, cm, self.statText())
+        if hasattr(self, 'hull'):
+            # show the roughness
+            imshow(imgi, self.roughnessIm(), self.statText(), title='xsFile')
         else:
-            imshow(imgi, im2, self.statText())
+            imshow(imgi, im2, self.statText(), title='xsFile')
         if hasattr(self, 'title'):
             plt.title(self.title)
         
@@ -145,16 +137,18 @@ class fileXS(fileMetric):
         '''measure multiple cross sections'''
         # find contours
         self.componentMask = self.segmenter.labelsBW
+        
         out = self.getContour(combine=True)
         if out<0:
             return 
+        self.x0,self.y0,self.w,self.h = cv.boundingRect(self.hull)   # x0,y0 is top left
 
         # measure components
         filledArea = self.segmenter.df.a.sum()
-        emptiness = self.getEmptiness(filledArea)
+        emptiness = self.getEmptiness()
         roughness = self.getRoughness()
 
-        self.x0,self.y0,self.w,self.h = cv.boundingRect(self.hull)   # x0,y0 is top left
+        
         aspect = self.h/self.w
 
         M = cv.moments(self.cnt)

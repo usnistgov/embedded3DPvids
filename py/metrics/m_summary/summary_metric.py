@@ -16,6 +16,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 from tools.plainIm import *
+from summary_ideals import *
 
 # logging
 logger = logging.getLogger(__name__)

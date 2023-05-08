@@ -84,14 +84,29 @@ class metricPlot:
         
         
     def checkValid(self):
+        '''try to add any missing values to the table and raise error if we can't'''
         if not (self.xvar in self.ss and self.yvar in self.ss):
-            if not self.xvar in self.ss:
-                if not self.yvar in self.ss:
+            xin = self.addValue(self.xvar)
+            yin = self.addValue(self.yvar)
+            if not xin:
+                if not yin:
                     raise NameError(f'Variable name {self.xvar} and {self.yvar} are not in table')
                 else:
                     raise NameError(f'Variable name {self.xvar} is not in table')
-            else:
+            elif not yin:
                 raise NameError(f'Variable name {self.yvar} is not in table')
+                
+    def addValue(self, var:str) -> bool:
+        '''add an independent scaling variable to the table. return true if the value is in the table'''
+        if var in self.ss:
+            return True
+        if 'Ratio' in var:
+            self.ss = self.ms.addRatios(self.ss, varlist=[var.replace('Ratio','')], operator='Ratio')
+        elif 'Prod' in var:
+            self.ss = self.ms.addRatios(self.ss, varlist=[var.replace('Prod','')], operator='Prod')
+        else:
+            return False
+        return True
                 
     def dropNA(self):
         '''remove NA x values and y values from table'''
@@ -192,7 +207,9 @@ class metricPlot:
                 tm = tm/2
             tminor = 0.1
         elif tdiff<2:
-            ticks = [0.5*10**ticklims[0], 10**ticklims[0], 0.5*10**ticklims[1], 10**ticklims[1], 1.5*10**ticklims[1]]
+            t0 = ticklims[0]
+            t1 = ticklims[1]
+            ticks = [5*10**(t0-1), 10**t0, 5*10**(t0), 10**t1, 5*10**t1]
             tminor = 0.1
         elif tdiff<5:
             ticks = [10**i for i in np.arange(ticklims[0], ticklims[1]+1, 1)]

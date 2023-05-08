@@ -83,8 +83,7 @@ class nozData(timeObject):
         self.bg.exportBackground(**kwargs)
         
     def __getattr__(self, s):
-        if s in ['yB', 'xL', 'xR', 'xM']:
-            return getattr(self.nd, s)
+        return getattr(self.nd, s)
         
 
     #--------------------------------------------------------------------
@@ -157,6 +156,8 @@ class nozData(timeObject):
             nd1 = detector.nd.nozDims()
             if nd1['xL']>self.nd.xL:
                 detector.nd.setDims({'xL':self.nd.xL})
+            if nd1['xR']<self.nd.xR:
+                detector.nd.setDims({'xR':self.nd.xR})
             self.nd = detector.nd
         
         

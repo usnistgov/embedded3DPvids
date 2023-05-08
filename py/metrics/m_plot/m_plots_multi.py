@@ -47,6 +47,7 @@ class multiPlot:
     
     def __init__(self, rows:int=1, cols:int=1, plotType:str='ppt', export:bool=False
                  , tightLayout:bool=True, sharex:bool=False, sharey:bool=False
+                 , set_xlabels:bool=True, set_ylabels:bool=False
                  , setSquare:bool=False, **kwargs):
         self.rows = rows
         self.cols = cols
@@ -54,6 +55,8 @@ class multiPlot:
         self.export = export
         self.sharex = sharex
         self.sharey = sharey
+        self.set_xlabels = set_xlabels
+        self.set_ylabels = set_ylabels
         self.setSquare = setSquare
         self.tightLayout = tightLayout
         self.kwargs0 = kwargs
@@ -83,6 +86,9 @@ class multiPlot:
             subFigureLabels(axl, horiz=True, inside=True)
         if self.tightLayout:
             self.fig.tight_layout()
+        if self.set_xlabels:
+            for ax in self.fig.axes:
+                ax.xaxis.set_tick_params(labelbottom=True)
                 
     def export(self, fn:str):
         if '.' in fn:
