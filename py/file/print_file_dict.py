@@ -101,7 +101,7 @@ class printFileDict:
         
     def getPrintType(self) -> None:
         '''get the print type from the folder hierarchy'''
-        d = {'singleDisturb':'singleDisturb', 'singleLines':'singleLines', 'tripleLines':'tripleLine', 'singleDoubleTriple':'SDT'}
+        d = {'singleDisturb':'singleDisturb', 'singleLines':'singleLines', 'tripleLines':'tripleLine', 'SDT':'SDT'}
         if self.hasLevels:
             f = os.path.basename(self.levels.printTypeFolder)
             for key,val in d.items():

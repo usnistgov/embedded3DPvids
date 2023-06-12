@@ -99,6 +99,7 @@ class segmenterDF(timeObject):
             return True
         
     def borderLength(self, mask:np.array) -> int:
+        '''the length of the mask that is touching the border'''
         contours = co.getContours(mask, mode=cv.CHAIN_APPROX_NONE)
         if len(contours)>0:
             contours = contours[0][:,0]
@@ -109,6 +110,12 @@ class segmenterDF(timeObject):
             return xmin+xmax+ymin+ymax
         else:
             return -1
+        
+    def largestObject(self, **kwargs) -> pd.Series:
+        '''the largest object in the dataframe'''
+        if len(self.df)==0:
+            return []
+        return self.df[self.df.a==self.df.a.max()].iloc[0]
     
     def mainComponent(self, margin:int=5, pcrit:int=20) -> int:
         '''the index of the largest, most centrally located component'''
@@ -256,13 +263,6 @@ class segmenterDF(timeObject):
             return
         goodpts = (self.df.y0>margin)
         self.selectComponents(goodpts, **kwargs)
-        
-        
-    def largestObject(self, **kwargs) -> pd.Series:
-        '''the largest object in the dataframe'''
-        if len(self.df)==0:
-            return []
-        return self.df[self.df.a==self.df.a.max()].iloc[0]
             
     def removeScragglies(self, **kwargs) -> None:
         '''if the largest object is smooth, remove anything with high roughness'''

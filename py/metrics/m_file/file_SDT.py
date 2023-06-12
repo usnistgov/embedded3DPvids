@@ -38,7 +38,8 @@ pd.set_option('display.max_rows', 500)
 class fileSDT(fileDisturb):
     '''singleDoubleTriple single files'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500,  **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCrop:bool=True, **kwargs):
+        self.exportCrop = exportCrop
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
     def initialize(self):
@@ -92,7 +93,6 @@ class fileSDT(fileDisturb):
         if background:
             self.im = self.nd.subtractBackground(self.im)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
-    
                 
     def padNozzle(self, left:int=0, right:int=0, bottom:int=0):
         '''expand the nozzle'''

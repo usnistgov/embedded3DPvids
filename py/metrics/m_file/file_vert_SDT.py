@@ -138,7 +138,7 @@ class fileVertSDT(fileVert, fileSDT):
             self.generateIm0()
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2)  # find the nozzle in the image and use that for future masking
         self.padNozzle(left=1, right=30, bottom=2)
-        self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
+        # self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
         if self.overrideSegment:
             self.generateSegment(overwrite=True)
         else:

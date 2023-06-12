@@ -66,7 +66,7 @@ class summarizer(fh.folderLoop):
             cl = self.measureClass(folder, overwrite=self.overwrite, overwriteMeasure=self.overwriteMeasure, overwriteSummary=self.overwriteSummary, **self.kwargs)
             if self.overwriteMeasure:
                 cl.measureFolder()
-            if self.overwriteSummary:
+            if self.overwriteSummary or not os.path.exists(pfd.summary):
                 summary, units, failures = cl.summarize()
             else:
                 cl.summaryHeader()
@@ -76,7 +76,12 @@ class summarizer(fh.folderLoop):
             self.units = {**self.units, **units}
             self.out.append(summary)
         if len(failures)>0:
-            self.failures = pd.concat([self.failures, failures])
+            flist = []
+            for i,row in failures.iterrows():
+                if len(self.failures)==0 or not row['file'] in self.failures['file']:
+                    flist.append(row['file'])
+            self.failures = pd.concat([self.failures, pd.DataFrame({'file':flist})])
+            self.failures.reset_index(inplace=True, drop=True)
 
     def export(self, fn:str) -> None:
         df = pd.DataFrame(self.out)
@@ -87,6 +92,9 @@ class summarizer(fh.folderLoop):
         plainExp(fn, self.failures, {}, index=False)
         if len(self.folderErrorList)>0:
             plainExp(fn.replace('Failures', 'Errors'), pd.DataFrame(self.folderErrorList), {}, index=False)
+            
+    def runFailure(self, i:int) -> None:
+        self.summarize(self.folderErrorList[i]['folder'])
             
     def run(self):
         self.out = []
@@ -129,12 +137,18 @@ class failureTest:
         
     def importFailures(self):
         df, _ = plainIm(self.failureFile, ic=None)
-        for i,row in df.iterrows():
-            folder = os.path.dirname(row['file'])
-            df.loc[i, 'fostr'] = folder.replace(cfg.path.server, '')[1:]
-            df.loc[i, 'fistr'] = os.path.basename(row['file'])
-            if not 'approved' in row:
-                df.loc[i, 'approved'] = False
+        if len(df)>0:
+            for i,row in df.iterrows():
+                folder = os.path.dirname(row['file'])
+                df.loc[i, 'fostr'] = folder.replace(cfg.path.server, '')[1:]
+                df.loc[i, 'fistr'] = os.path.basename(row['file'])
+                if not 'approved' in row:
+                    df.loc[i, 'approved'] = False
+        else:
+            df = pd.DataFrame(df)
+            df['approved'] = []
+            df['fostr'] = []
+            df['fistr'] = []
         self.df = df
         self.countFailures()
         
@@ -151,7 +165,7 @@ class failureTest:
         for i,_ in ffiles.iterrows():
             self.testFile(i, **kwargs)
 
-    def approveFile(self, i:int, export:bool=True):
+    def approveFile(self, i:int, export:bool=True, count:bool=True):
         '''approve the file'''
         self.df.loc[i, 'approved'] = True
         folder = os.path.join(cfg.path.server, self.df.loc[i, 'fostr'])
@@ -161,11 +175,12 @@ class failureTest:
         if export:
             if not hasattr(self, 'pfd'):
                 self.pfd = fh.printFileDict(folder)
-            if hasattr(self.pfd, 'failure'):
-                df, _ = plainIm(self.pfd.failure, ic=0)
+            if hasattr(self.pfd, 'failures'):
+                df, _ = plainIm(self.pfd.failures, ic=0)
                 df = df[~(df.file==file)]
                 plainExp(fn, df, {})
-        self.countFailures()
+        if count:
+            self.countFailures()
         
     def disableFile(self, i:int) -> None:
         '''overwrite the Usegment and MLsegment files so this file cannot be measured. useful if the function is measuring values from a bad image'''
@@ -173,13 +188,14 @@ class failureTest:
         self.testFunc(file, measure=False).disableFile()
         
     def approveFolder(self, fostr:str):
+        '''approve all files in the folder'''
         ffiles = self.df[self.df.fostr==fostr]
         for i,_ in ffiles.iterrows():
-            self.approveFile(i, export=False)
-        if not hasattr(self, 'pfd'):
-            self.pfd = fh.printFileDict(os.path.join(cfg.path.server, fostr))
-        if hasattr(self.pfd, 'failure'):
-            plainExp(self.pfd.failure, pd.DataFrame(['']), {})
+            self.approveFile(i, export=False, count=False)
+        self.countFailures()
+        pfd = fh.printFileDict(os.path.join(cfg.path.server, fostr))
+        if hasattr(pfd, 'failures'):
+            plainExp(pfd.failures, pd.DataFrame(['']), {})
             
     def approveFolderi(self, i:int) -> None:
         fostr = self.df.loc[i, 'fostr']

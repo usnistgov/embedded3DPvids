@@ -53,14 +53,14 @@ class cropLocs:
         else:
             if len(self.pfd.vstill)==0:
                 self.pfd.findVstill()
-            self.df = pd.DataFrame({'vstill':self.pfd.vstill})
+            self.df = pd.DataFrame({'vstill':[os.path.basename(f) for f in self.pfd.vstill]})
         self.units = {'vstill':'', 'x0':'px', 'xf':'px', 'y0':'px', 'yf':'px'}
         self.df0 = self.df.copy()
         self.changed = False
             
     def getCrop(self, file:str) -> dict:
         '''get the crop dimensions from the file'''
-        row = self.df[self.df.vstill==file]
+        row = self.df[self.df.vstill==os.path.basename(file)]
         if len(row)==0:
             raise ValueError(f'Cannot find {file} in cropLocs')
         d = dict(row.iloc[0])
@@ -82,7 +82,7 @@ class cropLocs:
     
     def changeCrop(self, file:str, crop:dict) -> None:
         '''change the value of the crop in the table'''
-        row = self.df[self.df.vstill==file]
+        row = self.df[self.df.vstill==os.path.basename(file)]
         if len(row)==0:
             raise ValueError(f'Cannot find {file} in cropLocs')
         i = (row.iloc[0]).name
@@ -91,8 +91,11 @@ class cropLocs:
                 self.changed = True
             self.df.loc[i,key] = val
             
-    def export(self, overwrite:bool=False):
+    def export(self, overwrite:bool=False, diag:bool=True):
         '''export the values to file'''
         if not self.changed and os.path.exists(self.fn) and not overwrite:
             return
-        plainExp(self.fn, self.df, self.units)
+        plainExp(self.fn, self.df, self.units, diag=diag)
+        
+        
+

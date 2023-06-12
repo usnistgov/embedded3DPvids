@@ -276,11 +276,10 @@ class segmenter(timeObject):
             self.thresh = openMorph(self.thresh, -self.closing)
         if self.removeSharp:
             self.removeLaplacian(**self.kwargs)
-        if hasattr(self, 'laplacian'):
-            kwargs = {'laplacian':self.laplacian}
+            kwargs0 = {'laplacian':self.laplacian}
         else:
-            kwargs = {}
-        self.filler = fi.filler(self.thresh, self.fillMode, diag=self.diag-2, **kwargs)
+            kwargs0 = {}
+        self.filler = fi.filler(self.thresh, self.fillMode, diag=self.diag-2, **kwargs0)
         self.filled = self.filler.filled
         self.filled = self.closeVerticalTop(self.filled, close=False)
         if self.closing>0:

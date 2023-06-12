@@ -55,13 +55,15 @@ class folderMetric(timeObject):
         self.overwriteMeasure = overwriteMeasure
         self.overwriteSummary = overwriteSummary
         if 'pfd' in kwargs:
-            self.pfd = kwargs['pfd']
+            self.pfd = kwargs.pop('pfd')
         else:
             self.pfd = fh.printFileDict(folder)
         if 'pv' in kwargs:
-            self.pv = kwargs['pv']
+            self.pv = kwargs.pop('pv')
         else:
             self.pv = printVals(self.folder, pfd=self.pfd)
+        if 'pg' in kwargs:
+            self.pg = kwargs.pop('pg')
         self.diag = diag
         self.kwargs = kwargs
         self.depVars = []
@@ -103,23 +105,29 @@ class folderMetric(timeObject):
         out = []
         failures = []
         self.nd = nozData(self.folder, pfd=self.pfd)
-        self.pg  = getProgDimsPV(self.pv)
+        if not os.path.exists(self.pfd.nozDims):
+            self.nd.detectNozzle(export=True)
+            self.nd.nozDims()
+        if not hasattr(self, 'pg'):
+            self.pg  = getProgDimsPV(self.pv)
         self.cl = cropLocs(self.folder, pfd=self.pfd)
         for file in files.values():
             self.nd.resetDims()
             try:
-                m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl, diag=self.diag-1, **self.kwargs).values()
+                m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl
+                          , diag=self.diag-1, exportCrop=False, **self.kwargs).values()
                 self.du = {**self.du, **u}
             except KeyboardInterrupt as e:
                 raise e
             except Exception as e:
-                failures.append(file)
-            if len(m['line'])<1:
-                failures.append(file)
-            out.append(m)
+                failures.append({'file':file, 'error':e})
+            else:
+                if len(m['line'])<1:
+                    failures.append({'file':file, 'error':'no vals detected'})
+                out.append(m)
         self.df = pd.DataFrame(out)
-        self.failures = pd.DataFrame({'file':failures})
-        plainExp(self.failfn, self.failures, {'file':''})
+        self.failures = pd.DataFrame(failures)
+        plainExp(self.failfn, self.failures, {'file':'', 'error':''})
         plainExp(self.fn, self.df, self.du)
         self.cl.export()
         return 0

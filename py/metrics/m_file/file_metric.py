@@ -67,13 +67,14 @@ def whiteoutFile(file:str, val:int=255) -> None:
 class fileMetric(timeObject):
     '''collects data about fluid segments in an image'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportDiag:int=2, **kwargs):
         self.file = file
         self.folder = os.path.dirname(self.file)
         if not os.path.exists(self.file):
             raise ValueError(f'File {self.file} does not exist')
         self.acrit = acrit
         self.diag = diag
+        self.exportDiag = exportDiag
         self.hasIm = False
         self.stats = {'line':''}
         self.units = {'line':''}
@@ -205,9 +206,15 @@ class fileMetric(timeObject):
         fnorig = self.subFN(subFolder, title)
         if not os.path.exists(fnorig) or overwrite:
             im = getattr(self, att)
-            cv.imwrite(fnorig, im)
-            if diag>1:
-                print(f'Exported {os.path.basename(fnorig)}')
+            out = cv.imwrite(fnorig, im)
+            if diag>1 and self.exportDiag>1:
+                if out:
+                    print(f'Exported {os.path.basename(fnorig)}')
+                else:
+                    folderExists = os.path.exists(os.path.dirname(fnorig))
+                    writePermission = os.access(os.path.dirname(fnorig), os.W_OK)
+                    print(f'Failed to export {fnorig}. Folder exists: {folderExists}. Write permission: {writePermission}. Name length: {len(fnorig)}')
+                    
             
     def generateIm0(self):
         '''generate the initial image'''

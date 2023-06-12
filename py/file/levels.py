@@ -28,6 +28,12 @@ logger.setLevel(logging.DEBUG)
 
 #----------------------------------------------
 
+def isSubPrintFolder(folder:str) -> bool:
+    for f in ['raw', 'temp', 'crop', 'Usegment', 'MLsegment']:
+        if f in folder:
+            return True
+    return False
+
 
 class labelLevels:
     '''label the levels of the file hierarchy, with one characteristic file per level'''
@@ -45,8 +51,8 @@ class labelLevels:
             bottom = ''
         else:
             bfold = os.path.dirname(bottom)
-        if 'raw' in bfold or 'temp' in bfold:
-            # raw image folder
+        if isSubPrintFolder(bfold):
+            # subimage folder
             self.rawFile = bottom
             if os.path.basename(bfold)=='raw':
                 self.rawFolder = bfold
@@ -55,9 +61,13 @@ class labelLevels:
                 self.tempFolder = bfold
                 aboveRaw = os.path.dirname(self.tempFolder)
             else:
-                self.rawLineFolder = bfold
-                self.rawFolder = os.path.dirname(bfold)
-                aboveRaw = os.path.dirname(self.rawFolder)
+                if 'raw' in bfold:
+                    self.rawLineFolder = bfold
+                    self.rawFolder = os.path.dirname(bfold)
+                    aboveRaw = os.path.dirname(self.rawFolder)
+                else:
+                    self.rawFolder = bfold
+                    aboveRaw = os.path.dirname(self.rawFolder)
 
             if sampleInName(aboveRaw):
                 self.file = os.path.join(aboveRaw, self.firstEntry(aboveRaw, directory=False)) # bottom level file inside sbpfolder
@@ -169,46 +179,3 @@ class labelLevels:
                 print(spacer*(ii+jj), s,': ', pout)
                 jj+=1
                 
-def labelAndSort(folder:str, debug:bool=False) -> None:
-    '''label the levels and create folders where needed'''
-    levels = labelLevels(folder)
-    if levels.sampleFolder =='generate':
-        # generate a sample folder
-        sample = sampleName(levels.subFolder, formatOutput=True)
-        sampleFolder = os.path.join(levels.sampleTypeFolder, sample)
-        if not os.path.exists(sampleFolder):
-            if debug:
-                logging.debug(f'Create {sampleFolder}')
-            else:
-                os.mkdir(sampleFolder)
-        levels.sampleFolder = sampleFolder
-        file = levels.subFolder
-        newname = os.path.join(levels.sampleFolder, os.path.basename(file))
-        if debug:
-            logging.info(f'Move {file} to {newname}')
-        else:
-            os.rename(file, newname)
-            logging.info(f'Moved {file} to {newname}')
-    if levels.subFolder=='generate':
-        # generate a subfolder
-        fd = fileDate(levels.file)
-        sample = os.path.basename(levels.sampleFolder) 
-        bn = f'{sample}_{fd}'
-        subfolder = os.path.join(levels.sampleFolder, bn)
-
-
-def sortRecursive(folder:str, debug:bool=False) -> None:
-    '''given any folder or file, sort and rename all the files inside'''
-    if not os.path.exists(folder):
-        return
-    if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
-        return
-    levels = labelLevels(folder)
-    if levels.currentLevel =='sampleTypeFolder':
-        for f in os.listdir(levels.sampleTypeFolder):
-            labelAndSort(os.path.join(levels.sampleTypeFolder, f), debug=debug) # sort the folders inside sampleTypeFolder
-    elif levels.currentLevel=='printTypeFolder':
-        for f in os.listdir(levels.printTypeFolder):
-            sortRecursive(os.path.join(levels.printTypeFolder, f), debug=debug)
-    elif levels.currentLevel in ['sampleFolder', 'subFolder', 'sbpFolder']:
-        labelAndSort(folder, debug=debug)

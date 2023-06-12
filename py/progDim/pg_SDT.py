@@ -39,8 +39,12 @@ class progDimsSDT(progDim):
         self.numPtimes = 5
         super().__init__(printFolder, pv, **kwargs)
         
-    def getOvershoots(self) -> pd.DataFrame:
-        return self.ftable[((self.ftable.targetLine)>(self.ftable.targetLine.shift(-1)))&(~self.ftable.trusted)]
+    def getOvershoots(self, trust:bool=True) -> pd.DataFrame:
+        f = self.ftable
+        if trust:
+            return f[((f.targetLine)>(f.targetLine.shift(-1)))&(~f.trusted)]
+        else:
+            return f[((f.targetLine)>(f.targetLine.shift(-1)))]
         
     def getTimeRewrite(self, diag:int=0) -> int:
         '''overwrite the target points in the time file'''
@@ -58,7 +62,9 @@ class progDimsSDT(progDim):
             dummy = dummy+1
             
         self.ftable.drop(columns=['xt_orig', 'yt_orig', 'zt_orig'], inplace=True)
-        
+        if len(self.getOvershoots(trust=False))>0:
+            # we still have some out of order points. steal from another folder
+            self.stealTargets()
         self.rewritten = True
         return 0
         
@@ -115,6 +121,7 @@ class progDimsSDT(progDim):
             counts = self.vll.value_counts('zt')
         else:
             counts = self.vll.value_counts('yt')
+        
         if not len(counts)==4:
             raise ValueError(f'Wrong number of targets in {self.printFolder}: {len(counts)}')
         missing = counts[counts<counts.max()]
@@ -158,11 +165,24 @@ class progDimsSDT(progDim):
                 # missing big shift
                 raise ValueError(f'Missing small shift to {xt}')  
                 
+    def checkExtraY(self):
+        '''check for extra rows in longlinesz'''
+        for x in self.vll.xt.unique():
+            sub = self.vll[self.vll.xt==x]
+            if len(sub.yt.unique())<len(sub):
+                # duplicate yt values
+                for y in sub.yt.unique():
+                    suby = sub[sub.yt==y]
+                    for i,row in suby[suby.dtr<suby.dtr.max()].iterrows():
+                         self.vll.drop(i,inplace=True)
+                
     def checkLongLinesz(self) -> None:
         '''check that there are the right number of long lines for a +z move'''
+        self.checkExtraY()
         counts = self.vll.value_counts('xt')
         if not len(counts)==2:
             raise ValueError(f'Wrong number of targets in {self.printFolder}: {len(counts)}')
+                    
         missing = counts[counts<counts.max()]
         if len(missing)>1:
             # we have at least one missing target
@@ -198,10 +218,15 @@ class progDimsSDT(progDim):
 
         
     def splitProgPos(self, moveDir:str, diag:bool=False):
-        '''convert list of positions for horizontal lines'''
+        '''convert list of positions'''
         
         # get the snap times
-        self.otimes = self.flagFlip[self.flagFlip.cam.str.contains('SNAP')] 
+        otimes = self.flagFlip[self.flagFlip.cam.str.contains('SNAP')&(~self.flagFlip.cam.str.contains('SNOFF'))] 
+        otimes = otimes.copy()
+        snofftimes = self.flagFlip[(~self.flagFlip.cam.str.contains('SNAP'))&(self.flagFlip.cam.str.contains('SNOFF'))] 
+        otimes['snapdt'] = [snofftimes.iloc[i]['time']-otimes.iloc[i]['time'] for i in range(len(snofftimes))]
+        otimes = otimes[otimes.snapdt>otimes.snapdt.mean()/2]  # remove very small snap times
+        self.otimes = otimes
         
         # get the moves
         self.vLongLines(moveDir, diag)
@@ -347,8 +372,7 @@ class progDimsSDT(progDim):
         self.importProgPos()
         self.importFlagFlip()
         self.initializeProgDims('XS' in self.sbp)
-    
-        
+
         if 'Horiz' in self.sbp:
             wlines, dlines = self.splitProgPos('+y', diag=diag)
         elif 'Vert' in self.sbp:
@@ -443,6 +467,7 @@ class progDimsSDT(progDim):
             for ss in ['xpic', 'ypic', 'zpic']:
                 zlin = len(olines[ss].unique())
                 if zlin>1:
+                    print(olines)
                     raise ValueError(f'Too many {ss} observe locations in {self.printFolder} group {gnum}: {zlin}')
                     
             # dwlines = gp[~gp.name.str.contains('o')]
@@ -486,7 +511,7 @@ class progDimsSDT(progDim):
     def checkProgDims(self):
         '''check that the programmed picture locations match expections'''
         if not all(self.progDims.sort_values(by='tpic').index==self.progDims.index):
-            print(self.progDims)
+            print(self.progDims[self.progDims.sort_values(by='tpic').index!=self.progDims.index])
             raise ValueError('Times are out of order')
         if pd.isna(self.progDims.loc[0,'l']):
             raise ValueError('Missing values in progDims')
@@ -500,3 +525,113 @@ class progDimsSDT(progDim):
         else:
             logging.warning(f'Cannot check prog dims: unexpected shopbot file name {bn}')
             
+    def findAnotherFolder(self) -> pd.DataFrame:
+        '''find another folder to steal from'''
+        topfolder = os.path.dirname(os.path.dirname(os.path.dirname(self.printFolder)))  # singleDoubleTriple\\SO_S85-0.05
+        for f1 in os.listdir(topfolder):
+            f1f = os.path.join(topfolder, f1)   # I_SO8-S85-0.05_S_4.00
+            if not f1f in self.printFolder:
+                for f2 in os.listdir(f1f):
+                    f2f = os.path.join(f1f, f2)  # I_SO8-S85-0.05_S_4.00_230511
+                    f3f = os.path.join(f2f, os.path.basename(self.printFolder))
+                    if os.path.exists(f3f):
+                        pfd2 = fh.printFileDict(f3f)
+                        if os.path.exists(pfd2.timeRewrite):
+                            # print(f3f)
+                            ft2,_ = plainIm(pfd2.timeRewrite)
+                            overshoots = ft2[((ft2.targetLine)>(ft2.targetLine.shift(-1)))]
+                            if len(overshoots)==0:
+                                return ft2
+        raise ValueError('No folder to steal from')
+        
+    def targetdxdydz(self, pt1:pd.Series, pt2:pd.Series) -> dict:
+        '''difference between target points of pt1 and pt2'''
+        return dict([[s, pt1[f'{s}_target']-pt2[f'{s}_target']] for s in ['x', 'y', 'z']])
+    
+    def sameDirection(self, row:pd.Series, dxdydz:dict, pt:pd.Series) -> bool:
+        '''determine if this row is within the move'''
+        dvals = [row[f'{s}d']-pt[f'{s}_target'] for s in ['x', 'y', 'z']]
+        if abs(dvals[0])<0.01 and abs(dvals[1])<0.01 and abs(dvals[2])<0.01:
+            # we hit the point
+            return False
+        for s in ['x', 'y', 'z']:
+            dd = dxdydz[s]
+            if dd>0.01:
+                if row[f'{s}d']-pt[f'{s}_target']>dd+0.01:
+                    # difference between display and target is bigger than size of move
+                    return False
+            elif dd<-0.01:
+                if row[f'{s}d']-pt[f'{s}_target']<dd-0.01:
+                    # difference between display and target is bigger than size of move
+                    return False
+            else:
+                if abs(row[f'{s}d']-pt[f'{s}_target'])>0.01:
+                    return False
+        return True
+    
+    def overwriteSection(self, tl:int, jj:int, ii:int, lastBad:int, ft2:pd.DataFrame, ft1:pd.DataFrame) -> int:
+        pt = ft2[ft2.targetLine==tl].iloc[0]
+        prevpt = ft2[ft2.targetLine==(ft2[ft2.targetLine<tl].targetLine.max())].iloc[0]
+        dxdydz = self.targetdxdydz(prevpt, pt)
+        while self.sameDirection(ft1.loc[jj], dxdydz, pt) and jj<lastBad:
+            jj = jj+1
+        # print(ii,jj, dxdydz, tl)
+        for s in ['x', 'y', 'z']:
+            # overwrite the target values
+            self.ftable.loc[ii:jj, f'{s}t'] = pt[f'{s}_target']
+        self.ftable.loc[ii:jj, 'targetLine'] = tl
+        self.ftable.loc[ii:jj, 'speed'] = pt['speed']
+        return jj
+            
+    def stealTargets(self, mode:int=0):
+        '''previous attempts have failed, and the time table can't be corrected without outside knowledge. copy it from another folder'''
+        ft2 = self.findAnotherFolder()
+        ft2 = ft2[ft2.z_target<0]
+        ft1 = self.ftable[self.ftable.zt<0]
+        tlu1 = ft1.targetLine.unique()
+        tlu2 = ft2.targetLine.unique()
+#         print(tlu1)
+#         print(tlu2)
+        
+        # print(overshoots)
+        if mode==0:
+            # overwrite only bad points
+            overshoots = self.getOvershoots(trust=False)
+            for i,row in overshoots.iterrows():
+                tlnext = self.ftable.loc[i+1, 'targetLine']
+                bad = self.ftable.loc[:i]
+                bad = bad[bad.targetLine>tlnext]
+                firstBad = bad.iloc[0].name          # find index in ftable of first bad row. i is the last bad row
+                tlprev = self.ftable.loc[firstBad-1, 'targetLine']
+                lastBad = bad.iloc[-1].name
+
+                # print(tlprev, tlnext,  i)
+                missing = tlu2[(tlu2>tlprev)&(tlu2<tlnext)]   # find missing steps
+                # print(missing)
+                ii = firstBad
+
+                for tl in missing:
+                    jj = ii
+                    jj = self.overwriteSection(tl, jj, ii, lastBad, ft2, ft1)
+                    ii = jj+1
+        elif mode==1: 
+            # overwrite all points
+            ii = ft1.iloc[0].name
+
+            for tl in tlu2[(tlu2>=min(tlu1))&(tlu2>min(tlu2))]:
+                jj = ii
+                pt = ft2[ft2.targetLine==tl].iloc[0]
+                prevpt = ft2[ft2.targetLine==(ft2[ft2.targetLine<tl].targetLine.max())].iloc[0]
+                dxdydz = self.targetdxdydz(prevpt, pt)
+                while self.sameDirection(ft1.loc[jj], dxdydz, pt) and jj<len(ft1):
+                    jj = jj+1
+                # print(ii,jj, dxdydz, tl)
+                for s in ['x', 'y', 'z']:
+                    # overwrite the target values
+                    self.ftable.loc[ii:jj, f'{s}t'] = pt[f'{s}_target']
+                self.ftable.loc[ii:jj, 'targetLine'] = tl
+                self.ftable.loc[ii:jj, 'speed'] = pt['speed']
+                ii = jj+1
+        # print(self.ftable.targetLine.unique())
+            
+        

@@ -93,17 +93,13 @@ def checkFolders(topFolder:str) -> Tuple[list, list]:
             tooMany.append(f)
     return mismatch, tooMany
 
-    
-        
-    
-
 #------------------------------------------------------------
 
-
-        
 def putStillsAway(folder:str, debug:bool=False) -> None:
     '''identify the stills and put them in a folder'''
     if not os.path.exists(folder):
+        return
+    if not os.path.isdir(folder):
         return
     if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
         return
@@ -111,19 +107,67 @@ def putStillsAway(folder:str, debug:bool=False) -> None:
     if levels.currentLevel in ['sampleTypeFolder', 'printTypeFolder', 'sampleFolder', 'subFolder']:
         for f in os.listdir(folder):
             putStillsAway(os.path.join(folder, f), debug=debug) # sort the folders inside sampleTypeFolder
-    elif levels.currentLevel in ['sbpFolder']:    
+    elif levels.currentLevel in ['sbpFolder']: 
         pfd = printFileDict(folder)
+        pfd.sort()
         snap = os.path.join(folder, 'raw')
         if not os.path.exists(snap):
             os.mkdir(snap)
         if debug:
             print('old names: ')
-            print(pfd.still_unknown)
+            print(pfd.still)
             print('new names: ')
-            print([os.path.join(snap, os.path.basename(file)) for file in pfd.still_unknown])
+            print([os.path.join(snap, os.path.basename(file)) for file in pfd.still])
         else:
-            for file in pfd.still_unknown:
-                os.rename(file, os.path.join(snap, os.path.basename(file)))
+            for file in pfd.still:
+                newname = os.path.join(snap, os.path.basename(file))
+                if not newname==file:
+                    os.rename(file, newname)
+                
+def labelAndSort(folder:str, debug:bool=False) -> None:
+    '''label the levels and create folders where needed'''
+    levels = labelLevels(folder)
+    if levels.sampleFolder =='generate':
+        # generate a sample folder
+        sample = sampleName(levels.subFolder, formatOutput=True)
+        sampleFolder = os.path.join(levels.sampleTypeFolder, sample)
+        if not os.path.exists(sampleFolder):
+            if debug:
+                logging.debug(f'Create {sampleFolder}')
+            else:
+                os.mkdir(sampleFolder)
+        levels.sampleFolder = sampleFolder
+        file = levels.subFolder
+        newname = os.path.join(levels.sampleFolder, os.path.basename(file))
+        if debug:
+            logging.info(f'Move {file} to {newname}')
+        else:
+            if not newname==file:
+                os.rename(file, newname)
+            logging.info(f'Moved {file} to {newname}')    
+    if levels.subFolder=='generate':
+        # generate a subfolder
+        fd = fileDate(levels.file)
+        sample = os.path.basename(levels.sampleFolder) 
+        bn = f'{sample}_{fd}'
+        subfolder = os.path.join(levels.sampleFolder, bn)
+
+
+def sortRecursive(folder:str, debug:bool=False) -> None:
+    '''given any folder or file, sort and rename all the files inside'''
+    if not os.path.exists(folder):
+        return
+    if "Thumbs" in folder or "DS_Store" in folder or 'README' in folder:
+        return
+    levels = labelLevels(folder)
+    if levels.currentLevel =='sampleTypeFolder':
+        for f in os.listdir(levels.sampleTypeFolder):
+            labelAndSort(os.path.join(levels.sampleTypeFolder, f), debug=debug) # sort the folders inside sampleTypeFolder
+    elif levels.currentLevel=='printTypeFolder':
+        for f in os.listdir(levels.printTypeFolder):
+            sortRecursive(os.path.join(levels.printTypeFolder, f), debug=debug)
+    elif levels.currentLevel in ['sampleFolder', 'subFolder', 'sbpFolder']:
+        labelAndSort(folder, debug=debug)
 
             
 #------------------------------------------------------
@@ -168,3 +212,7 @@ def countFiles(topFolder:str, diag:bool=True) -> pd.DataFrame:
         display(df[df['BasVideo']==0])
         display(df[df['BasStills']==0])
     return df
+
+
+        
+        

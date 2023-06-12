@@ -190,7 +190,31 @@ def exportNozDims(folder:str, overwrite:bool=False, **kwargs) -> None:
 def exportNozDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
     '''export stills of key lines from videos'''
     fl = fh.folderLoop(folder, exportNozDims, overwrite=overwrite, **kwargs)
-    return fl.run()
+    fl.run()
+    return fl
+
+def exportNozDimsRetry(folder:str, lcrit:int=15, overwrite:bool=False) -> None:
+    error = True
+    e0 = None
+    i = 0
+    while error and i<lcrit:
+        i = i+1
+        try: 
+            nd = nt.nozData(folder)
+            nd.detectNozzle(diag=2, overwrite=overwrite)
+            nd.nozDims()
+        except KeyboardInterrupt:
+            return
+        except Exception as e:
+            if 'Failed' in e or 'Detect' in e:
+                error = True
+                e0 = e
+            else:
+                raise e
+        else:
+            error = False
+    if error:
+        raise e0
     
     
 def checkBackground(folder:str, diag:bool=False) -> float:

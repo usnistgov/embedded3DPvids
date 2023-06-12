@@ -34,6 +34,8 @@ class summaryMetric:
     
     def __init__(self, file:str):
         self.file = file
+        if not os.path.exists(file):
+            raise FileNotFoundError(f'{file} does not exist')
         
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         self.ss, self.u = plainIm(self.file)

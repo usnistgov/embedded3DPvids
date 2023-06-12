@@ -67,18 +67,19 @@ def splitUnits(df:pd.DataFrame) -> Tuple[pd.DataFrame,dict]:
     return df,units
 
     
-def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True) -> None:
+def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True, diag:bool=True) -> None:
     '''export the file'''
     # if len(data)==0:
     #     return
-    if len(units)==0:
+    if len(units)==0 or len(data)==0:
         col = data.columns
     else:
         col = pd.MultiIndex.from_tuples([(k,units[k] if k in units else '') for k in data]) # index with units
     data = np.array(data)
     df = pd.DataFrame(data, columns=col)       
     df.to_csv(fn, index=index)
-    logging.info(f'Exported {fn}')
+    if diag:
+        logging.info(f'Exported {fn}')
     
     
 def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
@@ -91,7 +92,7 @@ def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
             # save all rows as class attributes
             if unitCol>0:
                 u[row[0]] = row[unitCol]
-            val = row[valCol]
+            val = (','.join(row[valCol:])).replace('\"', '')
             try:
                 val = float(val)
             except:
@@ -99,14 +100,15 @@ def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
             d[row[0]]=val
     return d,u
 
-def plainExpDict(fn:str, vals:dict, units:dict={}) -> None:
+def plainExpDict(fn:str, vals:dict, units:dict={}, diag:bool=True, quotechar:str='|') -> None:
     '''export the dictionary to file'''
     with open(fn, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer = csv.writer(csvfile, delimiter=',', quotechar=quotechar, quoting=csv.QUOTE_MINIMAL)
         for st,val in vals.items():
             if st in units:
                 row = [st, units[st], val]
             else:
                 row = [st, val]
             writer.writerow(row)
-    logging.info(f'Exported {fn}')
+    if diag:
+        logging.info(f'Exported {fn}')

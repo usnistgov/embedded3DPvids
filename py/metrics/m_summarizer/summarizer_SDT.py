@@ -52,7 +52,7 @@ class summarizerSDT(summarizer):
             f1 = f'{self.printType}{self.dire}'
         else:
             f1 = self.printType
-        return os.path.join(cfg.path.fig, 'singleDoubleTriple', 'summaries', f'{f1}SDT{s}.csv')
+        return os.path.join(cfg.path.fig, 'SDT', 'summaries', f'{f1}SDT{s}.csv')
     
     def summaryFN(self) -> str:
         return self.csvFN('Summaries')

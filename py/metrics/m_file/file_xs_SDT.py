@@ -118,8 +118,8 @@ class fileXSSDT(fileXS, fileSDT):
                                    , nozMode=nozMode.full
                                    , segmentMode=[sMode.threshold]
                                    , trimNozzle=(not 'o' in self.tag)
+                                   , removeSharp=False
                                    )
-        
         self.segmenter.eraseBorderComponents(10)
     
     def measure(self) -> None:
@@ -128,13 +128,13 @@ class fileXSSDT(fileXS, fileSDT):
             # white image
             return
         self.initialize()
-        self.getCrop(overwrite=True)
+        self.getCrop(overwrite=True, export=self.exportCrop)
         if self.diag>0:
             self.findNozzlePx()
         if not 'o' in self.tag:
             self.generateIm0()
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, ymargin=3)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=1, right=30, bottom=2)       # cover the nozzle, with some extra wiggle room
+        self.padNozzle(left=1, right=10, bottom=2)       # cover the nozzle, with some extra wiggle room
         self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
         self.segment()                                   # segment the image
         self.findIntendedCoords()                        # find where the object should be

@@ -10,6 +10,7 @@ import re
 import pandas as pd
 import numpy as np
 import csv
+import shutil
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -53,6 +54,7 @@ def uniqueConsecutive(df:pd.DataFrame, cols:List[str]) -> pd.DataFrame:
     df1.reset_index(inplace=True, drop=True)
     return df1.loc[:,cols]
 
+
 class progDim:
     '''class that holds timing for the video'''
     
@@ -68,9 +70,7 @@ class progDim:
         self.numLines = 4
         self.initializeProgDims()
         self.sbp = self.pfd.sbpName()    # name of shopbot file
-        
 
-            
     def importGeneric(self, s:str, export:bool=True) -> None:
         '''import a csv and export a new csv if it doesn't exist'''
 #         print(f'import {s}')

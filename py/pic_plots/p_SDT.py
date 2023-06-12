@@ -59,16 +59,10 @@ class multiPlotsSDT(multiPlots):
     def getTag(self, name:str, overlay:dict, ss:str) -> list:
         '''get the lines to search for and the overlay shape'''
         if name.endswith('1'):
-            if 'x' in name:
-                tag = [f'l2w{ss}', f'l2d{ss}']
-            else:
-                tag = [f'l2w1{ss}', f'l2d1{ss}']
+            tag = [f'l2w1{ss}', f'l2d1{ss}']
             overlay['shape'] = '2circles'
         elif name.endswith('2'):
-            if 'x' in name:
-                tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d{ss}']
-            else:
-                tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d2{ss}']
+            tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2d2{ss}']
             overlay['shape'] = '2circles'
         elif name.endswith('3'):
             tag = [f'l2w1{ss}', f'l2w2{ss}', f'l2w3{ss}']

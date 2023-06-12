@@ -126,16 +126,16 @@ class segmentExporter(folderFileLoop):
     def fileFunc(self, file:str, **kwargs) -> None:
         '''segment the image'''
         if not self.overwrite:
-            folder = os.path.basename(file)
+            folder = os.path.dirname(file)
             bn = os.path.basename(file)
             file2 = os.path.join(folder, 'Usegment', bn.replace('vstill', 'Usegment'))
             if os.path.exists(file2):
                 return
         
         kwargs['nd'].resetDims()   # reset the nozzle dimensions so we're going off the same thing every time
-        vs = self.fileMetricFunc(file, measure=False, overrideSegment=True, **kwargs)
+        vs = self.fileMetricFunc(file, measure=False, overrideSegment=True, exportDiag=self.exportDiag, **kwargs)
         vs.measure()
-        vs.exportSegment(overwrite=self.overwrite, diag=self.exportDiag)
+        # vs.exportSegment(overwrite=self.overwrite, diag=self.exportDiag)
         
     def folderFunc(self, folder:str, **kwargs) -> None:
         '''create all segmented images in the folder'''
@@ -148,6 +148,7 @@ class segmentExporter(folderFileLoop):
         pv = printVals(folder, pfd = pfd, fluidProperties=False)
         pg  = getProgDimsPV(pv)
         cl = cropLocs(folder, pfd=pfd)
+        # for file in pfd.vstill:
         for file in pfd.vstill:
             self.runFile(file, pfd=pfd, nd=nd, pv=pv, pg=pg, cl=cl, **kwargs)   
             

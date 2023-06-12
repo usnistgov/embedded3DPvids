@@ -69,6 +69,8 @@ def printType(bn:str) -> str:
         printType = 'SDT'
     elif bn in singleDisturbSBPfiles():
         printType = 'singleDisturb'
+    else:
+        raise ValueError(f'Unknown sbp file {bn} passed to printType') 
     return printType
 
 #--------------

@@ -253,18 +253,23 @@ class trainingGenerator:
     
 class resultMover:
     
-    def __init__(self, segFolder:str, serverFolder:str, diag:int=1, timing:int=100):
-        self.segFolder = segFolder
+    def __init__(self, segFolder:Union[List[str],str], serverFolder:str, diag:int=1, timing:int=100):
+        if type(segFolder) is str:
+            self.segFolders = [segFolder]
+        elif type(segFolder) is list:
+            self.segFolders = segFolder
+        else:
+            raise ValueError('Unexpected segFolder value passed to resultMover')
         self.serverFolder = serverFolder
         self.diag = diag
         self.timing = timing
         self.error = []
         self.printi = -1
         self.copied = 0
-        self.files = [os.path.join(self.segFolder, f) for f in os.listdir(self.segFolder)]
+        self.files = [os.path.join(sf, f) for sf in self.segFolders for f in os.listdir(sf) ]
         self.numFiles = len(self.files)
         if self.diag>0:
-            logging.info(f'Copying {self.numFiles} files in {self.segFolder}')
+            logging.info(f'Copying {self.numFiles} files in {self.segFolders}')
         self.already = 0
         self.moveMLResults()
         
@@ -318,7 +323,7 @@ def copyToMLInputFolder(cropFolder:str, topFolder:str, mustMatch:list=[], reg:st
                         newname = os.path.join(newfolder, f1)
                         if not os.path.exists(newname):
                             shutil.copyfile(os.path.join(crop, f1), newname)
-                            print(newname)
+                            # print(newname)
                         
 def splitIntoSubFolders(cropFolder:str, size:int=500) -> None:
     '''split the folder into equally sized subfolders for uploading'''

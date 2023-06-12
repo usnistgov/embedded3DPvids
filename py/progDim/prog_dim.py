@@ -10,6 +10,7 @@ import re
 import pandas as pd
 import numpy as np
 import csv
+import shutil
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -30,65 +31,51 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 #----------------------------------------------
 
-def getProgDims0(folder:str, pv:printVals) -> progDim:
+def getProgDims0(folder:str, pv:printVals, **kwargs) -> progDim:
     if pv.pfd.printType=='tripleLine':
-        return progDimsTripleLine(folder, pv)
+        return progDimsTripleLine(folder, pv, **kwargs)
     elif pv.pfd.printType=='singleLine':
-        return progDimsSingleLine(folder, pv)
+        return progDimsSingleLine(folder, pv, **kwargs)
     elif pv.pfd.printType=='singleDisturb':
-        return progDimsSingleDisturb(folder, pv)  
+        return progDimsSingleDisturb(folder, pv, **kwargs)  
     elif pv.pfd.printType=='SDT':
-        return progDimsSDT(folder, pv)  
+        return progDimsSDT(folder, pv, **kwargs)  
     else:
         raise ValueError(f'No print type detected in {folder}')
 
 def getProgDimsPV(pv:printVals) -> progDim:
     return getProgDims0(pv.printFolder, pv)
             
-def getProgDims(folder:str) -> progDim:
-    pv = printVals(folder)
-    return getProgDims0(folder, pv)
+def getProgDims(folder:str, **kwargs) -> progDim:
+    pv = printVals(folder, **kwargs)
+    return getProgDims0(folder, pv, **kwargs)
 
 def exportProgDims(folder:str, overwrite:bool=False, **kwargs) -> None:
-    pv = printVals(folder)
-    if not overwrite:
-        if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
-            return 
-    pdim = getProgDims(folder)
+    pfd = fh.printFileDict(folder)
+    if hasattr(pfd, 'progDims') and not overwrite:
+        return
+    pdim = getProgDims(folder, pfd=pfd)
     pdim.exportProgDims(overwrite=overwrite)
 
 def exportProgDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
     '''export stills of key lines from videos'''
     fl = fh.folderLoop(folder, exportProgDims, overwrite=overwrite, **kwargs)
-    return fl.run()
-
-
-def exportProgDims(folder:str, overwrite:bool=False, **kwargs) -> None:
-    pv = printVals(folder)
-    if not overwrite:
-        if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
-            return 
-    pdim = getProgDims(folder)
-    pdim.exportProgDims(overwrite=overwrite)
-
-def exportProgDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
-    '''export stills of key lines from videos'''
-    fl = fh.folderLoop(folder, exportProgDims, overwrite=overwrite, **kwargs)
-    return fl.run()
+    fl.run()
+    return fl
 
 def exportAllDims(folder:str, overwrite:bool=False, **kwargs) -> None:
-    pv = printVals(folder)
-    if not overwrite:
-        if len(pv.pfd.progDims)>0 and len(pv.pfd.progPos)>0:
-            return 
-    pdim = getProgDims(folder)
+    pfd = fh.printFileDict(folder)
+    if hasattr(pfd, 'progDims') and hasattr(pfd, 'progPos') and not overwrite:
+        return
+    pdim = getProgDims(folder, pfd=pfd)
     pdim.exportAll(overwrite=overwrite)
 
-def exportAllDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+def exportAllDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> fh.folderLoop:
     '''export stills of key lines from videos'''
     fl = fh.folderLoop(folder, exportAllDims, overwrite=overwrite, **kwargs)
-    return fl.run()
-
+    fl.run()
+    return fl
+            
     
 #----------------------------------------------------
 # single lines
@@ -154,4 +141,6 @@ def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.Dat
     if os.path.exists(exportFolder):
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
+
+
     

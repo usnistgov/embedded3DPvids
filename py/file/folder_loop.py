@@ -33,10 +33,12 @@ class folderLoop:
     the function needs to have only one arg, folder, and all other variables need to go in kwargs
     folders could be either the top folder to recurse into, or a list of folders'''
     
-    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, printErrors:bool=True, **kwargs):
+    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, printErrors:bool=True, folderDiag:int=0, **kwargs):
         if type(folders) is list:
             # list of specific folders
-            self.folders = folders
+            self.folders = []
+            for folder in folders:
+                self.folders = self.folders + printFolders(folder, mustMatch=mustMatch, canMatch=canMatch)
         elif not os.path.exists(folders):
             self.topFolder = ''
             self.folders = []
@@ -50,6 +52,7 @@ class folderLoop:
         self.kwargs = kwargs
         self.printTraceback = printTraceback
         self.printErrors = printErrors
+        self.folderDiag = folderDiag
         
     def runFolder(self, folder:str) -> None:
         '''run the function on one folder'''
@@ -63,6 +66,8 @@ class folderLoop:
         if not anyIn(self.canMatch, folder):
             return
 
+        if self.folderDiag>0:
+            print(folder)
         try:
             self.func(folder, **self.kwargs)
         except KeyboardInterrupt as e:
@@ -97,6 +102,10 @@ class folderLoop:
             return
         row = self.folderErrorList[i]
         openExplorer(row['folder'])
+        
+    def exportErrors(self, fn:str) -> None:
+        '''export the error list to file'''
+        plainExp(fn, pd.DataFrame(self.folderErrorList), {'folder':'', 'error':''}, index=False)
     
 
 class folderFileLoop(folderLoop):

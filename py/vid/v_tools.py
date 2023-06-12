@@ -74,13 +74,15 @@ class vidData:
             # no print type known
             return 1
         self.progDims.importProgDims()
+        if len(self.progDims.progDims.tpic.dropna())<len(self.progDims.progDims):
+            self.progDims.getProgDims()
+            self.progDims.exportProgDims(overwrite=True)
         self.prog = self.progDims.progDims
         if len(self.prog)==0:
             self.closeStream()
             # no timing file
             return 2
         
-
         if self.frameError[-2:]=='sh':
             self.progDims.importProgPos()
             pp = self.progDims.progPos
@@ -104,12 +106,23 @@ class vidData:
             return 1
         else:
             d, _ = plainImDict(fn, unitCol=-1, valCol=1)
-            tlist = ['frames', 'fps', 'duration', 'dstart']
+            
+            # adopt frame num, fps, and duration from file, and dstart if we haven't defined a manual dstart
+            tlist = ['frames', 'fps', 'duration']
+            if not hasattr(self, 'dstart_manual'):
+                tlist.append('dstart')
             for st,val in d.items():
-                setattr(self, st, val)
-            if 'dstart_manual' in d:
+                if st in tlist:
+                    setattr(self, st, val)
+                    
+            # adopt dstart
+            if hasattr(self, 'dstart_manual'):
+                self.dstart = self.dstart_manual
+            elif 'dstart_manual' in d:
                 self.dstart = d['dstart_manual']
                 self.dstart_manual = d['dstart_manual']
+                
+            # missing values
             if len(set(tlist)-set(d))>0:
                 return 1
             else:
@@ -146,8 +159,6 @@ class vidData:
         d,u = plainImDict(file, unitCol=1, valCol=2)
         if 'Basler_camera_collection_frame_rate' in d:
             self.collectionFrameRate = d['Basler_camera_collection_frame_rate']
-            
-
         
     def getVidStats(self) -> None:
         '''get the video stats from the stream'''
@@ -164,9 +175,11 @@ class vidData:
             # timing rate should be correct, but vid started earlier than timing
             self.dstart = max(self.duration-self.maxT,0)+1.25
         elif self.frameError=='sh':
-            self.dstart = 0
-            shift = max(0, ((300/self.collectionFrameRate)-1)/10)
-            self.dstart = self.dstart-shift
+            # self.dstart = 0.55
+            # shift = max(0, ((300/self.collectionFrameRate)-1)/10)
+            # self.dstart = self.dstart+shift
+            shift = 1.2-0.002*self.collectionFrameRate
+            self.dstart = shift
             self.rawPicTimes()   # determine if the raw pic times match the progDims times and shift dstart if they are off
         else:
             self.dstart = 0
@@ -174,9 +187,11 @@ class vidData:
         
     def openStream(self, overwrite:bool=False) -> None:
         '''open the video stream and get metadata'''
-        if not self.streamOpen:
-            self.stream = cv.VideoCapture(self.file)
-            self.streamOpen = True
+        if self.streamOpen:
+            return
+
+        self.stream = cv.VideoCapture(self.file)
+        self.streamOpen = True
         result = self.importVidStats()
         if result>0 or overwrite:
             self.getVidStats()
@@ -236,6 +251,9 @@ class vidData:
         if not hasattr(self, 'prog'):
             self.getProgDims()
         calc = self.prog[self.prog.name.str.contains('o')].tpic
+        if len(calc)==4*len(times):
+            # extra calcs
+            calc = self.prog[(self.prog.name.str.contains('o1'))|self.prog.name.str.contains('o8')].tpic
         if not len(calc)==len(times):
             logging.warning(f'Mismatch in {self.folder}: {len(times)} pics and {len(calc)} progDims')
             return {'raw':[round(x,2) for x in times], 'calc':[round(x,2) for x in calc]}
@@ -249,7 +267,6 @@ class vidData:
     def exportStills(self, prefixes:list=[], overwrite:bool=False, diag:int=1, **kwargs) -> None:
         '''export stills for all times in the progdims table'''
         self.getProgDims()
- 
         if not 'tpic' in self.prog:
             raise ValueError('No pic time noted')
         if self.pfd.printType=='singleLine':
@@ -307,3 +324,5 @@ class setManualStillTime(fh.folderLoop):
         vd.dstart_manual = dstart
         vd.dstart = dstart
         vd.exportStills(overwrite=True, **kwargs)
+        vd.exportVidStats0()
+        
