@@ -37,19 +37,25 @@ pd.set_option('display.max_rows', 500)
 
 #----------------------------------------------
 
+def convertFileToBW(ffull:str, diag:bool=False) -> None:
+    '''convert a single file to black and white with 1 as max'''
+    im = cv.imread(ffull)
+    im = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
+    if im.max().max()==1:
+        return
+    _,im = cv.threshold(im, 120, 255, cv.THRESH_BINARY)
+    im[im==255]=1
+    if diag:
+        print(im.shape, np.unique(im), im[0,0], f)
+    else:
+        cv.imwrite(ffull, im)
+
 def convertFilesToBW(folder:str, diag:bool=False) -> None:
     '''convert all the files in the folder to black and white'''
     for f in os.listdir(folder):
         if not 'Thumbs' in f:
             ffull = os.path.join(folder, f)
-            im = cv.imread(ffull)
-            im = cv.cvtColor(im, cv.COLOR_BGR2GRAY)
-            _,im = cv.threshold(im, 120, 255, cv.THRESH_BINARY)
-            im[im==255]=1
-            if diag:
-                print(im.shape, np.unique(im), im[0,0], f)
-            else:
-                cv.imwrite(ffull, im)
+            convertFileToBW(ffull, diag)
             
 def removeOme(folder:str):
     '''remove .ome from all of the file names'''
@@ -211,10 +217,10 @@ class segmentCompare:
 class trainingGenerator:
     '''a class for generating training data for ML models'''
     
-    def __init__(self, topFolder:str, excludeFolders:list=[], mustMatch:list=[], someIn:list=[]):
+    def __init__(self, topFolder:str, excludeFolders:list=[], mustMatch:list=[], canMatch:list=[]):
         self.topFolder = topFolder
         self.excludeFolders = excludeFolders
-        self.printFolders = fh.printFolders(topFolder, tags=mustMatch, someIn=someIn)
+        self.printFolders = fh.printFolders(topFolder, tags=mustMatch, someIn=canMatch)
         self.numFolders = len(self.printFolders)
         
     def randomFolder(self):
@@ -229,12 +235,16 @@ class trainingGenerator:
                 return True
         return False
     
-    def randomFile(self) -> str:
+    def randomFile(self, mustMatch:list=[], canMatch:list=[]) -> str:
         '''get a random vert vstill from the topFolder, but get a new one if it's already in one of the excludeFolders '''
         folder = self.randomFolder()
         pfd = fh.printFileDict(folder)
-        pfd.sort()
-        numstills = len(pfd.vstill)
+        pfd.findVstill()
+        fileList = []
+        for file in pfd.vstill:
+            if fh.anyIn(canMatch, file) and fh.allIn( mustMatch, file):
+                fileList.append(file)
+        numstills = len(fileList)
         if numstills==0:
             return self.randomFile()
         excluded = True
@@ -243,7 +253,7 @@ class trainingGenerator:
             i = np.random.randint(numstills)
             if not i in guessed:
                 guessed.append(i)
-                file = pfd.vstill[i]
+                file = fileList[i]
                 excluded = self.excluded(os.path.basename(file))
             if len(guessed)==numstills:
                 # we've guessed all of the files. remove this folder from contention and pick a different one
@@ -325,7 +335,7 @@ def copyToMLInputFolder(cropFolder:str, topFolder:str, mustMatch:list=[], reg:st
                             shutil.copyfile(os.path.join(crop, f1), newname)
                             # print(newname)
                         
-def splitIntoSubFolders(cropFolder:str, size:int=500) -> None:
+def splitIntoSubFolders(cropFolder:str, size:int=1000) -> None:
     '''split the folder into equally sized subfolders for uploading'''
     i = 0
     j = 0

@@ -126,6 +126,7 @@ class fileXSSDT(fileXS, fileSDT):
         '''measure cross-section of single disturbed line'''
         if self.checkWhite(val=254):
             # white image
+            self.stats['error'] = 'white'
             return
         self.initialize()
         self.getCrop(overwrite=True, export=self.exportCrop)

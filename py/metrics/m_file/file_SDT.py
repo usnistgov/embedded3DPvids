@@ -38,8 +38,9 @@ pd.set_option('display.max_rows', 500)
 class fileSDT(fileDisturb):
     '''singleDoubleTriple single files'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCrop:bool=True, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCrop:bool=True, useML:bool=True, **kwargs):
         self.exportCrop = exportCrop
+        self.useML = useML
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
     def initialize(self):

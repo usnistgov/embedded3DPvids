@@ -29,6 +29,7 @@ from vid.noz_detect import *
 from tools.timeCounter import timeObject
 import tools.regression as reg
 from folder_size_check import *
+from file_metric import whiteoutAll
 
 # logging
 logger = logging.getLogger(__name__)
@@ -42,7 +43,13 @@ pd.set_option('display.max_rows', 500)
 
 #----------------------------------------------
     
+def whiteOutFiles(folder:str, canMatch:list=[], mustMatch:list=[]) -> None:
+    '''whiteout all files that match the strings'''
+    for file in os.listdir(folder):
+        if 'vstill' in file and fh.anyIn(canMatch, file) and fh.allIn(mustMatch, file):
+            whiteoutAll(os.path.join(folder, file))
 
+            
 class folderMetric(timeObject):
     '''for a folder, measure all images
     export a table of values (Measure)
@@ -123,7 +130,12 @@ class folderMetric(timeObject):
                 failures.append({'file':file, 'error':e})
             else:
                 if len(m['line'])<1:
-                    failures.append({'file':file, 'error':'no vals detected'})
+                    if 'error' in m:
+                        # this image was whited out. failed intentionally
+                        er = m.pop('error')
+                        failures.append({'file':file, 'error':er})
+                    else:
+                        failures.append({'file':file, 'error':'no vals detected'})
                 out.append(m)
         self.df = pd.DataFrame(out)
         self.failures = pd.DataFrame(failures)

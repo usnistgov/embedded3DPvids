@@ -39,6 +39,10 @@ pd.set_option('display.max_rows', 500)
 def openInPaint(file):
     '''open the file in MS paint'''
     subprocess.Popen([cfg.path.paint, file]);
+    
+def openInExcel(file):
+    '''open the file in MS excel'''
+    subprocess.Popen([cfg.path.excel, file]);    
 
 def ppdist(p1:list, p2:list) -> float:
     '''distance between 2 points'''

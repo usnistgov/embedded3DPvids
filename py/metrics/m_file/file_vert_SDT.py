@@ -130,6 +130,16 @@ class fileVertSDT(fileVert, fileSDT):
 
     def measure(self) -> None:
         '''measure vertical SDT line'''
+        if self.checkWhite(val=254):
+            # white image
+            if self.overrideSegment:
+                self.getCrop(overwrite=False)
+                self.cropIm()
+                self.im[:,:] = 0
+                self.componentMask = self.im
+                self.exportSegment(overwrite=False)              # export segmentation
+            self.stats['error'] = 'white'
+            return
         self.initialize()
         self.getCrop(overwrite=True)
         

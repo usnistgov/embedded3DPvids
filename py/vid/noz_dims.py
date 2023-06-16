@@ -20,6 +20,7 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from im.imshow import imshow
+from im.contour import getContours
 import im.morph as vm
 import im.crop as vc
 from tools.config import cfg
@@ -168,39 +169,166 @@ class nozDims:
         yB = int(self.yB-crops['y0'])
         xL = int(self.xL-crops['x0'])
         xR = int(self.xR-crops['x0'])
-        df = pd.DataFrame(hull[:,0] , columns=['x', 'y'])
-        if xL-10>df.x.max() or xL<df.x.min() or yB<df.y.min():
-            # all points are left or right of the left edge of the nozzle or below the nozzle
+        
+        image1 = np.zeros((self.h, self.w), dtype=np.uint8)
+        cv.drawContours(image1, [hull], -1, 1, 1)
+        hull2 = getContours(image1, cv.CHAIN_APPROX_NONE)[0]
+        df = pd.DataFrame(hull2[:,0], columns=['x', 'y'])
+        insidepts = df[(df.x>=xL)&(df.x<=xR)&(df.y<=yB)]
+
+        if len(insidepts)==0 or (insidepts.y.min()==yB) or (insidepts.x.min()==xR) or (insidepts.x.max()==xL):
+            # no points to dent
             return hull
-        right = df[(df.y<yB)&(df.x>xR)]
-        under = df[(df.x<=xR)&(df.x>=xL)&(df.y>=yB)&(df.y<yB+10)]
-        ru = pd.concat([right, under])
-        if len(ru)==0:
-            return hull
-        left = df[df.x<xL]
-        leftu = df[(df.x<xL+1)&(df.x>xL-10)&(df.y<yB)]
-        if len(left)==0:
-            u1 = ru[ru.y<ru.y.min()+5]         # highest point on right/under
-            u2 = u1[u1.x==u1.x.min()].iloc[0] # leftmost point at highest point
-            i = int(u2.name)
+        
+        # find the points that intersect the nozzle
+        leftedge = insidepts[insidepts.x==insidepts.x.min()]
+        rightedge = insidepts[insidepts.x==insidepts.x.max()]
+        li = leftedge[leftedge.y==leftedge.y.max()].iloc[0].name
+        ri = rightedge[rightedge.y==rightedge.y.max()].iloc[-1].name     
+        lpt = df.loc[li]   # point at left
+        rpt = df.loc[ri]   # point at right
+        
+        # get the nozzle points
+        nozpts = []
+        if lpt.x==xL:
+            # intersect with left edge of nozzle
+            nozpts.append([xL, lpt.y])
+            nozpts.append([xL, yB])
+            if rpt.y==yB:
+                # intersect with bottom edge of nozzle
+                nozpts.append([rpt.x, yB])
+            elif rpt.x==xR:
+                # intersect with right edge of nozzle
+                nozpts.append([xR, yB])
+                nozpts.append([xR, rpt.y])
+            else:
+                raise ValueError('Unexpected intersection points')
+        elif lpt.y==yB:
+            nozpts.append([lpt.x, yB])
+            if h1.x==xR:
+                # intersect with right edge of nozzle
+                nozpts.append([xR, yB])
+                nozpts.append([xR, h1.y])
+            else:
+                raise ValueError('Unexpected intersection points')
         else:
-            # points go clockwise, so the under point will be after the left point
-            # i = left.index.max()+1  # index of the transition point
-            i = left[left.x==left.x.max()].index.max()+1
-            xL = max(hull[i-1, 0, 0],xL)
-        if len(leftu)==0:
-            # include left point at nozzle and bottom left corner
-            pt = np.array([[xL, hull[i-1, 0, 1]], [xL, yB]])
+            raise ValueError('Unexpected intersection points')
+            
+        # reconstitute the list of points
+        if li>ri:
+            # points go counterclockwise
+            nozpts.reverse()
+            hull3 = np.vstack([hull2[:ri, 0, :], nozpts, hull2[li:, 0, :]])
         else:
-            # include just bottom left corner
-            pt = np.array([[xL, yB]])
-        if len(right)>0:
-            # points to the right of the nozzle. include bottom right corner
-            pt = np.concatenate((pt, np.array([[xR, yB], [xR, right.y.min()]])))
-        hull2 = np.vstack([hull[:i, 0, :], pt, hull[i:, 0, :]])
-        if cv.contourArea(hull2)>cv.contourArea(hull):
-            # new contour has larger area, so dent was in the wrong direction. just return the original hull
-            return hull
-        else:
-            return hull2
+            hull3 = np.vstack([hull2[:li, 0, :], nozpts, hull2[ri:, 0, :]])
+            
+        # simplify the list of points
+        image2 = np.zeros((self.h, self.w), dtype=np.uint8)
+        cv.drawContours(image2, [hull3], -1, 1, 1)
+        hull4 = getContours(image2, cv.CHAIN_APPROX_SIMPLE)[0]
+        return hull4[:,0,:]
+            
+            
+#         if li>ri:
+#             # points go counterclockwise
+#             nozpts.reverse()
+#             firsti = ri
+#             lasti = li
+#         else:
+#             firsti = li
+#             lasti = ri
+          
+#         df3 = pd.DataFrame(hull[:,0], columns=['x', 'y'])
+#         firstpt = df.loc[firsti]
+#         while firsti>0 and len(self.dfMatch(df3, firstpt))==0:
+#             firsti = firsti-1
+#             firstpt = df.loc[firsti]
+#         if firsti>0:
+#             ii = self.dfMatch(df3, firstpt).iloc[0].name
+#         else:
+#             ii = 0
+            
+#         lastpt = df.loc[lasti]
+#         while lasti<len(df) and len(self.dfMatch(df3, lastpt))==0:
+#             lasti = lasti+1
+#             lastpt = df.loc[lasti]
+#         if lasti<len(df):
+#             jj = self.dfMatch(df3, lastpt).iloc[0].name
+#             lastgroup = hull[jj:, 0, :]
+#         else:
+#             jj = len(hull)-1
+ 
+#         print(firsti, lasti, li, ri, ii, jj, len(hull))
+#         if ii==0 and jj==len(hull)-1:
+#             nozpts.reverse()
+#             return np.vstack([hull[:-1,0,:], nozpts])
+#         elif jj<ii:
+#             nozpts.reverse()
+#             return np.vstack([hull[:jj, 0, :], nozpts, hull[ii:, 0, :]])
+#         elif ii<jj:
+#             if ii==0:
+#                 ii = jj-2
+#             print(hull[ii, 0, :], hull[jj, 0, :])
+#             return np.vstack([hull[:ii, 0, :], nozpts, hull[jj:, 0, :]])
+    
+#     def dfMatch(self, df3:pd.DataFrame, pt:pd.Series, i:int=3) -> pd.DataFrame:
+#         return df3[(df3.x>(pt.x-i))&(df3.x<(pt.x+i))&(df3.y>(pt.y-i))&(df3.y<(pt.y+i))]
+    
+        
+        
+
+#         blank = np.zeros((self.h, self.w))
+
+#         # Copy each contour into its own image and fill it with '1'
+#         image1 = cv.drawContours(blank.copy(), [hull], -1, 1, 1)
+#         image2 = cv.drawContours(blank.copy(), [np.array([[xL, 0], [xL, yB], [xR, yB], [xR, 0]])],-1, 1, 1)
+
+#         # Use the logical AND operation on the two images
+#         # Since the two images had bitwise and applied to it,
+#         # there should be a '1' or 'True' where there was intersection
+#         # and a '0' or 'False' where it didnt intersect
+#         intersection = cv.bitwise_and(image1, image2)
+#         pts = cv.findNonZero(intersection)
+        
+#         print(pts)
+#         imshow(image1, image2, intersection)
+        
+        
+        
+        
+        # df = pd.DataFrame(hull[:,0] , columns=['x', 'y'])
+        # if xL-10>df.x.max() or xL<df.x.min() or yB<df.y.min():
+        #     # all points are left or right of the left edge of the nozzle or below the nozzle
+        #     return hull
+        # right = df[(df.y<yB)&(df.x>xR)]
+        # under = df[(df.x<=xR)&(df.x>=xL)&(df.y>=yB)&(df.y<yB+10)]
+        # ru = pd.concat([right, under])
+        # if len(ru)==0:
+        #     return hull
+        # left = df[df.x<xL]
+        # leftu = df[(df.x<xL+1)&(df.x>xL-10)&(df.y<yB)]
+        # if len(left)==0:
+        #     u1 = ru[ru.y<ru.y.min()+5]         # highest point on right/under
+        #     u2 = u1[u1.x==u1.x.min()].iloc[0] # leftmost point at highest point
+        #     i = int(u2.name)
+        # else:
+        #     # points go clockwise, so the under point will be after the left point
+        #     # i = left.index.max()+1  # index of the transition point
+        #     i = left[left.x==left.x.max()].index.max()+1
+        #     xL = max(hull[i-1, 0, 0],xL)
+        # if len(leftu)==0:
+        #     # include left point at nozzle and bottom left corner
+        #     pt = np.array([[xL, hull[i-1, 0, 1]], [xL, yB]])
+        # else:
+        #     # include just bottom left corner
+        #     pt = np.array([[xL, yB]])
+        # if len(right)>0:
+        #     # points to the right of the nozzle. include bottom right corner
+        #     pt = np.concatenate((pt, np.array([[xR, yB], [xR, right.y.min()]])))
+        # hull2 = np.vstack([hull[:i, 0, :], pt, hull[i:, 0, :]])
+        # if cv.contourArea(hull2)>cv.contourArea(hull):
+        #     # new contour has larger area, so dent was in the wrong direction. just return the original hull
+        #     return hull
+        # else:
+        #     return hull2
         

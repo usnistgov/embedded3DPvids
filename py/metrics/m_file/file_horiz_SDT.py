@@ -210,6 +210,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 self.im[:,:] = 0
                 self.componentMask = self.im
                 self.exportSegment(overwrite=False)              # export segmentation
+            self.stats['error'] = 'white'
             return
         self.initialize()
         self.getCrop(overwrite=False)
@@ -223,13 +224,17 @@ class fileHorizSDT(fileHoriz, fileSDT):
         self.findIntendedPx()
         if self.overrideSegment:
             self.generateSegment(overwrite=True)
+            if self.useML:
+                self.importMLsegment()
+                self.Usegment = self.componentMask.copy()
         else:
             self.importSegmentation()
+        if self.useML:
             if hasattr(self, 'Usegment') and hasattr(self, 'MLsegment') and not self.Usegment.shape==self.MLsegment.shape:
                 self.generateSegment(overwrite=True)
                 self.Usegment = self.componentMask.copy()
             self.reconcileImportedSegment(eraseTop=False, largeCrit=100000)
-            self.segmentClean()
+        self.segmentClean()
         
         if not hasattr(self, 'segmenter'):
             self.segment()

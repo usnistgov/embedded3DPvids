@@ -60,9 +60,30 @@ def whiteoutFile(file:str, val:int=255) -> None:
         im[:,:] = val
     cv.imwrite(file, im)
     ff = file.replace(cfg.path.server, '')
-    logging.info(f'Whited out {ff}')
-
-
+    if val==255:
+        logging.info(f'Whited out {ff}')
+    elif val==0:
+        logging.info(f'Blacked out {ff}')
+    else:
+        logging.info(f'Covered up {ff}')
+    
+    
+def whiteoutAll(file:str) -> None:
+    '''whiteout the file, the cropped file, the ML file, and the Usegment file'''
+    if not 'vstill' in file:
+        raise ValueError(f'whiteoutAll failed on {file}. Only allowed for vstill files')
+    whiteoutFile(file, val=255)
+    bn = os.path.basename(file)
+    folder = os.path.dirname(file)
+    cropfile = os.path.join(folder, 'crop', bn.replace('vstill', 'vcrop'))
+    if os.path.exists(cropfile):
+        whiteoutFile(cropfile, val=255)
+    ufile = os.path.join(folder, 'Usegment', bn.replace('vstill', 'Usegment'))
+    mfile = os.path.join(folder, 'MLsegment', bn.replace('vstill', 'MLsegment'))
+    for filei in [ufile, mfile]:
+        if os.path.exists(filei):
+            whiteoutFile(filei, val=0)
+    
 
 class fileMetric(timeObject):
     '''collects data about fluid segments in an image'''
@@ -242,9 +263,16 @@ class fileMetric(timeObject):
         elif hasattr(self, 'Usegment'):
             self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
             self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+        else:
+            self.generateSegment(overwrite=False)
+            self.segmenter = segmenterDF(self.componentMask, acrit=self.acrit)
             
     def importSegmentation(self) -> None:
         '''import any pre-segmented images'''
+        self.importUsegment()
+        self.importMLsegment()
+        
+    def importUsegment(self):
         s = self.segmentFN()
         if os.path.exists(s):
             self.Usegment = cv.imread(s, cv.IMREAD_GRAYSCALE)
@@ -252,6 +280,8 @@ class fileMetric(timeObject):
             if not h==self.crop['yf']-self.crop['y0'] or not w==self.crop['xf']-self.crop['x0']:
                 raise ValueError(f'{self.file}: Usegment is wrong shape')
             self.importedImages = True
+            
+    def importMLsegment(self):
         m = self.MLFN()
         if os.path.exists(m):
             self.MLsegment = cv.imread(m, cv.IMREAD_GRAYSCALE)
