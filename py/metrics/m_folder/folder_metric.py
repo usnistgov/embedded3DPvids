@@ -29,7 +29,6 @@ from vid.noz_detect import *
 from tools.timeCounter import timeObject
 import tools.regression as reg
 from folder_size_check import *
-from file_metric import whiteoutAll
 
 # logging
 logger = logging.getLogger(__name__)
@@ -42,13 +41,6 @@ pd.set_option('display.max_rows', 500)
 
 
 #----------------------------------------------
-    
-def whiteOutFiles(folder:str, canMatch:list=[], mustMatch:list=[]) -> None:
-    '''whiteout all files that match the strings'''
-    for file in os.listdir(folder):
-        if 'vstill' in file and fh.anyIn(canMatch, file) and fh.allIn(mustMatch, file):
-            whiteoutAll(os.path.join(folder, file))
-
             
 class folderMetric(timeObject):
     '''for a folder, measure all images
@@ -56,11 +48,12 @@ class folderMetric(timeObject):
     export a list of failed files (Failures)
     export a row of summary values (Summary)'''
     
-    def __init__(self, folder:str, overwriteMeasure:bool=False, overwriteSummary:bool=False, diag:int=0, **kwargs) -> None:
+    def __init__(self, folder:str, overwriteMeasure:bool=False, overwriteSummary:bool=False, overwriteCropLocs:bool=False, diag:int=0, **kwargs) -> None:
         super().__init__()
         self.folder = folder
         self.overwriteMeasure = overwriteMeasure
         self.overwriteSummary = overwriteSummary
+        self.overwriteCropLocs = overwriteCropLocs
         if 'pfd' in kwargs:
             self.pfd = kwargs.pop('pfd')
         else:
@@ -122,7 +115,7 @@ class folderMetric(timeObject):
             self.nd.resetDims()
             try:
                 m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl
-                          , diag=self.diag-1, exportCrop=False, **self.kwargs).values()
+                          , diag=self.diag-1, exportCropLoc=False, overwriteCropLoc=self.overwriteCropLocs, **self.kwargs).values()
                 self.du = {**self.du, **u}
             except KeyboardInterrupt as e:
                 raise e

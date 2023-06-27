@@ -29,6 +29,16 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 #----------------------------------------------
 
+
+class segmenterFail:
+    
+    def __init__(self):
+        self.filled = None
+        self.success = False
+        
+    def display(self):
+        return
+
 class segmenterDF(timeObject):
     '''holds labeled components for an image'''
     
@@ -42,10 +52,18 @@ class segmenterDF(timeObject):
         self.diag = diag
         self.getConnectedComponents()
         
+    def display0(self):
+        if self.diag>0:
+            if hasattr(self, 'labeledIm'):
+                imshow(self.im, self.gray, self.thresh, self.labeledIm, maxwidth=13, titles=['seg.im', 'gray', 'thresh', 'labeled'])
+            else:
+                imshow(self.im, self.gray, self.thresh, maxwidth=13, titles=['seg.im', 'gray', 'thresh'])
+        
     def display(self):
         if self.diag<1:
             return
         if not hasattr(self, 'imML'):
+            self.display0()
             return
         imdiag = cv.cvtColor(self.filled, cv.COLOR_GRAY2BGR)
         imdiag[(self.exc==255)] = [0,0,255]
@@ -58,6 +76,8 @@ class segmenterDF(timeObject):
         df2 = pd.DataFrame(self.centroids, columns=['xc','yc'])
         df = pd.concat([df, df2], axis=1) 
             # combine markers into dataframe w/ label stats
+        df['xf'] = df.x0+df.w
+        df['yf'] = df.y0+df.h
         self.df = df
         
     def resetStats(self):
@@ -191,18 +211,23 @@ class segmenterDF(timeObject):
         '''remove any components that are too close to the edge'''
         if self.noDF():
             return
-        goodpts = (self.df.x0>margin)&(self.df.y0>margin)&(self.df.x0+self.df.w<self.w-margin)&(self.df.y0+self.df.h<self.h-margin)
+        goodpts = (self.df.x0>margin)&(self.df.y0>margin)&(self.df.xf<self.w-margin)&(self.df.yf<self.h-margin)
+        self.selectComponents(goodpts, **kwargs)
+        
+    def eraseBorderClingers(self, margin:int, **kwargs) -> None:
+        '''remove any components that are fully within margin of the border'''
+        goodpts = (self.df.xf>margin)&(self.df.yf>margin)&(self.df.x0<self.w-margin)&(self.df.y0<self.h-margin)
         self.selectComponents(goodpts, **kwargs)
         
     def eraseBorderTouchComponent(self, margin:int, border:str, **kwargs) -> None:
         if self.noDF():
             return
         if border=='+x':
-            goodpts = self.df.x0+self.df.w<self.w-margin
+            goodpts = self.df.xf<self.w-margin
         elif border=='-x':
             goodpts = self.df.x0>margin
         elif border=='+y':
-            goodpts = self.df.y0+self.df.h<self.h-margin
+            goodpts = self.df.yf<self.h-margin
         elif border=='-y':
             goodpts = self.df.y0>margin
         self.selectComponents(goodpts, **kwargs)
@@ -247,14 +272,14 @@ class segmenterDF(timeObject):
         '''remove components that are touching the left or right border'''
         if self.noDF():
             return
-        goodpts = ((self.df.x0>margin)&(self.df.x0+self.df.w<(self.w-margin)))
+        goodpts = ((self.df.x0>margin)&(self.df.xf<(self.w-margin)))
         self.selectComponents(goodpts, **kwargs)
         
     def eraseTopBottomBorder(self, margin:int=0, **kwargs) -> None:
         '''remove components that are touching the top or bottom border'''
         if self.noDF():
             return
-        goodpts = (self.df.y0>margin)&(self.df.y0+self.df.h<self.h-margin)
+        goodpts = (self.df.y0>margin)&(self.df.yf<self.h-margin)
         self.selectComponents(goodpts, **kwargs)
         
     def eraseTopBorder(self, margin:int=0, **kwargs) -> None:

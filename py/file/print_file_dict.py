@@ -66,6 +66,7 @@ class printFileDict:
         self.stitch=[]
         self.vstill=[]
         self.MLsegment = []
+        self.MLsegment2 = []
         self.Usegment = []
         self.vcrop = []
         self.vid = []
@@ -328,6 +329,8 @@ class printFileDict:
                 self.still.append(ffull)
             elif 'vcrop' in fname:
                 self.vcrop.append(ffull)
+            elif 'MLsegment2' in fname:
+                self.MLsegment2.append(ffull)
             elif 'MLsegment' in fname:
                 self.MLsegment.append(ffull)
             elif 'Usegment' in fname:
@@ -397,6 +400,16 @@ class printFileDict:
             if 'MLsegment' in f1 and 'png' in f1:
                 ffull = os.path.join(folder, f1)
                 self.MLsegment.append(ffull)
+                
+    def findMLsegment2(self) -> None:
+        self.MLsegment2 = []
+        folder = os.path.join(self.printFolder, 'MLsegment2')
+        if not os.path.exists(folder):
+            return
+        for f1 in os.listdir(folder):
+            if 'MLsegment2' in f1 and 'png' in f1:
+                ffull = os.path.join(folder, f1)
+                self.MLsegment2.append(ffull)
                 
     def findUsegment(self) -> None:
         self.Usegment = []

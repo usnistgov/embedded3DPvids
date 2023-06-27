@@ -247,7 +247,7 @@ class metricPlot:
             
     #----------------------------------------
     
-    def onePointSpacing(xl0:list) -> list:
+    def onePointSpacing(self, xl0:list) -> list:
         '''produce a list to encompass a single point'''
         xl0.sort()
         if len(xl0)>1:

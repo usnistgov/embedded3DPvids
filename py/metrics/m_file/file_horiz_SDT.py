@@ -45,13 +45,14 @@ def horizSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
 class fileHorizSDT(fileHoriz, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=1000, overrideSegment:bool=False, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=1000, overrideSegment:bool=False, overwriteCropLocs:bool=False, **kwargs):
         self.overrideSegment = overrideSegment
         self.maxlen = 800
         self.fillDilation = 0
         self.grayBlur = 1
         self.segmentSteps = 0
         self.importedImages = False
+        self.overwriteCropLocs = overwriteCropLocs
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
     def addToTestFile(self) -> None:
@@ -107,7 +108,8 @@ class fileHorizSDT(fileHoriz, fileSDT):
                     
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
-        rc = {'relative':True, 'w':800, 'h':275, 'wc':400, 'hc':205}
+        # rc = {'relative':True, 'w':800, 'h':275, 'wc':400, 'hc':205}
+        rc = {'relative':True, 'w':800, 'h':300, 'wc':400, 'hc':250}
         self.makeCrop(rc, export=export, overwrite=overwrite)
         
     def removeThreads(self) -> None:
@@ -141,7 +143,6 @@ class fileHorizSDT(fileHoriz, fileSDT):
             rightcnt[:,:,0] = rightcnt[:,:,0]+cut
             top = rightcnt[rightcnt[:,:,1]==min(rightcnt[:,:,1])]   # find points that are at top
             xmax = w0-(max(top[:,0]))
-            
             # close right edge, fill, and remove right edge
             self.segmenter.thresh = self.segmenter.closeBorder(self.segmenter.thresh, '+x', 255, pos=xmax)
             self.segmenter.fill()
@@ -155,7 +156,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
                                    , nozData=self.nd, crops=self.crop, segmentMode=[sMode.adaptive, sMode.kmeans]
                                    , nozMode=nozMode.full, removeSharp=True
                                    , grayBlur=self.grayBlur, addLeftEdge=True, addRightEdge=True, trimNozzle=True
-                                  , closing=self.fillDilation, complete=False)
+                                  , closing=self.fillDilation, complete=False, normalize=self.normalize)
         self.segmentSteps +=1
         self.segmenter.fill()
         self.segmentComplete()
@@ -169,10 +170,16 @@ class fileHorizSDT(fileHoriz, fileSDT):
         
     def segmentClean(self):
         '''erase bad components'''
+        for s in ['cnt', 'hull']:
+            if hasattr(self, s):
+                delattr(self, s)
+        if not self.segmenter.success:
+            return
         self.segmenter.eraseFullHeightComponents(margin=2)
         self.segmenter.eraseBorderLengthComponents(lcrit=400)
         self.segmenter.eraseBorderTouchComponent(2, '-y')
         self.segmenter.eraseBorderTouchComponent(2, '+y')
+        self.segmenter.eraseBorderClingers(40)
         # self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
 
     def generateSegment(self, overwrite:bool=False):
@@ -183,11 +190,26 @@ class fileHorizSDT(fileHoriz, fileSDT):
         
     def checkAndDims(self) -> int:
         '''check that the segmenter succeeded, get dims, and then check if dims are correct'''
+        for s in ['cnt']:
+            if hasattr(self, s):
+                delattr(self, s)   # reset contour
         if not self.segmenter.success:
             return 1
         getLDiff = ('o' in self.tag and not ('w1' in self.tag or 'd1' in self.tag))
         self.dimsMulti(getLDiff=getLDiff)
-        if (not 'emptiness' in self.stats or (self.stats['emptiness']>0.3)):
+        if 'w1' in self.tag or 'd1' in self.tag:
+            rcrit = 0.2
+        elif 'w2' in self.tag or 'd2' in self.tag:
+            if 'p1' in self.tag or 'p3' in self.tag or 'p2' in self.tag:
+                rcrit = 0.5
+            else:
+                rcrit = 1
+        elif 'w3' in self.tag or 'd3' in self.tag:
+            if 'p1' in self.tag or 'p3' in self.tag or 'p2' in self.tag:
+                rcrit = 1.5
+            else:
+                rcrit = 2
+        if (not 'roughness' in self.stats or (self.stats['roughness']>rcrit)):
             return 1
         else:
             return 0
@@ -199,54 +221,110 @@ class fileHorizSDT(fileHoriz, fileSDT):
             stat[s]=self.stats[s]
         stat['line'] = ''
         self.stats = stat
-
+        
+    def fattenEdges(self, r:int=10):
+        '''dilate the right edge, fill and then erode. this is for lines where it thins out at the right and leaves holes so the filament can't be filled. r is the dilation/erosion size in px'''
+        cm = self.componentMask.copy()
+        m = 200
+        
+        # empty the middle
+        cm[:, m:-m] =  np.zeros(cm[:, m:-m].shape)
+        
+        # dilate the ends
+        cm = dilate(cm, r)
+        
+        # add back into the image and fill
+        cm = cv.add(self.componentMask, cm)
+        cm = fi.filler(cm).filled
+        
+        # split filled image into one image that's just ends and another that's just middle
+        cmends = cm.copy()
+        cmmid = cm.copy()
+        rr = 0
+        cmmid[:, :m-rr] = np.zeros(cmmid[:, :m-rr].shape)
+        cmmid[:, -m+rr:] = np.zeros(cmmid[:, -m+rr:].shape)
+        jj = 0
+        cmends[:, m+r+jj:-m-r-jj] =  np.zeros(cmends[:, m+r+jj:-m-r-jj].shape)
+        
+        # erode the ends
+        cmends = erode(cmends, r)
+        
+        # recombine middle and ends
+        cm = cv.add(cmends, cmmid)
+        self.componentMask = cm
+        
+        
     def measure(self) -> None:
         '''measure horizontal SDT line'''
         if self.checkWhite(val=254):
             # white image
             if self.overrideSegment:
-                self.getCrop(overwrite=False)
-                self.cropIm()
+                self.getCrop(overwrite=self.overwriteCropLocs)
+                self.cropIm(normalize=self.normalize)
                 self.im[:,:] = 0
                 self.componentMask = self.im
                 self.exportSegment(overwrite=False)              # export segmentation
             self.stats['error'] = 'white'
             return
         self.initialize()
-        self.getCrop(overwrite=False)
+        self.getCrop(overwrite=self.overwriteCropLocs)
         self.generateIm0()
         # get the real nozzle position and pad it
         if not 'o' in self.tag:
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, yCropMargin=0)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=3, right=3, bottom=1)
-        self.cropIm()
+        self.padNozzle(left=3, right=5, bottom=5)
+        self.cropIm(normalize=self.normalize)
         self.findIntendedCoords()                        # find where the object should be
         self.findIntendedPx()
-        if self.overrideSegment:
+        
+        # use existing segmentation
+        if not self.overrideSegment:
+            self.importUsegment()
+            if hasattr(self, 'Usegment'):
+                if self.Usegment.sum().sum()>0:
+                    self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit, diag=self.diag)
+                    self.componentMask = self.segmenter.filled
+                else:
+                    self.stats['error'] = 'white'
+                    return
+                
+        # generate a new segment
+        if not hasattr(self, 'segmenter'):
             self.generateSegment(overwrite=True)
-            if self.useML:
-                self.importMLsegment()
-                self.Usegment = self.componentMask.copy()
-        else:
-            self.importSegmentation()
-        if self.useML:
-            if hasattr(self, 'Usegment') and hasattr(self, 'MLsegment') and not self.Usegment.shape==self.MLsegment.shape:
-                self.generateSegment(overwrite=True)
-                self.Usegment = self.componentMask.copy()
-            self.reconcileImportedSegment(eraseTop=False, largeCrit=100000)
+            self.exportSegment()
+            self.Usegment = self.componentMask.copy()
+            
+        # use ML
+        if self.forceML:
+            self.importMLsegment()
+            self.reconcileImportedSegment(func='horiz', smallCrit=500)
+            
         self.segmentClean()
         
-        if not hasattr(self, 'segmenter'):
-            self.segment()
-            self.exportSegment()              # export segmentation
-        
+        # try fattening edges
         o1 = self.checkAndDims()
-        while (o1==1) and not self.importedImages and self.segmentSteps<5:
-            self.segment()
-            for s in ['cnt']:
-                if hasattr(self, s):
-                    delattr(self, s)   # reset contour
+        if o1==1:
+            # empty space. try to fill it
+            self.fattenEdges(10)
+            scopy = self.segmenter
+            s2 = segmenterDF(self.componentMask, acrit=self.acrit, diag=self.diag)
+            for s in ['im', 'gray', 'thresh']:
+                setattr(s2, s, getattr(scopy, s))
+            self.segmenter = s2
+            self.segmentClean()
             o1 = self.checkAndDims()
+            if o1==0:
+                self.exportSegment(overwrite=True)
+        
+        # try machine learning
+        if self.useML and not self.forceML:
+            o1 = self.checkAndDims()
+            if o1==1:
+                self.importMLsegment()
+                self.reconcileImportedSegment(func='horiz', smallCrit=500)
+                self.segmentClean()
+                self.checkAndDims()
+
         if not self.segmenter.success:
             if self.diag>0:
                 logging.warning(f'Segmenter failed on {self.file}')

@@ -66,23 +66,28 @@ def pooledSESingle(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
         se = 0
     return mean, se
 
+
 def pooledSE(vals:list, ses:list, ns:list) -> Tuple[float, float, int]:
-    mean = np.mean(vals)
-    n = np.sum(ns)
+    '''given list of means, standard errors, and sizes, calculate the pooled mean, standard error, and sample size for a group of values, each with their own standard error. https://en.wikipedia.org/wiki/Pooled_variance'''
+    N = len(vals)   # number of means
+    n = np.sum(ns)  # number of samples
+    mean = np.sum([(ns[i]*vals[i]) for i in range(N)])/n # weighted mean
+    
     if not len(vals)==len(ses) or not len(ses)==len(ns):
         raise ValueError(f'Mismatched array lengths in pooledSE: vals {len(vals)}, SE {len(ses)}, N {len(ns)}')
 
     if len(ses)>0:
-        a = np.sum([ns[i]*(np.sqrt(ns[i])*ses[i])**2 for i in range(len(vals))])/np.sum(ns)
-        b = np.sum([ns[i]**2*(vals[i]-vals[i+1])**2 for i in range(len(vals)-1)])/np.sum([ns[i]**2 for i in range(len(vals))])
-        poolsd = np.sqrt(a+b)
-        se = poolsd/np.sqrt(len(vals))
+        ss = [ses[i]*np.sqrt(ns[i]) for i in range(N)]  # standard deviations
+        a = np.sum([(ns[i]-1)*ss[i]**2 + (ns[i]*vals[i]**2) for i in range(N)])
+        b = n*mean**2
+        poolsd = np.sqrt((a-b)/(n-N))
+        se = poolsd/np.sqrt(n)
     else:
         se = vals.sem()
     return mean, se, n
 
 def pooledSEDF(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
-    '''calculate the pooled standard error for a group of values, each with their own standard error'''
+    '''given a dataframe and a variable name, calculate the pooled mean, standard error, and sample size for a group of values, each with their own standard error'''
     sevar = f'{var}_SE'
     nvar = f'{var}_N'
     if not nvar in df:

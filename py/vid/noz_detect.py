@@ -72,9 +72,9 @@ class nozData(timeObject):
 
     #-----------------------------
 
-    def subtractBackground(self, im:np.array, dilate:int=0, diag:int=0) -> np.array:
+    def subtractBackground(self, im:np.array, dilate:int=0, diag:int=0, **kwargs) -> np.array:
         subtracted = self.bg.subtractBackground(im, diag=diag)
-        subtracted = self.maskNozzle(subtracted, dilate=dilate)
+        subtracted = self.maskNozzle(subtracted, dilate=dilate, **kwargs)
         if diag>0:
             imshow(im, bg, subtracted)
         return subtracted
@@ -138,7 +138,7 @@ class nozData(timeObject):
             out = cv.subtract(frame, mask)
         else:
             out = cv.add(frame, mask) 
-        
+
         if normalize:
             norm = np.zeros(out.shape)
             out = cv.normalize(out,  norm, 0, 255, cv.NORM_MINMAX) # normalize the image

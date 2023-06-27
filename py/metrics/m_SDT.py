@@ -28,6 +28,8 @@ from m_plot.m_plots import *
 from m_tools import *
 import progDim.prog_dim as pgd
 
+from val.v_pressure import pressureVals
+
 # logging
 
 
@@ -36,29 +38,30 @@ import progDim.prog_dim as pgd
 class fitChanger(fh.folderLoop):
     '''change the pressure vs speed model used in progDims and measurements for all folders and re-measure'''
     
-    def __init__(self, folders:Union[str, list], a:float, b:float, c:float, canMatch:list=['Horiz', 'Vert', 'XS'], **kwargs) -> None:
-        self.a = a
-        self.b = b
-        self.c = c
+    def __init__(self, folders:Union[str, list], canMatch:list=['Horiz', 'Vert', 'XS'], **kwargs) -> None:
         super().__init__(folders, self.changeFitAndMeasure, canMatch=canMatch, **kwargs)
         
-    def changeFit(self, folder:str):
-        '''change the pressure vs speed model used in progDims and measurements for a single folder'''
-        pfd = fh.printFileDict(folder)
-        mf = pfd.meta[0]
+#     def changeFit(self, folder:str):
+#         '''change the pressure vs speed model used in progDims and measurements for a single folder'''
+#         pfd = fh.printFileDict(folder)
+#         mf = pfd.meta[0]
 
-        meta,u = plainImDict(mf, unitCol=1, valCol=2)
-        if meta['caliba_channel_0'] == self.a and meta['calibb_channel_0'] == self.b and meta['calibc_channel_0'] == self.c:
-            return pfd
-        meta['caliba_channel_0'] = self.a
-        meta['calibb_channel_0'] = self.b
-        meta['calibc_channel_0'] = self.c
-        shutil.copyfile(mf, mf.replace('meta', 'metOrig'))
-        plainExpDict(mf, meta, u, quotechar='"')
-        return pfd
+#         meta,u = plainImDict(mf, unitCol=1, valCol=2)
+#         if meta['caliba_channel_0'] == self.a and meta['calibb_channel_0'] == self.b and meta['calibc_channel_0'] == self.c:
+#             return pfd
+#         meta['caliba_channel_0'] = self.a
+#         meta['calibb_channel_0'] = self.b
+#         meta['calibc_channel_0'] = self.c
+#         shutil.copyfile(mf, mf.replace('meta', 'metOrig'))
+#         plainExpDict(mf, meta, u, quotechar='"')
+#         return pfd
         
     def changeFitAndMeasure(self, folder:str):
-        pfd = self.changeFit(folder)
+        '''check the fit of a single folder and if it changed, re-measure'''
+        pfd = fh.printFileDict(folder)
+        pr = pressureVals(folder, pfd=pfd)
+        if not pr.changed:
+            return
         pdim = getProgDims(folder, pfd=pfd)
         pdim.exportAll(overwrite=True)
         if 'Horiz' in folder:

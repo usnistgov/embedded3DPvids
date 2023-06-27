@@ -28,7 +28,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 #----------------------------------------------
 
-class segmentCombiner(timeObject):
+class segmentCombinerV(timeObject):
     '''combine segmentation from ML model and unsupervised model'''
     
     def __init__(self, imML:np.array, imU:np.array, acrit:int, largeCrit:int=1000, rErode:int=5
@@ -40,6 +40,7 @@ class segmentCombiner(timeObject):
         sUm = sU.commonMask(sML)          # parts from U that are also in ML
         both = cv.bitwise_and(sMLm, sUm)  # parts that are in both
         tot = cv.add(sMLm, sUm)           # parts that are in either, but with overlapping components
+        dif = cv.subtract(sUm, sMLm)
 
         MLadd = cv.subtract(sMLm, sUm)   # parts that are in ML but not U
         if MLadd.sum().sum()>0 and eraseTop:
@@ -47,7 +48,7 @@ class segmentCombiner(timeObject):
             e2.eraseTopBorder(margin=5, checks=False)               # remove parts from the ML image that are touching the top edge
             if hasattr(e2, 'labelsBW'):       # ML model has tendency to add reflection at top
                 MLadd = e2.labelsBW
-        dif = cv.subtract(sUm, sMLm)
+        
         Uadd = dilate(erode(dif, rErode),rDilate)   # parts that are in U but not ML, opened
         Uexc = cv.bitwise_and(tot, Uadd)
         if Uexc.sum().sum()>0 and largeCrit<10000:
@@ -62,5 +63,32 @@ class segmentCombiner(timeObject):
         segmenter.imML = imML
         segmenter.imU = imU
         segmenter.exc = exc
+        segmenter.dif = dif
+        self.segmenter = segmenter
+        
+class segmentCombinerH(timeObject):
+    '''combine segmentation from ML model and unsupervised model, where typically ML is just filling holes from unsupervised'''
+    
+    def __init__(self, imML:np.array, imU:np.array, acrit:int, smallCrit:int=500, diag:int=0, **kwargs):
+        super().__init__()
+        # sML = segmenterDF(imML, acrit=acrit) # ML DF
+        # sU = segmenterDF(imU, acrit=acrit) # unsupervised DF
+        # sMLm = sML.commonMask(sU)         # parts from ML that are also in U
+        # sUm = sU.commonMask(sML)          # parts from U that are also in ML
+
+        MLadd = cv.subtract(imML, imU)   # parts that are in ML but not U
+        if MLadd.sum().sum()>0:
+            e1 = segmenterDF(MLadd, acrit=500)
+            e1.eraseSmallComponents()
+            if hasattr(e1, 'labelsBW'):
+                MLadd = e1.labelsBW
+        
+        filled = cv.add(MLadd, imU)
+        dif = cv.bitwise_xor(imML, imU)
+        filled = fi.filler(filled, fi.fillMode.fillTiny, acrit=50).filled
+        segmenter = segmenterDF(filled, acrit=acrit, diag=diag)
+        segmenter.imML = imML
+        segmenter.imU = imU
+        segmenter.exc = MLadd
         segmenter.dif = dif
         self.segmenter = segmenter

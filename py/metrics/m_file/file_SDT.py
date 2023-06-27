@@ -38,14 +38,30 @@ pd.set_option('display.max_rows', 500)
 class fileSDT(fileDisturb):
     '''singleDoubleTriple single files'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCrop:bool=True, useML:bool=True, **kwargs):
-        self.exportCrop = exportCrop
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCropLoc:bool=True, useML:bool=True, forceML:bool=False, background:bool=True, **kwargs):
+        self.exportCropLoc = exportCropLoc
         self.useML = useML
+        self.forceML = forceML
+        self.background = background
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
     def initialize(self):
         self.getProgRow() 
         self.getProgTime()
+        
+    def openSeriesInPaint(self):
+        '''open all the files in this group, e.g o1,o2,o3 in paint'''
+        if 'o' in self.tag:
+            s1 = 'o'
+            imax = 8
+        elif 'p' in self.tag:
+            s1 = 'p'
+            imax = 5
+        else:
+            return
+        oo = self.tag[-1]
+        for i in range(1,imax+1):
+            openInPaint(self.file.replace(f'{s1}{oo}', f'{s1}{i}'))
         
     def getProgTime(self):
         '''get the time of this picture relative to the time when the endpoint was written'''
@@ -90,9 +106,9 @@ class fileSDT(fileDisturb):
         self.units['pname'] = ''
         
     
-    def cropIm(self, background:bool=True):
-        if background:
-            self.im = self.nd.subtractBackground(self.im)   # remove the background and the nozzle
+    def cropIm(self, normalize:bool=True):
+        if self.background:
+            self.im = self.nd.subtractBackground(self.im, normalize=normalize)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
                 
     def padNozzle(self, left:int=0, right:int=0, bottom:int=0):

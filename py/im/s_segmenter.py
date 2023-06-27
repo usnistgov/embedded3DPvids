@@ -49,7 +49,7 @@ class segmenter(timeObject):
                  , closing:int=0, grayBlur:int=3, removeSharp:bool=False
                  , nozMode:int=nozMode.full
                  , trimNozzle:bool=False, addRightEdge:bool=False, addLeftEdge:bool=False
-                 , leaveHollows:bool=True, complete:bool=True, **kwargs):
+                 , leaveHollows:bool=True, complete:bool=True, normalize:bool=True, **kwargs):
         self.im = im
         self.w = self.im.shape[1]
         self.h = self.im.shape[0]
@@ -67,6 +67,7 @@ class segmenter(timeObject):
         self.addRightEdge = addRightEdge
         self.addLeftEdge = addLeftEdge
         self.grayBlur = grayBlur
+        self.normalize = normalize
         self.kwargs = kwargs
         if 'nozData' in kwargs:
             self.nd = kwargs['nozData']
@@ -250,7 +251,7 @@ class segmenter(timeObject):
         '''add the nozzle in black back in for filling'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, bottomOnly=bottomOnly)   
+        thresh = self.nd.maskNozzle(self.thresh, ave=False, invert=False, crops=self.crops, bottomOnly=bottomOnly, normalize=self.normalize)   
         h,w = thresh.shape
         thresh[0, :] = 0   # clear out the top row
         thresh[:int(h/4), 0] = 0  # clear left and right edges at top half
@@ -292,7 +293,7 @@ class segmenter(timeObject):
         if not hasattr(self, 'filled'):
             return
         # Apply morphology operations
-        thresh2 = self.nd.maskNozzle(self.thresh, dilate=5, crops=self.crops, invert=True)  # generously remove nozzle
+        thresh2 = self.nd.maskNozzle(self.thresh, dilate=5, crops=self.crops, invert=True, normalize=self.normalize)  # generously remove nozzle
         gX = openMorph(thresh2, 1, aspect=15)    # filter out horizontal lines
         tot1 = closeMorph(gX, 5, aspect=1/5)   # close sharp edges
         tot = fi.filler(tot1).gapsToFill()    # fill gaps
@@ -311,7 +312,7 @@ class segmenter(timeObject):
         '''remove the black nozzle from the image'''
         if not (hasattr(self, 'nd') and hasattr(self, 'crops')):
             return
-        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops))  
+        setattr(self, s, self.nd.maskNozzle(getattr(self, s), ave=False, invert=True, crops=self.crops, normalize=self.normalize))  
         # remove the nozzle again
             
             

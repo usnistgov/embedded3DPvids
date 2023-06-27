@@ -205,10 +205,10 @@ class nozDims:
                 raise ValueError('Unexpected intersection points')
         elif lpt.y==yB:
             nozpts.append([lpt.x, yB])
-            if h1.x==xR:
+            if rpt.x==xR:
                 # intersect with right edge of nozzle
                 nozpts.append([xR, yB])
-                nozpts.append([xR, h1.y])
+                nozpts.append([xR, rpt.y])
             else:
                 raise ValueError('Unexpected intersection points')
         else:

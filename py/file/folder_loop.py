@@ -151,6 +151,8 @@ class folderFileLoop(folderLoop):
             self.fileErrorList[i]['error']=e 
             if self.printErrors:
                 print(e)
+            if self.printTraceback:
+                traceback.print_exc()
         else:
             self.fileErrorList[i]['error'] = ''
         print(self.fileErrorList[i])

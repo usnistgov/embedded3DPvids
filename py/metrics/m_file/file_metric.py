@@ -48,47 +48,12 @@ pd.set_option('display.max_rows', 500)
 
 
 #----------------------------------------------
-
-def whiteoutFile(file:str, val:int=255) -> None:
-    '''white out the whole file'''
-    if not os.path.exists(file):
-        return
-    im = cv.imread(file)
-    if len(im.shape)==3:
-        im[:,:,:] = val
-    else:
-        im[:,:] = val
-    cv.imwrite(file, im)
-    ff = file.replace(cfg.path.server, '')
-    if val==255:
-        logging.info(f'Whited out {ff}')
-    elif val==0:
-        logging.info(f'Blacked out {ff}')
-    else:
-        logging.info(f'Covered up {ff}')
-    
-    
-def whiteoutAll(file:str) -> None:
-    '''whiteout the file, the cropped file, the ML file, and the Usegment file'''
-    if not 'vstill' in file:
-        raise ValueError(f'whiteoutAll failed on {file}. Only allowed for vstill files')
-    whiteoutFile(file, val=255)
-    bn = os.path.basename(file)
-    folder = os.path.dirname(file)
-    cropfile = os.path.join(folder, 'crop', bn.replace('vstill', 'vcrop'))
-    if os.path.exists(cropfile):
-        whiteoutFile(cropfile, val=255)
-    ufile = os.path.join(folder, 'Usegment', bn.replace('vstill', 'Usegment'))
-    mfile = os.path.join(folder, 'MLsegment', bn.replace('vstill', 'MLsegment'))
-    for filei in [ufile, mfile]:
-        if os.path.exists(filei):
-            whiteoutFile(filei, val=0)
-    
+   
 
 class fileMetric(timeObject):
     '''collects data about fluid segments in an image'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportDiag:int=2, **kwargs):
+    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportDiag:int=2, normalize:bool=True, **kwargs):
         self.file = file
         self.folder = os.path.dirname(self.file)
         if not os.path.exists(self.file):
@@ -96,6 +61,7 @@ class fileMetric(timeObject):
         self.acrit = acrit
         self.diag = diag
         self.exportDiag = exportDiag
+        self.normalize = normalize
         self.hasIm = False
         self.stats = {'line':''}
         self.units = {'line':''}
@@ -111,6 +77,10 @@ class fileMetric(timeObject):
         self.scale = 1/fh.fileScale(self.file)
         self.im = cv.imread(self.file)
         self.hasIm = True
+        
+    def openInPaint(self):
+        openInPaint(self.file)
+    
         
     def imDims(self):
         '''image dimensions'''
@@ -244,33 +214,49 @@ class fileMetric(timeObject):
             self.im0 = vc.imcrop(self.im0, self.crop) 
             
         
-    def reconcileImportedSegment(self, **kwargs):
+    def reconcileImportedSegment(self, func:str='vert', **kwargs):
         '''reconcile the difference between the imported segmentation files'''
-        if hasattr(self, 'MLsegment'):
-            self.MLsegment = self.nd.maskNozzle(self.MLsegment, crops=self.crop, invert=True)
-            if hasattr(self, 'Usegment'):
-                self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
-                if self.Usegment.sum().sum()==0:
-                    self.segmenter = segmenterDF(self.MLsegment, acrit=self.acrit)
-                elif self.MLsegment.sum().sum()==0:
-                    self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
-                else:
-                    self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
-            else:
-                self.generateSegment(overwrite=False)
-                self.Usegment = self.componentMask
-                self.segmenter = segmentCombiner(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
-        elif hasattr(self, 'Usegment'):
+        if func=='vert':
+            f = segmentCombinerV
+        elif func=='horiz':
+            f = segmentCombinerH
+            
+        
+        if hasattr(self, 'Usegment'):
             self.Usegment = self.nd.maskNozzle(self.Usegment, crops=self.crop, invert=True)
-            self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+            if self.Usegment.sum().sum()==0:
+                delattr(self, 'Usegment')
         else:
             self.generateSegment(overwrite=False)
             self.segmenter = segmenterDF(self.componentMask, acrit=self.acrit)
+            return
+        
+        if hasattr(self, 'MLsegment'):
+            self.MLsegment = self.nd.maskNozzle(self.MLsegment, crops=self.crop, invert=True)
+            if self.MLsegment.sum().sum()==0:
+                delattr(self, 'MLsegment')
+               
+        if hasattr(self, 'MLsegment'): 
+            if hasattr(self, 'Usegment'):
+                self.segmenter = f(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
+            else:
+                self.segmenter = segmenterDF(self.MLsegment, acrit=self.acrit)
+        elif hasattr(self, 'Usegment'):
+            self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit)
+        else:
+            self.segmenter = segmenterFail()
+        if self.segmenter.success:
+            self.componentMask = self.segmenter.filled.copy()
+            
             
     def importSegmentation(self) -> None:
         '''import any pre-segmented images'''
         self.importUsegment()
         self.importMLsegment()
+        if self.diag>0:
+            uu = hasattr(self, 'Usegment')
+            mm = hasattr(self, 'MLsegment')
+            print(f'Usegment: {uu}, MLsegment: {mm}')
         
     def importUsegment(self):
         s = self.segmentFN()
@@ -289,8 +275,7 @@ class fileMetric(timeObject):
             if not h==self.crop['yf']-self.crop['y0'] or not w==self.crop['xf']-self.crop['x0']:
                 raise ValueError(f'{self.file}: MLsegment is wrong shape')
             self.importedImages = True
-        if self.diag>0:
-            print(f'Usegment: {os.path.exists(s)}, MLsegment: {os.path.exists(m)}')
+        
         
     def exportCrop(self, **kwargs) -> None:
         '''add the cropped image to the folder for machine learning'''
@@ -302,7 +287,11 @@ class fileMetric(timeObject):
         return self.subFN('Usegment', 'Usegment')
     
     def MLFN(self) -> str:
-        return self.subFN('MLsegment', 'MLsegment')
+        fn = self.subFN('MLsegment2', 'MLsegment2')
+        if not os.path.exists(fn):
+            return self.subFN('MLsegment', 'MLsegment')
+        else:
+            return fn
             
     def exportSegment(self, **kwargs) -> None:
         '''add the cropped image to the folder for machine learning'''

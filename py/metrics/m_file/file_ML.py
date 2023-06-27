@@ -108,18 +108,23 @@ class segmentCompare:
     
     def getSegMachine(self, i:int, bn:str) -> np.array:
         '''get the ML segmented image from a folder'''
-        fn = fh.findFullFN(bn, self.serverFolder)
-        if not os.path.exists(fn):
+        try:
+            fn = fh.findFullFN(bn, self.serverFolder)
+        except FileNotFoundError:
             self.df.loc[i, 'result'] = 'MLNotFound'
             return []
         fn = os.path.join(os.path.dirname(fn), 'MLsegment', bn.replace('vstill', 'MLsegment'))
+        if not os.path.exists(fn):
+            self.df.loc[i, 'result'] = 'MLNotFound'
+            return []
         seg = cv.imread(fn, cv.IMREAD_GRAYSCALE)
         return seg
     
     def getSegU(self, i:int, bn:str) -> np.array:
         '''get the unsupervised segmented image from a folder'''
-        fn = fh.findFullFN(bn, self.serverFolder)
-        if not os.path.exists(fn):
+        try:
+            fn = fh.findFullFN(bn, self.serverFolder)
+        except FileNotFoundError:
             self.df.loc[i, 'result'] = 'UNotFound'
             return []
         fn = os.path.join(os.path.dirname(fn), 'Usegment', bn.replace('vstill', 'Usegment'))
@@ -130,11 +135,15 @@ class segmentCompare:
         '''get the original image'''
         fn = os.path.join(self.origFolder, bn)
         if not os.path.exists(fn):
-            return []
+            print(bn)
+            try:
+                fn = fh.findFullFN(bn.replace('.ome', '').replace('vcrop', 'vstill'), self.origFolder)
+            except FileNotFoundError:
+                return []
         orig = cv.imread(fn)
         return orig
             
-    def compareFile(self, i:int, diag:int=0, **kwargs) -> dict:
+    def compareFile(self, i:int, diag:int=0, diffCrit:float=0.01, **kwargs) -> dict:
         '''segfile is the pre-segmented file'''
         bn = self.df.loc[i, 'bn']
         self.df.loc[i, 'difference'] = 1
@@ -148,6 +157,8 @@ class segmentCompare:
                 segReal = self.getSegMachine(i, bn)
             elif self.func=='U':
                 segReal = self.getSegU(i,bn)
+            else:
+                raise ValueError(f'Unexpected func {self.func}')
         else:
             # segment the file
             segReal = self.getSegReal(i, bn, diag=diag, **kwargs)
@@ -158,8 +169,9 @@ class segmentCompare:
         if not segIdeal.shape==segReal.shape:
             self.df.loc[i, 'result'] = 'ShapeMismatch'
             return
-        diff = self.measureDifference(bn, i, segIdeal, segReal)
-        self.createImDiag(bn, segIdeal, segReal, diff, diag=diag)
+        diff, difference = self.measureDifference(bn, i, segIdeal, segReal)
+        if difference>diffCrit:
+            self.createImDiag(bn, segIdeal, segReal, diff, diag=diag)
         
         
     def measureDifference(self, bn:str, i:int, segIdeal:np.array, segReal:np.array) -> None:
@@ -168,10 +180,11 @@ class segmentCompare:
         self.df.loc[i, 'result'] = 'Found'
         shape = segIdeal.shape
         a = shape[0]*shape[1]
-        self.df.loc[i, 'difference'] = diff.sum(axis=0).sum(axis=0)/255/a  # number of different pixels
-        return diff
+        difference = diff.sum(axis=0).sum(axis=0)/255/a  # fraction of different pixels
+        self.df.loc[i, 'difference'] = difference
+        return diff, difference
         
-    def createImDiag(self, bn:str, segIdeal:np.array, segReal:np.array, diff:np.array, diag:int=0) -> None:
+    def createImDiag(self, bn:str, segIdeal:np.array, segReal:np.array, diff:np.array, diag:int=0, title1:str='ideal', title2:str='real') -> None:
         '''create a diagnostic image that compares the found image to the manual segmented image and shows differences in color'''
         imdiag = cv.cvtColor(segIdeal, cv.COLOR_GRAY2BGR)
         r0 = cv.bitwise_and(segIdeal, segReal)
@@ -183,9 +196,9 @@ class segmentCompare:
         if diag>0:
             orig = self.getOrig(bn)
             if len(orig)>0:
-                imshow(imdiag, segIdeal, segReal, orig, titles=['diff', 'ideal', 'real', 'orig'])
+                imshow(imdiag, segIdeal, segReal, orig, titles=['diff', title1, title2, 'orig'])
             else:
-                imshow(imdiag, segIdeal, segReal, diff, titles=['diff', 'ideal', 'real', 'difference'])
+                imshow(imdiag, segIdeal, segReal, diff, titles=['diff', title1, title2, 'difference'])
         self.images[bn] = imdiag 
         
     def showWorstSegmentation(self, n:int=6) -> None:
@@ -212,7 +225,59 @@ class segmentCompare:
     def averageDiff(self) -> float:
         '''get the average difference'''
         return self.df.difference.mean()
+    
+#-----------------------
 
+class modelCompare(segmentCompare):
+    '''for comparing the performance of 2 ML models with results in 2 folders'''
+    
+    def __init__(self, folder1:str, folder2:str, origFolder:str):
+        super().__init__(folder1, '', origFolder, None)
+        self.folder1 = folder1
+        self.folder2 = folder2
+        
+    def getImage(self, folder:str, i:int, bn:str, tag:str) -> np.array:
+        '''get the manually segmented image'''
+        file = os.path.join(folder, bn)
+        self.df.loc[i, tag] = file
+        im = cv.imread(file, cv.IMREAD_GRAYSCALE)
+        return im
+        
+    def compareFile(self, i:int, diag:int=0, diffCrit:float=0.01, **kwargs) -> dict:
+        '''segfile is the pre-segmented file'''
+        bn = self.df.loc[i, 'bn']
+        self.df.loc[i, 'difference'] = 1
+        
+        # find original file
+        seg1 = self.getImage(self.folder1, i, bn, 'folder1')
+        seg2 = self.getImage(self.folder2, i, bn, 'folder2')
+        
+        # compare segmentation to ideal
+        if not seg1.shape==seg2.shape:
+            self.df.loc[i, 'result'] = 'ShapeMismatch'
+            return
+        diff, difference = self.measureDifference(bn, i, seg1, seg2)
+        if difference>diffCrit:
+            self.createImDiag(bn, seg1, seg2, diff, diag=diag, title1='folder 1', title2='folder 2')
+            
+    def showWorstSegmentation(self, n:int=6) -> None:
+        '''show the segmented images with the worst diff values'''
+        print(f'Fraction same: {self.successRate():0.3f}, Average diff: {self.averageDiff():0.3f}')
+        df2 = self.df.sort_values(by='difference', ascending=False)
+        ims = []
+        print(df2.iloc[:n*2][['result', 'difference']])
+        print('Red = folder 1, green = folder 2')
+        i = 0
+        j = 0
+        while j<n and i<len(df2):
+            bn = df2.iloc[i]['bn']
+            if bn in self.images:
+                ims.append(self.images[bn])
+                j = j+1
+            i = i+1
+        imshow(*ims)
+
+#-----------------------
     
 class trainingGenerator:
     '''a class for generating training data for ML models'''
@@ -261,9 +326,12 @@ class trainingGenerator:
                 return self.randomFile()
         return file
     
-class resultMover:
+#-----------------------
     
-    def __init__(self, segFolder:Union[List[str],str], serverFolder:str, diag:int=1, timing:int=100):
+class resultMover:
+    '''move machine learning results to the folder'''
+    
+    def __init__(self, segFolder:Union[List[str],str], serverFolder:str, diag:int=1, timing:int=100, tag:str='MLsegment'):
         if type(segFolder) is str:
             self.segFolders = [segFolder]
         elif type(segFolder) is list:
@@ -273,6 +341,7 @@ class resultMover:
         self.serverFolder = serverFolder
         self.diag = diag
         self.timing = timing
+        self.tag = tag
         self.error = []
         self.printi = -1
         self.copied = 0
@@ -293,10 +362,10 @@ class resultMover:
             self.error.append(fn)
             return
         folder = os.path.dirname(fn)
-        segfolder = os.path.join(folder, 'MLsegment')
+        segfolder = os.path.join(folder, self.tag)
         if not os.path.exists(segfolder):
             os.mkdir(segfolder)
-        newname = os.path.join(segfolder, bn.replace('vstill', 'MLsegment'))
+        newname = os.path.join(segfolder, bn.replace('vstill', self.tag))
         if os.path.exists(newname):
             self.already+=1
         else:
