@@ -11,6 +11,7 @@ from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
 import cv2 as cv
+import imageio
 import csv
 
 # local packages
@@ -292,6 +293,47 @@ class vidData:
                 cv.imwrite(fn, frame)
                 if diag>0:
                     logging.info(f'Exported {fn}')
+                    
+    def exportGIF(self, line:str, compression:int=1, speedScale:float=1, color:bool=True, crop:dict={}, sizeCompression:int=1, prestart:float=0) -> None:
+        '''export a gif of just the writing and observing of one line. line is the line name, e.g. l1w1.
+        compression is the factor of how many frames to drop. e.g take on frame per compression frames
+        speedScale is how much to speed up the video'''
+        self.openStream()
+        dt = compression/self.fps  # time step size to take frames
+        giffps = int(speedScale/dt)   # frames per second of the gif
+        newName = self.pfd.newFileName(f'clip_{line}', 'gif')
+        result = imageio.get_writer(newName, fps=giffps)
+        
+        pline = self.prog[self.prog.name.str.contains(f'{line}p')]
+        if len(pline)==0:
+            raise ValueError(f'Cannot find line {line}')
+        t0 = pline.iloc[0]['t0']+prestart
+        oline = self.prog[self.prog.name.str.contains(f'{line}o')]
+        tf = oline.iloc[-1]['tpic']
+
+        for t in np.arange(t0, tf+dt, dt):
+            frame = self.getFrameAtTime(t, False)
+            if color:
+                frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            else:
+                frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            if 'y0' in crop and 'yf' in crop and 'x0' in crop and 'xf' in crop:
+                frame = frame[crop['y0']:crop['yf'], crop['x0']:crop['xf']]
+            if not sizeCompression==1:
+                dim = frame.shape
+                h = int(dim[0]/sizeCompression)
+                w = int(dim[1]/sizeCompression)
+                dim = (w,h)
+                frame = cv.resize(frame, dim, interpolation = cv.INTER_AREA)
+            result.append_data(frame)
+
+          # When everything done, release 
+        # the video capture and video 
+        # write objects
+        result.close()
+        file_stats = os.stat(newName)
+        logging.info(f'Exported {newName}: {file_stats.st_size / (1024 * 1024)} MB')
+        return
             
 #----------------------------------------------
 

@@ -59,7 +59,7 @@ class fileXSSDT(fileXS, fileSDT):
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly. assume that the center of the first filament should be at the center of the nozzle tip'''
-        rc1, rc2, w1, w2, _ = self.intendedRC(fixList=['y','z'])
+        rc1, rc2, w1, w2, _, _ = self.intendedRC(fixList=['y','z'])
         for j in [['dx', 'w'], ['dy', 'h']]:
             coord = j[0][1]
             right = (rc2[j[0]]+w2/2)      # the left edge should be 1/2 diameter to the left of the first line center

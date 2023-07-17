@@ -196,7 +196,7 @@ class pressureVals:
         '''create new linear model fit from the file and adopt the values. return 0 if succeeded'''
         pts = self.getPointsFromCalib(file)
         newreg = regPD(pts, ['pressure (mbar)'], 'speed (mm/s)', order=1, log=False, intercept='')
-        if newreg['r2']<0.8:
+        if not 'r2' in newreg or newreg['r2']<0.8:
             return 1
         self.caliba = 0
         self.calibb = newreg['b']
@@ -259,7 +259,7 @@ class pressureVals:
         with open(calibFile, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=',', quotechar='|')
             for row in reader:
-                if 'init wt' in row[0]:
+                if len(row)>0 and 'init wt' in row[0]:
                     df = pd.read_csv(calibFile, skiprows=reader.line_num-1)
                     df.dropna(inplace=True)
                     return df

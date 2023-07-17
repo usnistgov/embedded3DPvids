@@ -61,7 +61,7 @@ class folderMetric(timeObject):
         if 'pv' in kwargs:
             self.pv = kwargs.pop('pv')
         else:
-            self.pv = printVals(self.folder, pfd=self.pfd)
+            self.pv = printVals(self.folder, pfd=self.pfd, **kwargs)
         if 'pg' in kwargs:
             self.pg = kwargs.pop('pg')
         self.diag = diag

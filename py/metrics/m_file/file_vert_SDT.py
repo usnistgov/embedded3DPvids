@@ -60,7 +60,7 @@ class fileVertSDT(fileVert, fileSDT):
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly'''
-        rc1, rc2, w1, w2, l = self.intendedRC()  # intended coords in mm
+        rc1, rc2, w1, w2, l, lprog = self.intendedRC()  # intended coords in mm
         for j in [['dx', 'w']]:
             coord = j[0][1]
             right = (rc2[j[0]]+w2/2)      # the left edge should be 1/2 diameter to the left of the first line center
@@ -74,9 +74,12 @@ class fileVertSDT(fileVert, fileSDT):
         self.ideals['area'] = l*w
         self.ideals['v'] = (l-w)*np.pi*r**2 + 4/3*np.pi*r**3
         self.ideals['h'] = l
+        self.ideals['hn'] = lprog
         
     def findDisplacement(self) -> None:
         '''find the displacement of the center and dimensions relative to the intended dimensions'''
+        self.stats['hn'] = self.stats['h']
+        self.units['hn'] = self.units['h']
         for s,ival in {'xc':'xc', 'x0':'x0', 'xf':'xf', 'dxprint':'xc'}.items():
             # ratio of size to intended size
             if s in self.stats:
@@ -86,7 +89,7 @@ class fileVertSDT(fileVert, fileSDT):
             if s in self.stats:
                 self.stats[s] = self.stats[s]/self.pv.dEst
                 self.units[s] = 'dEst'
-        for s,ival in {'w':'w', 'meanT':'w', 'vest':'v', 'vintegral':'v'}.items():
+        for s,ival in {'w':'w', 'meanT':'w', 'vest':'v', 'vintegral':'v', 'hn':'hn'}.items():
             # ratio of size to intended size
             if s in self.stats:
                 self.stats[s] = (self.stats[s]/self.ideals[ival])
@@ -97,7 +100,7 @@ class fileVertSDT(fileVert, fileSDT):
                 
         # remove length measurements for mid-print measurements 
         if not 'o' in self.tag:
-            for s in ['h', 'vest', 'vintegral', 'w', 'xf', 'meanT', 'stdevT', 'minmaxT']:
+            for s in ['h', 'vest', 'vintegral', 'w', 'xf', 'meanT', 'stdevT', 'minmaxT', 'hn']:
                 if s in self.stats:
                     self.stats.pop(s)
                     
@@ -120,13 +123,14 @@ class fileVertSDT(fileVert, fileSDT):
         self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
                                    , fillMode=fi.fillMode.fillByContours
                                    , nozData=self.nd, crops=self.crop
-                                   , segmentMode=[sMode.adaptive, sMode.kmeans]
-                                   , nozMode=nozMode.bottom, removeSharp=True
+                                   , segmentMode=[sMode.kmeans]
+                                   , nozMode=nozMode.full, removeSharp=True
                                    , fillTop=True, openBottom=True, grayBlur=self.grayBlur
                                   , closing=self.fillDilation)
         self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
-        self.segmenter.eraseLeftRightBorder(margin=1)   # remove components touching the left or right border
+        self.segmenter.eraseLeftRightBorder(margin=2, checks=False)   # remove components touching the left or right border
         self.segmenter.removeScragglies()  # remove scraggly components
+        self.segmenter.eraseBorderClingers(40)
 
     def measure(self) -> None:
         '''measure vertical SDT line'''

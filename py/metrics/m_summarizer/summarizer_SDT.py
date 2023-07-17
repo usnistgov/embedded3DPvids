@@ -26,6 +26,7 @@ from m_file.file_xs_SDT import *
 from m_file.file_vert_SDT import *
 from m_file.file_horiz_SDT import *
 from summarizer import *
+from val.v_tables import valTables
 
 # logging
 logger = logging.getLogger(__name__)
@@ -39,11 +40,12 @@ pd.set_option("display.precision", 2)
 #--------------------------------
 
 class summarizerSDT(summarizer):
-    '''recursively create summaries. measureClass is a class definition for a folderMetric class'''
+    '''recursively create summaries over many folders. measureClass is a class definition for a folderMetric class'''
     
     def __init__(self, topFolder:str, measureClass, printType:str, mustMatch:list=[], **kwargs):
         self.printType = printType
-        super().__init__(topFolder, measureClass, mustMatch=mustMatch+[printType], **kwargs)
+        self.valTable = valTables('singleDoubleTriple')
+        super().__init__(topFolder, measureClass, mustMatch=mustMatch+[printType], valTable=self.valTable, **kwargs)
         
         
     def csvFN(self, s:str) -> str:

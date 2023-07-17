@@ -63,8 +63,8 @@ class fileMetric(timeObject):
         self.exportDiag = exportDiag
         self.normalize = normalize
         self.hasIm = False
-        self.stats = {'line':''}
-        self.units = {'line':''}
+        self.stats = {'line':'', 'usedML':False}
+        self.units = {'line':'', 'usedML':''}
         
     def __getattr__(self, s):
         if s=='im':
@@ -237,6 +237,7 @@ class fileMetric(timeObject):
                 delattr(self, 'MLsegment')
                
         if hasattr(self, 'MLsegment'): 
+            self.stats['usedML'] = True
             if hasattr(self, 'Usegment'):
                 self.segmenter = f(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
             else:
@@ -247,6 +248,7 @@ class fileMetric(timeObject):
             self.segmenter = segmenterFail()
         if self.segmenter.success:
             self.componentMask = self.segmenter.filled.copy()
+        
             
             
     def importSegmentation(self) -> None:
@@ -396,7 +398,7 @@ class fileMetric(timeObject):
         return d,u
 
         
-    def intendedRC(self, fixList:list=[]) -> Tuple[dict, list]:
+    def intendedRC(self, fixList:list=[]) -> tuple:
         '''get the intended center position and width of the whole structure written so far, as coordinates in mm relative to the nozzle'''
         rc1 = self.pg.relativeCoords(self.tag, fixList=fixList)   # position of line 1 in mm, relative to the nozzle. 
            # we know y and z stay the same during travel, so we can just use the endpoint
@@ -411,7 +413,8 @@ class fileMetric(timeObject):
             rc2 = rc1
             w2 = w1
         l = self.progRows.l.max() # length of longest line written so far
-        return rc1, rc2, w1, w2, l
+        lprog = self.progRows.lprog.max()
+        return rc1, rc2, w1, w2, l, lprog
         
     def checkWhite(self, val:int=254) -> bool:
         '''check if the image is all white'''
@@ -590,8 +593,8 @@ class fileMetric(timeObject):
             stdev = np.std(midrange)/meant*self.scale               # standard deviation of thickness normalized by mean
             minmax = (max(midrange)-min(midrange))/meant*self.scale # total variation in thickness normalized by mean
         else:
-            stdev = ''
-            minmax = ''
+            stdev = np.nan
+            minmax = np.nan
         meant = meant*self.scale
         return meant, stdev, minmax
 

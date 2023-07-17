@@ -45,11 +45,12 @@ class folderSDT(folderMetric):
         super().__init__(folder, **kwargs)
         if not f'disturb' in os.path.basename(self.folder):
             return
-        if 'pg' in kwargs:
-            self.pg = kwargs['pg']
-        else:
-            self.pg = getProgDims(self.folder)
-            self.pg.importProgDims()
+        if not hasattr(self, 'pg'):
+            if 'pg' in kwargs:
+                self.pg = kwargs['pg']
+            else:
+                self.pg = getProgDimsPV(self.pv)
+                self.pg.importProgDims()
         self.lines = list(self.pg.progDims.name)    
         
     def depvars(self) -> list:
@@ -165,8 +166,10 @@ class folderSDT(folderMetric):
         llist = self.writeGroups()
         out = [(f'{ll}p', f'{ll}o') for ll in llist]
     
-    def plotValue(self, yvar:str, xvar:str='wtime') -> None:
+    def plotValue(self, yvar:str, xvar:str='wtime', fn:str='') -> None:
         '''plot values over time'''
+        if not hasattr(self, 'df'):
+            self.importMeasure()
         if not yvar in self.df or not xvar in self.df:
             return
         fig, ax = plt.subplots(figsize=(8,6))
@@ -208,5 +211,10 @@ class folderSDT(folderMetric):
         # ax.set_yscale('log')
         plt.legend()
         fig.tight_layout()
+        if len(fn)>0 and os.path.exists(os.path.dirname(fn)):
+            fn0 = os.path.splitext(fn)[0]
+            for s in ['.png', '.svg']:
+                fig.savefig(f'{fn0}{s}', bbox_inches='tight', dpi=300)
+            logging.info(f'Exported {fn0}.png and .svg')
         
 

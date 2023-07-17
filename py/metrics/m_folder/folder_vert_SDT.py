@@ -36,10 +36,11 @@ pd.set_option("display.precision", 2)
 class folderVertSDT(folderSDT):
     '''for a vertSDT folder, measure the disturbed lines'''
     
-    def __init__(self, folder:str, **kwargs) -> None:
-        super().__init__(folder, **kwargs)
-        if not 'disturbVert' in os.path.basename(self.folder):
-            raise ValueError(f'Wrong folderDisturb class called for {self.folder}')
+    def __init__(self, folder:str, overwrite:bool=False, **kwargs) -> None:
+        if not 'disturbVert' in os.path.basename(folder):
+            raise ValueError(f'Wrong folderDisturb class called for {folder}')
+        super().__init__(folder, overwrite=overwrite, **kwargs)
+        
         
     def measureFolder(self) -> None:
         '''measure all cross-sections in the folder and export table'''
@@ -49,7 +50,7 @@ class folderVertSDT(folderSDT):
     # summaries
 
     def summarize(self, **kwargs) -> Tuple[dict,dict]:
-        '''summarize xsical measurements in the folder and export table'''
+        '''summarize vertical measurements in the folder and export table'''
         r = self.summaryHeader()
         if r==0:
             return self.summary, self.summaryUnits, self.failures

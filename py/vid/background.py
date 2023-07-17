@@ -43,7 +43,8 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class background:
     '''holds information about the background'''
     
-    def __init__(self, printFolder:str, **kwargs):
+    def __init__(self, printFolder:str, mode:int=2, **kwargs):
+        self.mode = mode
         self.printFolder = printFolder
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']  # print file dict
@@ -68,7 +69,7 @@ class background:
         '''create a background file'''
         fn = self.backgroundFN()
         if not os.path.exists(fn) or overwrite:
-            self.background = self.fs.frame(mode=2, diag=diag-1, overwrite=True, **kwargs)
+            self.background = self.fs.frame(mode=self.mode, diag=diag-1, overwrite=True, **kwargs)
             self.background = cv.medianBlur(self.background, 5)
             self.exportBackground0(diag=diag)
     

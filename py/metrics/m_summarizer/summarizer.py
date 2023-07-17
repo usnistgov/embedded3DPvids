@@ -53,7 +53,7 @@ class summarizer(fh.folderLoop):
         self.units = {}
         self.failures = pd.DataFrame([])
         
-    def summarize(self, folder:str) -> None:
+    def summarize(self, folder:str, **kwargs) -> None:
         '''get summaries from a single folder and add them to the running list'''
         summary = []
         failures = []

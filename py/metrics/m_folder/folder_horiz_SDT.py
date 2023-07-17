@@ -36,10 +36,11 @@ pd.set_option("display.precision", 2)
 class folderHorizSDT(folderSDT):
     '''for a horizSDT folder, measure the disturbed lines'''
     
-    def __init__(self, folder:str, **kwargs) -> None:
-        super().__init__(folder, **kwargs)
-        if not 'disturbHoriz' in os.path.basename(self.folder):
-            raise ValueError(f'Wrong folderSDT class called for {self.folder}')
+    def __init__(self, folder:str, overwrite:bool=False, **kwargs) -> None:
+        if not 'disturbHoriz' in os.path.basename(folder):
+            raise ValueError(f'Wrong folderSDT class called for {folder}')
+        super().__init__(folder, overwrite=overwrite, **kwargs)
+        
         
     def measureFolder(self) -> None:
         '''measure all cross-sections in the folder and export table'''
@@ -57,9 +58,9 @@ class folderHorizSDT(folderSDT):
             return pd.DataFrame([]), {}, pd.DataFrame([])
   
         # dependent variables for observe images. use different measurements for w1 and all other lines
-        ovars = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']
-        ovars1 = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']   # for the 1st line
-        opairvars = ['segments', 'yBot', 'yTop', 'w', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']     # for pairs of observe lines
+        ovars = ['segments', 'yBot', 'yTop', 'w', 'wn', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']
+        ovars1 = ['segments', 'yBot', 'yTop', 'w', 'wn', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT']   # for the 1st line
+        opairvars = ['segments', 'yBot', 'yTop', 'w', 'wn', 'h', 'yc', 'roughness', 'emptiness', 'meanT', 'stdevT', 'minmaxT', 'ldiff']     # for pairs of observe lines
         # dependent variables for progress images. use different measurements for w1 and all other lines
         pvars = ['yBot', 'segments', 'roughness', 'emptiness', 'dy0l', 'dy0lr', 'dyfl', 'dyflr', 'space_l', 'space_b']
         pvars1 = ['yBot', 'dy0l', 'dyfl', 'dyflr']

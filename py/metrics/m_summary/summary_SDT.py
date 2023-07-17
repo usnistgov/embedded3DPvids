@@ -50,6 +50,28 @@ class summarySDT(summaryMetric):
             raise ValueError('Cannot identify print type')
         self.importStillsSummary(diag=diag)
         
+    def metaVars(self) -> list:
+        '''the variables that are pure metadata, not variables'''
+        out = ['bn', 'calibFile', 'date', 'fluFile', 'printFolder']
+        for fluid in ['ink', 'sup']:
+            out = out + [f'{fluid}_{var}' for var in ['base', 'days', 'dye', 'rheModifier', 'shortname', 'surfactant', 'surfactantWt', 'type', 'var']]
+        return out
+    
+    def displayShort(self, df:pd.DataFrame, yvar:str, xvar:str='int_Ca') -> pd.DataFrame:
+        '''display the dataframe with just a few columns'''
+        row2 = df[['ink_shortname','sup_shortname', xvar, 'spacing', yvar]].copy()
+        display(row2.sort_values(by=yvar))
+        return df
+    
+    def reduceRows(self, yvar:str, *varargs, yvarmin:float=-10**20, yvarmax:float=10*20, **kwargs) -> pd.DataFrame:
+        '''each vararg is a boolean series of self.ss, get just the rows that fit all subsets, display, and return the rows'''
+        rows = self.ss.copy()
+        if len(varargs)>0:
+            rows = rows[pd.DataFrame(varargs).all()]
+        rows = rows[(rows[yvar]>yvarmin)&(rows[yvar]<yvarmax)]
+        return self.displayShort(rows, yvar, **kwargs)
+
+        
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         '''import the stills summary and convert sweep types, capillary numbers'''
         self.ss,self.u = plainIm(self.file, ic=False)
@@ -124,16 +146,14 @@ class summarySDT(summaryMetric):
                     else:
                         kt.loc[i,col] = ''
         display(kt)
-                
-        
 
-    def addRatios(self, ss:pd.DataFrame, **kwargs) -> pd.DataFrame:
+    def addRatios(self, **kwargs) -> pd.DataFrame:
         '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
-        return super().addRatios(ss, self.firstDepCol(), **kwargs)
+        return super().addRatios(self.firstDepCol(), **kwargs)
 
-    def addLogs(self, ss:pd.DataFrame, varlist:List[str], **kwargs) -> pd.DataFrame:
+    def addLogs(self, varlist:List[str], **kwargs) -> pd.DataFrame:
         '''add log values for the list of variables to the dataframe'''
-        return super().addLogs(ss, self.firstDepCol(), varlist, **kwargs)
+        return super().addLogs(self.firstDepCol(), varlist, **kwargs)
     
     def depVarSpl(self, s:str) -> str:
         '''split the dependent variable to convert it to a new name'''
@@ -193,7 +213,7 @@ class summarySDT(summaryMetric):
                        , 'aspectI':'h/w/intended'}
         elif self.type=='horiz':
             varlist = {'yBot':'$y_{bottom}$', 'yTop':'$y_{top}$', 'yc':'$y_{center}$'
-                       , 'segments':'segments', 'w':'length', 'h':'height'
+                       , 'segments':'segments', 'w':'length', 'wn':'length/intended', 'h':'height'
                        , 'roughness':'roughness', 'emptiness':'emptiness'
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness', 'minmaxT':'thickness variation'
                        , 'ldiff':'left shrinkage'
@@ -234,7 +254,10 @@ class summarySDT(summaryMetric):
                 var1 = s[:-4]
             inksymb = self.indVarSymbol(var1, 'ink', commas=commas)[:-1]
             supsymb = self.indVarSymbol(var1, 'sup', commas=commas)[1:]
-            return f'{inksymb}{symb}{supsymb}'
+            if inksymb=='$'+var1+'_{ink}':
+                return self.indVarSymbol(s, '', commas=commas)
+            else:
+                return f'{inksymb}{symb}{supsymb}'
         elif s=='int_Ca':
             return r'$Ca=v_{ink}\eta_{sup}/\sigma$'
         elif s.startswith('ink_') or s.startswith('sup_'):

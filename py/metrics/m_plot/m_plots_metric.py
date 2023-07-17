@@ -81,7 +81,13 @@ class metricPlot:
         else:
             self.checkValid()    # check that inputs are valid
             self.setUpAxes()
-        
+            
+    def export(self, filename):
+        if len(filename)>0:
+            fn = os.path.splitext(filename)[0]
+            for s in ['.png', '.svg']:
+                self.fig.savefig(f'{fn}{s}', bbox_inches='tight', dpi=300)
+            logging.info(f'Exported {fn}.png and .svg')
         
     def checkValid(self):
         '''try to add any missing values to the table and raise error if we can't'''

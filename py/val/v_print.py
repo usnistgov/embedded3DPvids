@@ -22,6 +22,7 @@ import file.file_handling as fh
 from val.v_fluid import fluidVals
 from val.v_pressure import pressureVals
 from val.v_geometry import geometryVals
+from val.v_tables import valTables
 
 # logging
 logger = logging.getLogger(__name__)
@@ -37,10 +38,11 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class printVals:
     '''class that holds info about the experiment'''
     
-    def __init__(self, folder:str, fluidProperties:bool=True, **kwargs):
+    def __init__(self, folder:str, fluidProperties:bool=True, **kwargs0):
         '''get the ink and support names from the folder name. 
         vink and vsup are in mm/s. 
         di (inner nozzle diameter) and do (outer) are in mm'''
+        kwargs = kwargs0.copy()
         self.fluidProperties = fluidProperties
         tic = time.perf_counter()
         self.printFolder = folder
@@ -48,6 +50,10 @@ class printVals:
             self.pfd = kwargs['pfd']
         else:
             self.pfd = fh.printFileDict(self.printFolder)
+        if 'valTable' in kwargs:
+            self.valTable = kwargs.pop('valTable')
+        else:
+            self.valTable = valTables(self.pfd.printType)
             
         # get the sample folder
         fi = self.printFolder
@@ -69,8 +75,9 @@ class printVals:
         supShortName = split[3]
 
         self.constUnits['date'] = 'yymmdd'
-        self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties)
-        self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties)
+        
+        self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties, valTable=self.valTable, **kwargs)
+        self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties, valTable=self.valTable, **kwargs)
         
         if self.pfd.printType in ['tripleLine', 'singleDisturb', 'SDT']:
             split = re.split('_', os.path.basename(self.pfd.printFolder))
@@ -97,22 +104,32 @@ class printVals:
             
         if self.fluidProperties:
             # viscosity ratio
-            self.viscRatio = self.ink.visc0/self.sup.visc0 
-            self.constUnits['viscRatio'] = ''
+            self.viscRatio = self.ink.visc0/self.sup.visc0   # local viscosity ratio
+            self.tau0aRatio = self.ink.tau0a/self.sup.tau0a
+            self.tau0dRatio = self.ink.tau0d/self.sup.tau0d
+            self.GaRatio = self.ink.Gstora/self.sup.Gstora
+            self.GdRatio = self.ink.Gstord/self.sup.Gstord
+            self.GtaRatio = self.ink.Gstora/self.sup.tau0a
+            self.tGdRatio = self.ink.tau0d/self.sup.Gstord
+            for s in ['viscRatio', 'tau0aRatio', 'tau0dRatio', 'GaRatio', 'GdRatio', 'GtaRatio', 'tGdRatio']:
+                self.constUnits[s] = ''
             # velocity ratio
 
             # crit radius  
             ddiff = self.ink.density-self.sup.density
-            if abs(ddiff)>0:
-                self.rGrav = 10**6*(self.sup.tau0)/((ddiff)*9.8) 
-            else:
-                self.rGrav = 0
-                # characteristic sagging radius in mm, missing scaling factor, see O'Brien MRS Bulletin 2017
-            self.constUnits['rGrav'] = 'mm'
-        
-        
-            self.ink.dnormInv = self.ink.dPR/self.dEst  # keep this inverted to avoid divide by 0 problems
-            self.sup.dnormInv = self.sup.dPR/self.dEst
+            for dire in ['a', 'd']:
+                if abs(ddiff)>0:
+                    setattr(self, f'rGrav{dire}', 10**6*(getattr(self.sup, f'tau0{dire}'))/((ddiff)*9.8)) 
+                else:
+                    setattr(self, f'rGrav{dire}', 0) 
+                    # characteristic sagging radius in mm, missing scaling factor, see O'Brien MRS Bulletin 2017
+                self.constUnits[f'rGrav{dire}'] = 'mm'
+
+                
+                setattr(self.ink, f'dnormInv{dire}', getattr(self.ink, f'dPR{dire}')/self.dEst)  # keep this inverted to avoid divide by 0 problems
+                setattr(self.sup, f'dnormInv{dire}', getattr(self.sup, f'dPR{dire}')/self.dEst)
+                for fluid in [self.ink, self.sup]:
+                    fluid.constUnits[f'dnormInv{dire}'] = ''
 
             # Reynolds number
             self.int_Re = 10**-3*(self.ink.density*self.ink.v*self.geo.di)/(self.sup.visc0)
@@ -196,22 +213,7 @@ class printVals:
     
     def tension(self) -> float:
         '''pull the surface tension from a table'''
-        if self.pfd.printType in ['singleLine', 'singleDisturb']:
-            table = cfg.path.sigmaTable.single
-        else:
-            table = cfg.path.sigmaTable.SDT
-        if not os.path.exists(table):
-            logging.error(f'No sigma table found: {table}')
-            return
-        ext = os.path.splitext(table)[-1]
-        if ext=='.xlsx':
-            sigt = pd.read_excel(table)
-        elif ext=='.csv':
-            sigt = pd.read_csv(table)
-        else:
-            print(ext)
-            raise ValueError(f'Could not read sigma table: {table}')
-        sigt = sigt.fillna('') 
+        sigt = self.valTable.sigmaDF()
         criterion = sigt.ink_base==self.ink.base
         for s in ['sup_base', 'ink_surfactant', 'ink_surfactantWt', 'sup_surfactant']:
             if s in sigt:
@@ -233,16 +235,7 @@ class printVals:
         '''get the path of the video file taken during the print'''
         return self.pfd.vidFile()   
     
-    
-            
 
-    
-    #--------------------------------------------------
-    
-    
-
-                
-                
                 
 class pvSingle(printVals):
     '''class that holds info about single line experiments'''

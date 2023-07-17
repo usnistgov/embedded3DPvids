@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 from tools.plainIm import *
 from summary_ideals import *
+import file.file_handling as fh
 
 # logging
 logger = logging.getLogger(__name__)
@@ -36,23 +37,36 @@ class summaryMetric:
         self.file = file
         if not os.path.exists(file):
             raise FileNotFoundError(f'{file} does not exist')
+            
+    def openFolder(self, i:int):
+        '''open the folder given by the row in the ss dataframe'''
+        fh.openExplorer(self.ss.loc[i,'printFolder'])
         
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         self.ss, self.u = plainIm(self.file)
         
-        
-    def flipInv(self, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> None:
+    def flipInv(self, ss:pd.DataFrame=[], varlist:list = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
         '''find inverse values and invert them (e.g. WeInv)'''
-        k = self.ss.keys()
+        if len(ss)==0:
+            ss = self.ss
+        k = ss.keys()
         idx = self.idx0(k)
-        for j, s2 in enumerate(varlist):
-            for i,s1 in enumerate(['sup', 'ink']):
-                xvar = f'{s1}_{s2}'
-                if f'{s1}_{s2}Inv' in self.ss and not xvar in self.ss:
-                    self.ss.insert(idx, xvar, 1/self.ss[f'{s1}_{s2}Inv'])
-                    idx+=1
-        if 'int_Ca' not in self.ss:
-            self.ss.insert(idx, 'int_Ca', 1/self.ss['int_CaInv'])
+        for j, var in enumerate(varlist):
+            for i,fluid in enumerate(['sup', 'ink']):
+                for dire in ['', 'a', 'd']:
+                    xvar = f'{fluid}_{var}{dire}'
+                    if f'{fluid}_{var}Inv{dire}' in ss and not xvar in ss:
+                        ss.insert(idx, xvar, 1/ss[f'{fluid}_{var}Inv{dire}'])
+                        u = self.u[f'{fluid}_{var}Inv{dire}']
+                        if u=='':
+                            self.u[xvar] = ''
+                        else:
+                            self.u[xvar] = f'1/{u}'
+                        idx+=1
+        if 'int_Ca' not in ss:
+            ss.insert(idx, 'int_Ca', 1/ss['int_CaInv'])
+            self.u['int_Ca'] = ''
+        return ss
             
     def indVarSymbol(self, var:str, fluid:str, commas:bool=True) -> str:
         '''get the symbol for an independent variable, eg. dnorm, and its fluid, e.g ink
@@ -61,53 +75,90 @@ class summaryMetric:
             com = ','
         else:
             com = '.'
+        last = var[-1]
+        if not last in ['a', 'd']:
+            last = ''
+        else:
+            last = com+{'a':'asc', 'd':'desc'}[last]
         if var=='visc' or var=='visc0':
             return '$\eta_{'+fluid+'}$'
         elif var=='tau0':
             return '$\tau_{y'+com+fluid+'}$'
-        elif var=='dPR':
-            return '$d_{PR'+com+fluid+'}$'
-        elif var=='dnorm':
-            return '$\overline{d_{PR'+com+fluid+'}}$'
-        elif var=='dnormInv':
-            return '$1/\overline{d_{PR'+com+fluid+'}}$'
+        elif var[:3]=='dPR':
+            return '$d_{PR'+com+fluid+last+'}$'
+        elif var[:5]=='dnorm':
+            return '$\overline{d_{PR'+com+fluid+last+'}}$'
+        elif var[:5]=='dnorm' and var[-3]=='Inv':
+            return '$1/\overline{d_{PR'+com+fluid+last+'}}$'
+        elif var[:2]=='Bm':
+            return '$Bm_{'+fluid+last+'}$'
         elif var=='rate':
             return '$\dot{\gamma}_{'+fluid+'}$'
         elif var=='val':
             return {'ink':'ink', 'sup':'support'}[fluid]
+        elif var[:5]=='Gstor':
+            return '$G\'_{'+fluid+last+'}$'
+        elif var[:4]=='tau0':
+            return r'$\tau_{y'+com+fluid+last+'}$'
+        elif var=='GaRatio':
+            return '$G\'_{ink'+com+'a}/G\'_{sup'+com+'a}$'
+        elif var=='GdRatio':
+            return '$G\'_{ink'+com+'d}/G\'_{sup'+com+'d}$'
+        elif var=='GtaRatio':
+            return '$G\'_{ink'+com+r'a}/\tau_{y'+com+'sup'+com+'a}$'
+        elif var=='tau0aRatio':
+            return r'$\tau_{y'+com+'ink'+com+r'a}/\tau_{y'+com+'sup'+com+'a}$'
+        elif var=='tau0dRatio':
+            return r'$\tau_{y'+com+'ink'+com+r'd}/\tau_{y'+com+'sup'+com+'d}$'
+        elif var=='tGdRatio':
+            return r'$\tau_{ink'+com+'d}/G\'_{sup'+com+'d}$'
         else:
             if var.endswith('Inv'):
                 varsymbol = '1/'+var[:-3]
             else:
                 varsymbol = var
-            return '$'+varsymbol+'_{'+fluid+'}$'
+            if len(fluid)>0:
+                return '$'+varsymbol+'_{'+fluid+'}$'
+            else:
+                return varsymbol
         
-    def addRatios(self, ss:pd.DataFrame, startName:str, varlist = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
+    def addRatios(self, startName:str='', ss:pd.DataFrame=[], varlist:list = ['Ca', 'dPR', 'dnorm', 'We', 'Oh', 'Bm'], operator:str='Prod') -> pd.DataFrame:
         '''add products and ratios of nondimensional variables. operator could be Prod or Ratio'''
+        if len(ss)==0:
+            ss = self.ss
+        if startName=='':
+            startName = self.firstDepCol()
         k = ss.keys()
         idx = int(np.argmax(k==startName))
-        for j, s2 in enumerate(varlist):
-            xvar =  f'{s2}{operator}'
-            if not xvar in ss:
-                if not f'ink_{s2}' in ss or not  'sup_{s2}' in ss:
-                    self.flipInv()
-                if operator=='Prod':
-                    ss.insert(idx, xvar, ss[f'ink_{s2}']*ss[f'sup_{s2}'])
-                elif operator=='Ratio':
-                    ss.insert(idx, xvar, ss[f'ink_{s2}']/ss[f'sup_{s2}'])
+        for j, var in enumerate(varlist):
+            for dire in ['', 'a', 'd']:   # ascending, descending
+                if f'ink_{var}{dire}' in ss:
+                    xvar =  f'{var}{dire}{operator}'
+                    if not xvar in self.ss:
+                        if not f'ink_{var}{dire}' in ss or not f'sup_{var}{dire}' in ss:
+                            ss = self.flipInv(ss, varlist=[f'{var}{dire}'])
+                        if operator=='Prod':
+                            ss.insert(idx, xvar, ss[f'ink_{var}{dire}']*ss[f'sup_{var}{dire}'])
+                        elif operator=='Ratio':
+                            ss.insert(idx, xvar, ss[f'ink_{var}{dire}']/ss[f'sup_{var}{dire}'])
+                        idx+=1
+        return ss
+
+    def addLogs(self, startName:str='', varlist:List[str]=[], ss:pd.DataFrame=[]) -> pd.DataFrame:
+        '''add log values for the list of variables to the dataframe. this is useful for adding values to subsets of dataframes as well'''
+        if len(ss)==0:
+            ss = self.ss
+        k = ss.keys()
+        if startName=='':
+            startName = self.firstDepCol()
+        idx = int(np.argmax(k==startName))
+        for j, var in enumerate(varlist):
+            xvar = f'{var}_log'
+            if not xvar in var:
+                ss.insert(idx, xvar, np.log10(ss[var]))
                 idx+=1
         return ss
 
-    def addLogs(self, ss:pd.DataFrame, startName:str, varlist:List[str]) -> pd.DataFrame:
-        '''add log values for the list of variables to the dataframe'''
-        k = ss.keys()
-        idx = int(np.argmax(k==startName))
-        for j, s2 in enumerate(varlist):
-            xvar = f'{s2}_log'
-            if not xvar in s2:
-                ss.insert(idx, xvar, np.log10(ss[s2]))
-                idx+=1
-        return ss
     
     def printStillsKeys(self) -> None:
         '''sort the keys into dependent and independent variables and print them out'''
@@ -127,12 +178,26 @@ class summaryMetric:
         controls = k[:firstCol]
         return list(controls)
     
+    def printList(self, f, iv:list) -> None:
+        '''filter the list iv, sort, and print'''
+        l = list(filter(f, iv))
+        l = sorted(l, key=str.casefold)
+        l1 = list(filter(lambda x:(self.u[x]==''), l))
+        l2 = list(filter(lambda x:(not self.u[x]==''), l))
+        if len(l1)>0:
+            print('\t',  ', '.join(l1))
+        if len(l2)>0:
+            print('\t',  ', '.join(l2))
+    
     def printIndeps(self) -> None:
         iv = self.indepVars()
-        print('\033[1mIndependents:\033[0m ')
-        print('\t', ', '.join(filter(lambda x:(not 'sup' in x and not 'ink' in x), iv)))
-        print('\t',  ', '.join(filter(lambda x:('sup' in x), iv)))
-        print('\t',  ', '.join(filter(lambda x:('ink' in x), iv)))
+        mv = self.metaVars()
+        const = list(filter(lambda x: not x in mv, iv))
+        print('\033[1mIndependents:\033[0m ')  
+        for l in [mv, const]:
+            self.printList(lambda x:(not 'sup' in x and not 'ink' in x), l)
+            self.printList(lambda x:('sup' in x), l)
+            self.printList(lambda x:('ink' in x), l)
         
         
     def idx(self, k:list, name:str) -> int:

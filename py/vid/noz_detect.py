@@ -46,7 +46,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class nozData(timeObject):
     '''holds metadata about the nozzle'''
     
-    def __init__(self, folder:str, maskPad:int=0, **kwargs):
+    def __init__(self, folder:str, maskPad:int=0, bgmode:int=2, **kwargs):
         super().__init__()
         self.printFolder = folder
         if 'pfd' in kwargs:
@@ -60,7 +60,8 @@ class nozData(timeObject):
         self.ndGlobal = nozDims(self.pfd)
         self.nd = nozDims(self.pfd)
         self.fs = frameSelector(self.printFolder, self.pfd)
-        self.bg = background(self.printFolder, pfd=self.pfd, fs=self.fs)
+        
+        self.bg = background(self.printFolder, pfd=self.pfd, fs=self.fs, mode=bgmode)
         
     def nozDims(self):
         '''get the nozzle xL, xR, yB'''
@@ -97,7 +98,9 @@ class nozData(timeObject):
                 # we already detected the nozzle
                 return 0
             
-        self.detector = nozDetector(self.fs, self.pfd, self.printFolder)
+        if not 'max_line_gap' in kwargs:
+            kwargs['max_line_gap'] = 100
+        self.detector = nozDetector(self.fs, self.pfd, self.printFolder, **kwargs)
         self.detector.detectNozzle(overwrite=overwrite, **kwargs)
         self.nd = self.detector.nd
 

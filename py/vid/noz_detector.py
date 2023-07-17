@@ -76,7 +76,7 @@ class nozDetector:
         self.pfd = pfd
         self.pxpmm = self.pfd.pxpmm()
         self.printFolder = printFolder
-        self.defineHoughParams()
+        self.defineHoughParams(**kwargs)
         self.defineCritVals()
         
     def defineHoughParams(self, min_line_length:int = 50, max_line_gap:int=300, threshold:int=30, rho:int=0, critslope:float=0.1, theta:float=np.pi/180, hmax:int=400, **kwargs):
@@ -104,7 +104,7 @@ class nozDetector:
         
         # bounds of size of nozzle in mm. for 20 gauge nozzle, diam should be 0.908 mm
         self.nozwidthMin = 0.75 # mm
-        self.nozWidthMax = 1.05 # mm
+        self.nozWidthMax = 1.2 # mm
         
     def defineCritValsImage(self, nd, crops:dict, xmargin:int=20, ymargin:int=20, yCropMargin:int=20, xCropMargin:int=20, **kwargs) -> None:
         '''define crit vals, where this is a cropped image and we already have approximate nozzle position'''
@@ -138,7 +138,7 @@ class nozDetector:
         thres2 = vm.dilate(thres2,3)                  # thicken edges
         
         # only include points above a certain threshold (nozzle is black, so this should get rid of most ink)
-        _,threshmask = cv.threshold(gray2, 120,255,cv.THRESH_BINARY_INV)
+        _,threshmask = cv.threshold(gray2, 50,255,cv.THRESH_BINARY_INV)
         threshmask = vm.dilate(threshmask, 15)
         thres2 = cv.bitwise_and(thres2, thres2, mask=threshmask)
         self.edgeImage = thres2.copy()                # store edge image for displaying diagnostics
@@ -156,7 +156,7 @@ class nozDetector:
             return [], []
 
         # convert to dataframe
-        lines = pd.DataFrame(lines.reshape(len(lines),4), columns=['x0', 'y0', 'xf', 'yf'], dtype='int32')
+        lines = pd.DataFrame(lines.reshape(len(lines),4), columns=['x0', 'y0', 'xf', 'yf'], dtype='int32')        
         lines['slope'] = abs(lines['x0']-lines['xf'])/abs(lines['y0']-lines['yf'])
         # find horizontal lines
         horizLines = lines[(lines['slope']>20)&(lines['y0']>self.yBmin)&(lines['y0']<self.yBmax)]
@@ -310,10 +310,10 @@ class nozDetector:
 
     def detectNozzle(self, diag:int=0, **kwargs) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
-        for mode in [0,1]: # median, then mean
-            for i in range(3):
+        for mode in [4]: # min, median, then mean
+            for i in range(1):
                 try:
-                    frame = self.fs.frame(mode=mode)           # get median or averaged frame
+                    frame = self.fs.frame(mode=mode, numpics=10, **kwargs)           # get median or averaged frame
                     self.detectNozzle0(frame, diag=diag, **kwargs)
                 except ValueError as e:
                     if diag>1:

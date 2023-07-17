@@ -48,6 +48,7 @@ class regressionTable:
         self.package = package
         self.kwargs = kwargs
         self.smax = self.ss.sigma.max()
+        self.hlines = []
         if export and not os.path.exists(exportFolder):
             logging.warning(f'exportFolder {exportFolder} does not exist. Defaulting to {cfg.path.fig}')
             exportFolder = cfg.path.fig
@@ -70,24 +71,26 @@ class regressionTable:
             else:
                 logging.info(f'All {self.yvar} values the same for zero surface tension\n---------------------------\n\n')
         return
-
-    def prepareSSI(self) -> Tuple[list, pd.DataFrame]:
-        '''get the list of independent variables and add to the dataframe'''
-        # define x variables
+    
+    def indepVars(self) -> list:
+        '''a  list of the nondimensional variables for nonzero surface tension'''
         if self.smax>0:
             self.varlist = ['Ca', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
         else:
             self.varlist = ['Re', 'Bm', 'visc0']
+        self.ratioList = []
+
+    def prepareSSI(self) -> Tuple[list, pd.DataFrame]:
+        '''get the list of independent variables and add to the dataframe'''
+        # define x variables
+        self.indepVars()
 
         # add logs and ratios
         for i,s1 in enumerate(['sup', 'ink']):
-            self.ss = self.ms.addLogs(self.ss, [f'{s1}_{v}' for v in self.varlist])
+            self.ss = self.ms.addLogs(varlist=[f'{s1}_{v}' for v in self.varlist], ss=self.ss)
         for i,s1 in enumerate(['Prod', 'Ratio']):
-            self.ss = self.ms.addRatios(self.ss, varlist=self.varlist, operator=s1)
-            self.ss = self.ms.addLogs(self.ss, [f'{v}{s1}' for v in self.varlist])
-            
-        if 'spacing' in self.ss:
-            self.varlist = ['spacing']+ self.varlist
+            self.ss = self.ms.addRatios(varlist=self.varlist, operator=s1, ss=self.ss)
+            self.ss = self.ms.addLogs(varlist=[f'{v}{s1}' for v in self.varlist], ss=self.ss)
     
     def regRow(self, df:list, xcol:str, title:str) -> None:
         '''get regression and correlation info for a single x,y variable combo'''
@@ -103,12 +106,9 @@ class regressionTable:
     def createVariableTable(self, scvar:str) -> pd.DataFrame:
         '''create a table of correlations for the scaling variable, in combos of ink, sup, ink*sup, and ink/sup'''
         df = []
-        if scvar=='spacing':
-            reg = self.regRow(df, 'spacing', 'spacing')
-            return pd.DataFrame(df)
         
         if scvar=='Ca':
-            self.ss = self.ms.addLogs(self.ss, ['int_Ca'])
+            self.ss = self.ms.addLogs(ss=self.ss, varlist=['int_Ca'])
             self.regRow(df, 'int_Ca_log', '$Ca$')            
         
         # single variable correlation
@@ -143,6 +143,24 @@ class regressionTable:
         if len(df)>0:
             df = self.labelBestFit(df)       
             self.df = pd.concat([self.df, df])
+            self.hlines.append(len(self.df))
+        
+    def addRatios(self) -> None:
+        '''add the requested variables that are just ratios, one row per variable'''
+        df = []
+        self.ss = self.ms.addLogs(ss=self.ss, varlist=self.ratioList)
+        for var in self.ratioList:
+            if var=='spacing':
+                xvar = 'spacing'
+            else:
+                xvar = f'{var}_log'
+            title = self.ms.varSymbol(var, commas=False)
+            self.regRow(df, xvar, title)  
+        df = pd.DataFrame(df)
+        if len(df)>0:
+            df = self.labelBestFit(df)       
+            self.df = pd.concat([self.df, df])
+            self.hlines.append(len(self.df))
         
     def addHeaders(self) -> None:
         '''add headers to the table'''
@@ -196,11 +214,13 @@ class regressionTable:
             ctr+=1
             if 'variables' in line:
                 ctr = 0
-            if 'bm{Ca}' in line or '$Ca$' in line:
-                ctr = 0
-            if (ctr==4 and not line.startswith('\\end')) or 'spacing' in line:
+            # if 'bm{Ca}' in line or '$Ca$' in line:
+            #     ctr = 0
+            # if (ctr==4 and not line.startswith('\\end')) or 'spacing' in line or 'tGd' in line:
+            #     dftextOut = dftextOut+'\t\t\\hline\n'
+            #     ctr=0
+            if ctr in self.hlines:
                 dftextOut = dftextOut+'\t\t\\hline\n'
-                ctr=0
         self.dftextOut = dftextOut
         if self.printOut:
             print(self.dftextOut)
@@ -257,8 +277,10 @@ class regressionTable:
         self.prepareSSI()  # get the independent variable list and the dataframe with those variables added
         
         # go through each variable and get sup, ink, product, ratio
+        self.addRatios()
         for s2 in self.varlist:
             self.addVariable(s2)
+        
 
         # combine into table
         self.addHeaders()        
@@ -312,3 +334,20 @@ class regressionTables:
         self.createSS()
         self.createTable(self.ssca1)
         self.createTable(self.sslap)
+        
+class regressionTableSDT(regressionTable):
+    '''for holding a single regression table for singledoubletriple prints'''
+    
+    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, yvar:str, **kwargs):
+        super().__init__(ms, ss, yvar, **kwargs)
+        
+    def indepVars(self) -> list:
+        '''a  list of the nondimensional variables for nonzero surface tension'''
+        self.ratioList = ['spacing', 'GtaRatio', 'tGdRatio', 'GaRatio', 'GdRatio', 'tau0aRatio', 'tau0dRatio']
+        l0 = ['Re', 'Bma', 'Bmd', 'visc0']
+        
+        if self.smax>0:
+            self.varlist = ['Ca', 'dnorma', 'dnormd', 'We', 'Oh']+l0
+        else:
+            self.varlist = l0
+        

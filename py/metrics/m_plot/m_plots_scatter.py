@@ -70,6 +70,7 @@ class scatterPlot(metricPlot):
             self.legendVals = self.kwargs0['legendVals']
         if self.gradColor==colorModes.discreteZvar:
             self.legendVals = self.ss[self.zvar].unique()
+            self.legendVals.sort()
         else:
             self.legendVals = [0]
             

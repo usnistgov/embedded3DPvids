@@ -42,7 +42,7 @@ class segmenterFail:
 class segmenterDF(timeObject):
     '''holds labeled components for an image'''
     
-    def __init__(self, filled:np.array, acrit:float=100, diag:int=0):
+    def __init__(self, filled:np.array, acrit:float=100, diag:int=0, **kwargs):
         self.acrit = acrit
         self.filled = filled
         self.trustLargest = 0
@@ -50,14 +50,19 @@ class segmenterDF(timeObject):
         self.w = self.filled.shape[1]
         self.h = self.filled.shape[0]
         self.diag = diag
+        if 'im' in kwargs:
+            self.im = kwargs['im']
         self.getConnectedComponents()
         
     def display0(self):
         if self.diag>0:
-            if hasattr(self, 'labeledIm'):
-                imshow(self.im, self.gray, self.thresh, self.labeledIm, maxwidth=13, titles=['seg.im', 'gray', 'thresh', 'labeled'])
-            else:
-                imshow(self.im, self.gray, self.thresh, maxwidth=13, titles=['seg.im', 'gray', 'thresh'])
+            v = []
+            titles = []
+            for key,val in {'im':'seg.im', 'gray':'gray', 'thresh':'thresh', 'labeledIm':'labeled'}.items():
+                if hasattr(self, key):
+                    v.append(getattr(self, key))
+                    titles.append(val)
+            imshow(*v, maxwidth=13, titles=titles)
         
     def display(self):
         if self.diag<1:
@@ -96,7 +101,7 @@ class segmenterDF(timeObject):
     def resetNumbering(self):
         '''reset the numbering of the components so the labeledIm is easier to read'''
         j = 1
-        for i,row in self.df.iterrows():
+        for i,row in self.df[(self.df.w<self.w)&(self.df.h<self.h)].iterrows():
             self.labeledIm[self.labeledIm == i] = j
             self.df = self.df.rename(index={i:j})
             j = j+1
@@ -220,6 +225,7 @@ class segmenterDF(timeObject):
         self.selectComponents(goodpts, **kwargs)
         
     def eraseBorderTouchComponent(self, margin:int, border:str, **kwargs) -> None:
+        '''erase components that are touching the border'''
         if self.noDF():
             return
         if border=='+x':
@@ -295,8 +301,9 @@ class segmenterDF(timeObject):
             return
         for i in self.df.index:
             mask = (self.labeledIm == i).astype("uint8") * 255 
-            cnt = co.getContours(mask)[0]
-            self.df.loc[i, 'roughness'] = co.contourRoughness(cnt)
+            if np.max(mask)==255:
+                cnt = co.getContours(mask)[0]
+                self.df.loc[i, 'roughness'] = co.contourRoughness(cnt)
         if not self.df.idxmin()['roughness']==self.df.idxmax()['a']:
             # smoothest object is not the largest object
             return

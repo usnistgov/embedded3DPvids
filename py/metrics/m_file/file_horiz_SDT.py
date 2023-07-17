@@ -41,6 +41,19 @@ def horizSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
 def horizSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
     '''test a single file and print diagnostics'''
     testFile(fstr, fistr, fileHorizSDT, ['emptiness','x0','segments'], **kwargs)
+    
+def fileHorizSDTFromTag(folder:str, tag:str, **kwargs):
+    '''get the filehorizSDT from a string that is in the file name'''
+    pfd = fh.printFileDict(folder)
+    pfd.findVstill()
+    i = 0
+    while i<len(pfd.vstill)-1:
+        i = i+1
+        if tag in pfd.vstill[i]:
+            fhs = fileHorizSDT(pfd.vstill[i], **kwargs)
+            if len(tag)==6:
+                return fhs
+    return fhs
         
 class fileHorizSDT(fileHoriz, fileSDT):
     '''for singledoubletriple lines'''
@@ -63,7 +76,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly'''
-        rc1, rc2, w1, w2, l = self.intendedRC()  # intended coords in mm
+        rc1, rc2, w1, w2, l, lprog = self.intendedRC()  # intended coords in mm
         for j in [['dy', 'h']]:
             coord = j[0][1]
             bottom = (rc2[j[0]]+w1/2)      # the bottom edge should be 1/2 diameter below the first line center
@@ -77,9 +90,12 @@ class fileHorizSDT(fileHoriz, fileSDT):
         self.ideals['area'] = l*h
         self.ideals['v'] = (l-h)*np.pi*r**2 + 4/3*np.pi*r**3
         self.ideals['w'] = l
+        self.ideals['wn'] = lprog
         
     def findDisplacement(self) -> None:
         '''find the displacement of the center and dimensions relative to the intended dimensions'''
+        self.stats['wn'] = self.stats['w']
+        self.units['wn'] = self.units['w']
         for s,ival in {'yc':'yc', 'y0':'y0', 'yf':'yf'}.items():
             # ratio of size to intended size
             if s in self.stats:
@@ -91,7 +107,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
                     raise ValueError(f'{s} must be in mm')
                 self.stats[s] = self.stats[s]/self.pv.dEst
                 self.units[s] = 'dEst'
-        for s,ival in {'h':'h', 'meanT':'h', 'vest':'v', 'vintegral':'v'}.items():
+        for s,ival in {'h':'h', 'meanT':'h', 'vest':'v', 'vintegral':'v', 'wn':'wn'}.items():
             # ratio of size to intended size
             if s in self.stats:
                 self.stats[s] = (self.stats[s]/self.ideals[ival])
@@ -102,14 +118,14 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 
         # remove length measurements for mid-print measurements 
         if not 'o' in self.tag:
-            for s in ['h', 'vest', 'vintegral', 'w', 'meanT', 'stdevT', 'minmaxT']:
+            for s in ['h', 'vest', 'vintegral', 'w', 'meanT', 'stdevT', 'minmaxT', 'wn']:
                 if s in self.stats:
                     self.stats.pop(s)
                     
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
         # rc = {'relative':True, 'w':800, 'h':275, 'wc':400, 'hc':205}
-        rc = {'relative':True, 'w':800, 'h':300, 'wc':400, 'hc':250}
+        rc = {'relative':True, 'w':800, 'h':310, 'wc':400, 'hc':250}
         self.makeCrop(rc, export=export, overwrite=overwrite)
         
     def removeThreads(self) -> None:
@@ -177,8 +193,11 @@ class fileHorizSDT(fileHoriz, fileSDT):
             return
         self.segmenter.eraseFullHeightComponents(margin=2)
         self.segmenter.eraseBorderLengthComponents(lcrit=400)
-        self.segmenter.eraseBorderTouchComponent(2, '-y')
-        self.segmenter.eraseBorderTouchComponent(2, '+y')
+        self.segmenter.eraseBorderTouchComponent(2, '-y', checks=False)
+        self.segmenter.eraseBorderTouchComponent(2, '+y', checks=False)
+        if 'o' in self.tag:
+            self.segmenter.eraseBorderTouchComponent(2, '-x', checks=True)
+            self.segmenter.eraseBorderTouchComponent(2, '+x', checks=True)
         self.segmenter.eraseBorderClingers(40)
         # self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
 
@@ -272,7 +291,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
         # get the real nozzle position and pad it
         if not 'o' in self.tag:
             self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, yCropMargin=0)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=3, right=5, bottom=5)
+        self.padNozzle(left=3, right=5, bottom=10)
         self.cropIm(normalize=self.normalize)
         self.findIntendedCoords()                        # find where the object should be
         self.findIntendedPx()
@@ -282,7 +301,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
             self.importUsegment()
             if hasattr(self, 'Usegment'):
                 if self.Usegment.sum().sum()>0:
-                    self.segmenter = segmenterDF(self.Usegment, acrit=self.acrit, diag=self.diag)
+                    self.segmenter = segmenterDF(self.Usegment, im=self.im, acrit=self.acrit, diag=self.diag)
                     self.componentMask = self.segmenter.filled
                 else:
                     self.stats['error'] = 'white'
@@ -305,9 +324,9 @@ class fileHorizSDT(fileHoriz, fileSDT):
         o1 = self.checkAndDims()
         if o1==1:
             # empty space. try to fill it
-            self.fattenEdges(10)
+            self.fattenEdges(5)
             scopy = self.segmenter
-            s2 = segmenterDF(self.componentMask, acrit=self.acrit, diag=self.diag)
+            s2 = segmenterDF(self.componentMask, im=self.im, acrit=self.acrit, diag=self.diag)
             for s in ['im', 'gray', 'thresh']:
                 setattr(s2, s, getattr(scopy, s))
             self.segmenter = s2

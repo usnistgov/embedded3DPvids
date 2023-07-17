@@ -56,7 +56,7 @@ class multiPlotsSDT(multiPlots):
                 self.plot(f'{s}{i+1}', spacing=0.875, **kwargs)
                 self.plot(f'{s}{i+1}', ink=self.inkList[-1], **kwargs)  
                 
-    def getTag(self, name:str, overlay:dict, ss:str) -> list:
+    def getTag(self, name:str, overlay:dict, ss:str, kwargs) -> list:
         '''get the lines to search for and the overlay shape'''
         if name.endswith('1'):
             tag = [f'l2w1{ss}', f'l2d1{ss}']
@@ -73,6 +73,8 @@ class multiPlotsSDT(multiPlots):
             overlay['color'] = 'black'
         elif name[:-1] in ['HOx']:
             overlay['color'] = 'white'
+        if 'tag' in kwargs:
+            tag = kwargs.pop('tag')
         return tag
     
     def getCrops(self, name:str, kwargs2:dict, kwargs:dict) -> None:
@@ -170,7 +172,7 @@ class multiPlotsSDT(multiPlots):
         for ss in ['o1', s2]:
             allIn = [file]
             overlay = {'dx':-0.7, 'dy':-0.7}
-            tag = self.getTag(name, overlay, ss)
+            tag = self.getTag(name, overlay, ss, kwargs2)
             self.getCrops(name, kwargs2, kwargs)
             allIn, xvar, yvar = self.checkFreeVars(allIn, kwargs2, kwargs)
             concat = self.getConcat(name)
