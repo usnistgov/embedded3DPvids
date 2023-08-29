@@ -16,6 +16,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 from tools.plainIm import *
+import tools.regression as rg
 from summary_ideals import *
 import file.file_handling as fh
 
@@ -158,7 +159,6 @@ class summaryMetric:
                 ss.insert(idx, xvar, np.log10(ss[var]))
                 idx+=1
         return ss
-
     
     def printStillsKeys(self) -> None:
         '''sort the keys into dependent and independent variables and print them out'''
@@ -178,26 +178,26 @@ class summaryMetric:
         controls = k[:firstCol]
         return list(controls)
     
-    def printList(self, f, iv:list) -> None:
+    def printList(self, f, iv:list, title:str) -> None:
         '''filter the list iv, sort, and print'''
         l = list(filter(f, iv))
         l = sorted(l, key=str.casefold)
         l1 = list(filter(lambda x:(self.u[x]==''), l))
         l2 = list(filter(lambda x:(not self.u[x]==''), l))
         if len(l1)>0:
-            print('\t',  ', '.join(l1))
+            print('\t\033[31m','{:<12}:'.format(title), '\033[0m',  ', '.join(l1))
         if len(l2)>0:
-            print('\t',  ', '.join(l2))
+            print('\t',"{:<12}".format(' '), ' ',  ', '.join(l2))
     
     def printIndeps(self) -> None:
         iv = self.indepVars()
         mv = self.metaVars()
         const = list(filter(lambda x: not x in mv, iv))
         print('\033[1mIndependents:\033[0m ')  
-        for l in [mv, const]:
-            self.printList(lambda x:(not 'sup' in x and not 'ink' in x), l)
-            self.printList(lambda x:('sup' in x), l)
-            self.printList(lambda x:('ink' in x), l)
+        for key,l in {'meta':mv, 'const':const}.items():
+            self.printList(lambda x:(not 'sup' in x and not 'ink' in x), l, f'{key}    ')
+            self.printList(lambda x:('sup' in x), l, f'{key} sup')
+            self.printList(lambda x:('ink' in x), l, f'{key} ink')
         
         
     def idx(self, k:list, name:str) -> int:
@@ -224,3 +224,14 @@ class summaryMetric:
         deps = deps[~(deps.str.endswith('_N'))]
         return deps
     
+    def depCorrelations(self):
+        '''get a table of spearman correlation strengths between all dependent variables'''
+        v = self.depVars()
+        out = []
+        for i,var1 in enumerate(v):
+            for var2 in v[i+1:]:
+                spear = rg.spearman(self.ss, var1, var2)
+                spear['var1'] = var1
+                spear['var2'] = var2
+                out.append(spear)
+        self.depCor = pd.DataFrame(out)

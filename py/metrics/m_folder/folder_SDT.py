@@ -42,7 +42,7 @@ class folderSDT(folderMetric):
     '''
     
     def __init__(self, folder:str, **kwargs) -> None:
-        super().__init__(folder, **kwargs)
+        super().__init__(folder, splitGroups=True, **kwargs)
         if not f'disturb' in os.path.basename(self.folder):
             return
         if not hasattr(self, 'pg'):
@@ -58,7 +58,7 @@ class folderSDT(folderMetric):
         self.importMeasure()
         if len(self.df)>0:        
             dv = list(self.df.keys())
-            for s in ['line', 'gname', 'ltype', 'pr', 'pname', 'time', 'wtime', 'zdepth']:
+            for s in ['line', 'gname', 'ltype', 'pr', 'pname', 'time', 'wtime', 'zdepth', 'usedML']:
                 if s in dv:
                     dv.remove(s)
             return dv

@@ -43,12 +43,16 @@ def xsSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
     '''test a single file and print diagnostics'''
     testFile(fstr, fistr, fileXSSDT, ['w', 'h', 'xc', 'yc'], **kwargs)
     
+def fileXSSDTFromTag(folder:str, tag:str, **kwargs):
+    '''get the fileVertSDT from a string that is in the file name'''
+    return fileMetricFromTag(fileXSSDT, folder, tag, **kwargs)
+    
 class fileXSSDT(fileXS, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=300, **kwargs):
+    def __init__(self, file:str, acrit:int=1000, **kwargs):
         self.numLines = int(re.split('_', os.path.basename(file))[1])
-        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        super().__init__(file, acrit=acrit, **kwargs)
         
     def addToTestFile(self) -> None:
         '''add the current measurements to the csv of intended measurements for XSSDT'''
@@ -103,7 +107,7 @@ class fileXSSDT(fileXS, fileSDT):
                 rc = {'relative':True, 'w':300, 'h':500, 'wc':100, 'hc':400}
             else:
                 rc = {'relative':True, 'w':300, 'h':350, 'wc':100, 'hc':200}
-        self.makeCrop(rc, export=export, overwrite=overwrite)
+        self.makeCrop(rc, export=self.exportCropLocs, overwrite=self.overwriteCropLocs)
                 
     def segment(self) -> None:
         '''segment the foreground'''
@@ -121,6 +125,21 @@ class fileXSSDT(fileXS, fileSDT):
                                    , removeSharp=False
                                    )
         self.segmenter.eraseBorderComponents(10)
+        
+    def generateSegment(self):
+        '''generate a new segmentation'''
+        if not hasattr(self, 'im0'):
+            self.generateIm0()
+        if not 'o' in self.tag:
+            self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, ymargin=3)  # find the nozzle in the image and use that for future masking
+        self.padNozzle(left=1, right=10, bottom=2)       # cover the nozzle, with some extra wiggle room
+        self.cropIm()
+        self.segment()
+        if self.segmenter.success:
+            self.componentMask = self.segmenter.labelsBW.copy()
+        else:
+            self.componentMask = self.segmenter.filled.copy()
+        self.exportSegment(overwrite=self.overrideSegment)
     
     def measure(self) -> None:
         '''measure cross-section of single disturbed line'''
@@ -129,15 +148,15 @@ class fileXSSDT(fileXS, fileSDT):
             self.stats['error'] = 'white'
             return
         self.initialize()
-        self.getCrop(overwrite=True, export=self.exportCrop)
+        self.getCrop()
         if self.diag>0:
             self.findNozzlePx()
-        if not 'o' in self.tag:
-            self.generateIm0()
-            self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2, ymargin=3)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=1, right=10, bottom=2)       # cover the nozzle, with some extra wiggle room
-        self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
-        self.segment()                                   # segment the image
+                
+        if not self.overrideSegment:
+            self.importSegmentation()
+        
+        if not hasattr(self, 'segmenter'):
+            self.generateSegment()                                   # segment the image
         self.findIntendedCoords()                        # find where the object should be
         self.findIntendedPx()
         self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object

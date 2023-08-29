@@ -63,6 +63,20 @@ def exportProgDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
     fl.run()
     return fl
 
+def exportProgDimsPos(folder:str, overwrite:bool=False, **kwargs) -> None:
+    pfd = fh.printFileDict(folder)
+    if hasattr(pfd, 'progDims') and not overwrite:
+        return
+    pdim = getProgDims(folder, pfd=pfd)
+    pdim.exportProgPos(overwrite=overwrite)
+    pdim.exportProgDims(overwrite=overwrite)
+
+def exportProgDimsPosRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
+    '''export stills of key lines from videos'''
+    fl = fh.folderLoop(folder, exportProgDimsPos, overwrite=overwrite, **kwargs)
+    fl.run()
+    return fl
+
 def exportAllDims(folder:str, overwrite:bool=False, **kwargs) -> None:
     pfd = fh.printFileDict(folder)
     if hasattr(pfd, 'progDims') and hasattr(pfd, 'progPos') and not overwrite:

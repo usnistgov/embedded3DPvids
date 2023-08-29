@@ -41,16 +41,19 @@ def vertSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
 def vertSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
     '''test a single file and print diagnostics'''
     testFile(fstr, fistr, fileVertSDT, ['emptiness','x0','segments'], **kwargs)
+    
+def fileVertSDTFromTag(folder:str, tag:str, **kwargs):
+    '''get the fileVertSDT from a string that is in the file name'''
+    return fileMetricFromTag(fileVertSDT, folder, tag, **kwargs)
         
 class fileVertSDT(fileVert, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=1000, overrideSegment:bool=False, **kwargs):
-        self.overrideSegment = overrideSegment
+    def __init__(self, file:str, acrit:int=3000, **kwargs):
         self.maxlen = 800
         self.fillDilation = 0
         self.grayBlur = 1
-        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        super().__init__(file, acrit=acrit, **kwargs)
         
     def addToTestFile(self) -> None:
         '''add the current measurements to the csv of intended measurements for XSSDT'''
@@ -60,7 +63,7 @@ class fileVertSDT(fileVert, fileSDT):
                 
     def findIntendedCoords(self) -> None:
         '''find the intended x0,y0,xc,and yc of the assembly'''
-        rc1, rc2, w1, w2, l, lprog = self.intendedRC()  # intended coords in mm
+        rc1, rc2, w1, w2, l, lprog = self.intendedRC()  # intended coords and widths of each line in mm
         for j in [['dx', 'w']]:
             coord = j[0][1]
             right = (rc2[j[0]]+w2/2)      # the left edge should be 1/2 diameter to the left of the first line center
@@ -69,7 +72,7 @@ class fileVertSDT(fileVert, fileSDT):
             self.ideals[f'{coord}f'] = max(left, right)
             self.ideals[j[1]] = abs(right - left)     # get the ideal width
             self.ideals[f'{coord}c'] = (right+left)/2  # get the ideal center
-        w = self.ideals['w']
+        w = self.ideals['w']   # total width
         r = w/2
         self.ideals['area'] = l*w
         self.ideals['v'] = (l-w)*np.pi*r**2 + 4/3*np.pi*r**3
@@ -107,7 +110,7 @@ class fileVertSDT(fileVert, fileSDT):
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
         rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
-        self.makeCrop(rc, export=export, overwrite=overwrite)
+        self.makeCrop(rc, export=self.exportCropLocs, overwrite=self.overwriteCropLocs)
         
     def generateSegment(self, overwrite:bool=False):
         '''generate a new segmentation'''
@@ -123,9 +126,9 @@ class fileVertSDT(fileVert, fileSDT):
         self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
                                    , fillMode=fi.fillMode.fillByContours
                                    , nozData=self.nd, crops=self.crop
-                                   , segmentMode=[sMode.kmeans]
+                                   , segmentMode=[sMode.kmeans, sMode.adaptive]
                                    , nozMode=nozMode.full, removeSharp=True
-                                   , fillTop=True, openBottom=True, grayBlur=self.grayBlur
+                                   , closeTop=True, openBottom=True, grayBlur=self.grayBlur
                                   , closing=self.fillDilation)
         self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
         self.segmenter.eraseLeftRightBorder(margin=2, checks=False)   # remove components touching the left or right border
@@ -137,7 +140,7 @@ class fileVertSDT(fileVert, fileSDT):
         if self.checkWhite(val=254):
             # white image
             if self.overrideSegment:
-                self.getCrop(overwrite=False)
+                self.getCrop()
                 self.cropIm()
                 self.im[:,:] = 0
                 self.componentMask = self.im
@@ -145,15 +148,13 @@ class fileVertSDT(fileVert, fileSDT):
             self.stats['error'] = 'white'
             return
         self.initialize()
-        self.getCrop(overwrite=True)
-        
-        # get the real nozzle position and pad it
-        if not 'o' in self.tag:
-            self.generateIm0()
-            self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2)  # find the nozzle in the image and use that for future masking
-        self.padNozzle(left=1, right=30, bottom=2)
-        # self.im = vc.imcrop(self.im, self.crop)          # crop the image to ROI
+        self.getCrop()
         if self.overrideSegment:
+             # get the real nozzle position and pad it
+            if not 'o' in self.tag:
+                self.generateIm0()
+                self.nd.adjustEdges(self.im0, self.crop, diag=self.diag-2)  # find the nozzle in the image and use that for future masking
+            self.padNozzle(left=1, right=30, bottom=10)
             self.generateSegment(overwrite=True)
         else:
             self.importSegmentation()

@@ -29,7 +29,6 @@ from v_tools import vidData
 from noz_plots import *
 from noz_dims import *
 from background import *
-from noz_detector import *
 
 
 # logging
@@ -98,7 +97,7 @@ class nozDetector:
         self.xLmin = 200 # px
         self.xLmax = 500
         self.xRmin = 300
-        self.xRmax = 600
+        self.xRmax = 700
         self.yBmin = 200
         self.yBmax = 430
         
@@ -204,7 +203,7 @@ class nozDetector:
         self.leftCorner = self.lines.loc[0,['xf','yf']]         # take bottom point of left vertical line
         self.rightCorner = self.lines.loc[1,['xf', 'yf']]       # take bottom point of right vertical line
         
-    def findNozzlePoints(self) -> None:
+    def findNozzlePoints(self, mode:int=4, **kwargs) -> None:
         '''find lines and corners of nozzle from list of lines'''
         # based on line with most votes, group lines into groups on the right edge and groups on the left edge
         best = self.lines0.iloc[0]                # line with most votes
@@ -251,6 +250,9 @@ class nozDetector:
             # otherwise, use mean of bottom point of left and right edges
             yB = (self.leftCorner['yf']+self.rightCorner['yf'])/2
         self.nd = nozDims(self.pfd, importDims=False)
+        if mode==1:
+            # means erase lateral movement of the nozzle, so need to expand the nozzle slightly
+            xL = xL-10
         self.nd.setDims({'yB':yB, 'xL':xL, 'xR':xR})
         self.np.nd = self.nd
         self.nd.nozDetected = True
@@ -279,7 +281,7 @@ class nozDetector:
         self.nozzleLines()            # edge detect and Hough transform to get nozzle edges as lines
         if len(self.lines0)==0:
             raise ValueError('Failed to detect any vertical lines in nozzle')
-        self.findNozzlePoints()       # filter the lines to get nozzle coords
+        self.findNozzlePoints(**kwargs)       # filter the lines to get nozzle coords
         self.checkNozzleValues()      # make sure coords make sense
         if export:
             self.nd.exportNozzleDims(overwrite=overwrite)       # save coords  
@@ -310,11 +312,19 @@ class nozDetector:
 
     def detectNozzle(self, diag:int=0, **kwargs) -> None:
         '''find the bottom corners of the nozzle, trying different images. suppressSuccess=True to only print diagnostics if the run fails'''
-        for mode in [4]: # min, median, then mean
-            for i in range(1):
+        if 'modes' in kwargs:
+            modes = kwargs['modes']
+        else:
+            if 'Horiz' in self.printFolder:
+                modes = [4,1]
+            else:
+                modes = [1]
+        
+        for mode in modes: # min, median, then mean
+            for i in range(3):
                 try:
                     frame = self.fs.frame(mode=mode, numpics=10, **kwargs)           # get median or averaged frame
-                    self.detectNozzle0(frame, diag=diag, **kwargs)
+                    self.detectNozzle0(frame, diag=diag, mode=mode, **kwargs)
                 except ValueError as e:
                     if diag>1:
                         print(f'{e}: Looping to next mode')

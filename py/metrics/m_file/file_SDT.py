@@ -38,8 +38,13 @@ pd.set_option('display.max_rows', 500)
 class fileSDT(fileDisturb):
     '''singleDoubleTriple single files'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=2500, exportCropLoc:bool=True, useML:bool=True, forceML:bool=False, background:bool=True, **kwargs):
-        self.exportCropLoc = exportCropLoc
+    def __init__(self, file:str, diag:int=0, acrit:int=2500
+                 , overwriteCropLocs:bool=False, exportCropLocs:bool=True
+                 , overrideSegment:bool=False
+                 , useML:bool=True, forceML:bool=False, background:bool=True, **kwargs):
+        self.exportCropLocs = exportCropLocs
+        self.overwriteCropLocs = overwriteCropLocs
+        self.overrideSegment = overrideSegment
         self.useML = useML
         self.forceML = forceML
         self.background = background

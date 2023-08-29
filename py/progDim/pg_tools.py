@@ -329,15 +329,20 @@ class progDim:
                 # convert pressure to volume flux using calibration curve
             vol = sum(volflux)
             if l==0:
+                # sphere
                 w = 2*(vol*3/4/np.pi)**1/3
                 a = np.pi*(w/2)**2
+                wmax = w
             else:
+                # cylinder
                 a = vol/l
                 w = 2*np.sqrt(a/np.pi)
-            app = {**app, **{'t0_flow':t0flow, 'tf_flow':tfflow, 'l':l, 'w':w, 't':ttot, 'a':a, 'vol':vol}}
+                amax = max(volflux)/(l/len(volflux))
+                wmax = 2*np.sqrt(amax/np.pi)
+            app = {**app, **{'t0_flow':t0flow, 'tf_flow':tfflow, 'l':l, 'w':w, 'wmax':wmax, 't':ttot, 'a':a, 'vol':vol}}
         else:
             # no flow
-            app = {**app, **{'t0_flow':np.nan, 'tf_flow':np.nan, 'l':0, 'w':0, 't':0, 'a':0, 'vol':0}}
+            app = {**app, **{'t0_flow':np.nan, 'tf_flow':np.nan, 'l':0, 'w':0, 'wmax':0, 't':0, 'a':0, 'vol':0}}
         self.progPos.append(app)
         self.pprev = pt
         
@@ -368,7 +373,7 @@ class progDim:
         tu = self.ftableUnits['time']
         self.progPosUnits = {'xt':lu, 'yt':lu, 'zt':lu, 'dx':lu, 'dy':lu, 'dz':lu, 'dprog':lu, 'dtr':lu,
                              't0':tu, 'tf':tu, 't0_flow':tu, 'tf_flow':tu, 'speed':f'{lu}/{tu}',
-                            'l':lu, 'w':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3'}
+                            'l':lu, 'w':lu, 'wmax':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3'}
         
     def exportProgPos(self, overwrite:bool=False, diag:int=0) -> int:
         '''label programmed moves and export'''
@@ -388,7 +393,7 @@ class progDim:
         
     def initializeProgDims(self) -> None:
         '''initialize the table'''
-        cols = ['name', 'l', 'w', 't', 'a', 'vol', 't0', 'tf', 'tpic', 'lprog', 'ltr', 'speed', 'xpic', 'ypic', 'zpic']
+        cols = ['name', 'l', 'w', 'wmax', 't', 'a', 'vol', 't0', 'tf', 'tpic', 'lprog', 'ltr', 'speed', 'xpic', 'ypic', 'zpic']
         self.progDims = pd.DataFrame(columns=cols)
         
     
@@ -405,7 +410,7 @@ class progDim:
             tu = self.ftableUnits['time']
         else:
             tu = 's'
-        self.progDimsUnits = {'name':'', 'l':lu, 'w':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3', 
+        self.progDimsUnits = {'name':'', 'l':lu, 'w':lu, 'wmax':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3', 
                               't0':tu, 'tf':tu, 'tpic':tu, 'lprog':lu, 'ltr':lu, 'speed':f'{lu}/{tu}',
                              'xpic':lu, 'ypic':lu, 'zpic':lu}
     

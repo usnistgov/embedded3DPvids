@@ -201,7 +201,10 @@ class nozDims:
                 # intersect with right edge of nozzle
                 nozpts.append([xR, yB])
                 nozpts.append([xR, rpt.y])
+            elif rpt.x<xR:
+                nozpts.append([rpt.x, rpt.y])
             else:
+                
                 raise ValueError('Unexpected intersection points')
         elif lpt.y==yB:
             nozpts.append([lpt.x, yB])
@@ -215,7 +218,7 @@ class nozDims:
             raise ValueError('Unexpected intersection points')
             
         # reconstitute the list of points
-        if li>ri:
+        if li>ri or ri>li:
             # points go counterclockwise
             nozpts.reverse()
             hull3 = np.vstack([hull2[:ri, 0, :], nozpts, hull2[li:, 0, :]])

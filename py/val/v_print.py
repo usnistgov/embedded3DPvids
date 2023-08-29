@@ -69,7 +69,6 @@ class printVals:
 
         self.constUnits = {}
         self.pxpmm = self.pfd.pxpmm()
-    
         split = re.split('_', self.bn)
         inkShortName = split[1]
         supShortName = split[3]

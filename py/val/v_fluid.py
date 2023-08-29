@@ -48,6 +48,23 @@ class fluidVals:
         else:
             self.properties = False
             
+    def extractSurfactant(self, fluid:str) -> None:
+        '''pull the surfactant weight out from the fluid'''
+        spl = re.split('-', fluid)
+        self.val = spl[0]
+        self.dye = 'red'
+        if len(spl)>1:
+            if spl[1]=='S20':
+                self.surfactant = 'Span 20'
+            elif spl[1]=='S85':
+                self.surfactant = 'Span 85'
+            else:
+                raise ValueError(f'Unexpected surfactant in {fluid}')
+            if len(spl)>2:
+                self.surfactantWt=float(spl[2])
+            else:
+                raise ValueError(f'Missing surfactant wt in {fluid}')
+            
     def findComposition(self, fluid:str, ftype:str) -> None:
         '''find the composition of the fluid'''
         self.shortname = fluid
@@ -55,6 +72,8 @@ class fluidVals:
         self.rheModifier = 'fumed silica'
         self.surfactant = ''
         self.surfactantWt = ''
+        self.diluent = ''
+        self.diluentWt = ''
         self.dye = ''
         self.ftype=ftype
         if fluid[0]=='M':
@@ -69,17 +88,19 @@ class fluidVals:
                 self.val = self.val[:-1]
         elif fluid[:4]=='PDMS':
             self.var = 'w% silica'
+            self.rheModifier = 'Aerosil R812S'
             if ftype=='ink':
                 self.dye = 'red'
             if fluid[4]=='M':
-                self.base = 'PDMS_3_mineral_25'
+                self.base = 'PDMS_3'
+                self.diluent = 'mineral oil'
+                self.diluentWt = 25
             else:
-                self.base = 'PDMS_3_silicone_25'
+                self.base = 'PDMS_3'
+                self.diluent = 'silicone oil'
+                self.diluentWt = 25
             self.val = fluid[5:]
-            if fluid[-1]=='S':
-                self.surfactant = 'Span 20'
-                self.surfactantWt = 0.5
-                self.val = self.val[:-1]
+            self.extractSurfactant(self.val)
         elif fluid[:3]=='PEG':
             if ftype=='ink':
                 self.dye = 'blue'
@@ -90,20 +111,7 @@ class fluidVals:
             self.var = 'w% silica'
             self.base = 'silicone oil'
             self.rheModifier = 'Aerosil R812S'
-            spl = re.split('-', fluid)
-            self.val = spl[0][2:]
-            self.dye = 'red'
-            if len(spl)>1:
-                if spl[1]=='S20':
-                    self.surfactant = 'Span 20'
-                elif spl[1]=='S85':
-                    self.surfactant = 'Span 85'
-                else:
-                    raise ValueError(f'Unexpected surfactant in {fluid}')
-                if len(spl)>2:
-                    self.surfactantWt=float(spl[2])
-                else:
-                    raise ValueError(f'Missing surfactant wt in {fluid}')
+            self.extractSurfactant(fluid[2:])
         else:
             self.var = 'w% Laponite RD'
             self.rheModifier = 'Laponite RD'
@@ -128,7 +136,7 @@ class fluidVals:
         
     def metarow(self, tag:s='') -> Tuple[dict,dict]:
         '''row containing metadata'''
-        mlist = ['shortname', 'days', 'rheModifier', 'surfactant', 'surfactantWt', 'dye', 'var', 'val', 'base', 'type']
+        mlist = ['shortname', 'days', 'rheModifier', 'surfactant', 'surfactantWt', 'diluent', 'diluentWt', 'dye', 'var', 'val', 'base', 'type']
         meta = [[f'{tag}{i}',getattr(self,i)] for i in mlist]  # metadata
         munits = [[f'{tag}{i}', ''] for i in mlist]            # metadata units
         
@@ -155,9 +163,10 @@ class fluidVals:
         if len(rhe)==0:
             logging.error(f'No rheology table found: {self.fluid}')
             return
-        
         criterion = rhe.rheWt==self.val
-        for s in ['base', 'rheModifier', 'surfactant', 'surfactantWt', 'dye', 'days']:
+        traitList =  ['base', 'rheModifier', 'surfactant', 'surfactantWt', 'dye', 'days', 'diluent', 'diluentWt']
+        # print(dict([[s, getattr(self, s)] for s in traitList]))
+        for s in traitList:
             if s in rhe:
                 criterion = criterion&(rhe[s]==getattr(self, s))
         entry = rhe[criterion]
@@ -189,7 +198,7 @@ class fluidVals:
             logging.error(f'No density table found: {self.fluid}')
             return 1
         criterion = tab.rheWt==self.val
-        for s in ['base', 'rheModifier', 'surfactant', 'surfactantWt']:
+        for s in ['base', 'rheModifier', 'surfactant', 'surfactantWt', 'diluent', 'diluentWt']:
             if s in tab:
                 criterion = criterion&(tab[s]==getattr(self, s))
         entry = tab[criterion]

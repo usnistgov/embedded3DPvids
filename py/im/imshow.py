@@ -93,5 +93,8 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
             ax.set_title(kwargs['title'])
     if 'titles' in kwargs:
         for i,t in enumerate(kwargs['titles']):
-            axlist[i].set_title(t)
+            if len(args)>1:
+                axlist[i].set_title(t)
+            else:
+                ax.set_title(t)
     f.tight_layout()

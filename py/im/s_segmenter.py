@@ -34,6 +34,8 @@ class sMode:
     threshold = 0
     adaptive = 1
     kmeans = 2
+    adaptiveRed = 3
+    thresholdRed = 4
     
 class nozMode:
     none = 0
@@ -103,26 +105,46 @@ class segmenter(timeObject):
             self.gray = cv.medianBlur(gray, self.grayBlur)
         else:
             self.gray = gray
-        
-    def adaptiveThresh(self) -> np.array:
+
+    def adaptiveThresh(self, im:np.array) -> np.array:
         '''adaptive threshold'''
-        return cv.adaptiveThreshold(self.gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,11,6)
+        return cv.adaptiveThreshold(im,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,11,6)
     
-    def threshThresh(self, topthresh, whiteval) -> np.array:
+    def adaptiveThreshGray(self) -> np.array:
+        return self.adaptiveThresh(self.gray)
+    
+    def redDiff(self) -> np.array:
+        '''difference between red and bluegreen channels'''
+        red = self.im[:,:,2]
+        bg = cv.mean(self.im[:,:,0],self.im[:,:,1])
+        diff = cv.subtract(bg,red)
+        return diff
+    
+    def adaptiveThreshRed(self) -> np.array:
+        '''adaptive threshold on the red channel'''
+        return self.adaptiveThresh(self.redDiff())
+    
+    def threshThresh(self, im:np.array, topthresh:int, whiteval:int) -> np.array:
         '''conventional threshold
         topthresh is the initial threshold value
         whiteval is the pixel intensity below which everything can be considered white'''
         crit = topthresh
-        impx = np.product(self.gray.shape)
+        impx = np.product(im.shape)
         allwhite = impx*whiteval
         prod = allwhite
         while prod>=allwhite and crit>50: # segmentation included too much
-            ret, thresh = cv.threshold(self.gray,crit,255,cv.THRESH_BINARY_INV)
+            ret, thresh = cv.threshold(im,crit,255,cv.THRESH_BINARY_INV)
             prod = np.sum(np.sum(thresh))/impx
             crit = crit-10
         if self.diag>0:
             logging.info(f'Threshold: {crit+10}, product: {prod}, white:{whiteval}')
         return thresh
+    
+    def redThresh(self, topthresh, whiteval) -> np.array:
+        return self.threshThresh(255-self.redDiff(), topthresh, whiteval)
+    
+    def grayThresh(self, topthresh, whiteval) -> np.array:
+        return self.threshThresh(self.gray, topthresh, whiteval)
     
     def kmeansThresh(self) -> np.array:
         '''use kmeans clustering on the color image to segment interfaces'''
@@ -157,15 +179,27 @@ class segmenter(timeObject):
             segmentModes = [segmentMode]
         else:
             segmentModes = segmentMode
+        titles = []
         for a in segmentModes:
             if a==sMode.threshold:
-                threshes.append(self.threshThresh(topthresh, whiteval))
+                threshes.append(self.grayThresh(topthresh, whiteval))
+                titles.append('gray thresh')
             elif a==sMode.adaptive:
-                threshes.append(self.adaptiveThresh())
+                threshes.append(self.adaptiveThreshGray())
+                titles.append('adaptive gray')
             elif a==sMode.kmeans:
                 # use k-means clstering
                 threshes.append(self.kmeansThresh())
+                titles.append('k means')
+            elif a==sMode.adaptiveRed:
+                threshes.append(self.adaptiveThreshRed())
+                titles.append('adaptive red')
+            elif a==sMode.thresholdRed:
+                threshes.append(self.redThresh(topthresh, whiteval))
+                titles.append('red thresh')
         thresh = threshes[0]
+        if self.diag>1:
+            imshow(*threshes, titles=titles)
         for t in threshes[1:]:
             thresh = cv.add(thresh, t)
         self.thresh = thresh
@@ -191,8 +225,6 @@ class segmenter(timeObject):
 
     def closeVerticalTop(self, im:np.array, close:bool=True, cutoffTop:float=0.01, closeBottom:bool=False, **kwargs) -> np.array:
         '''if the image is of a vertical line, close the top'''
-        if im.shape[0]<im.shape[1]*2:
-            return im
 
         # cut off top 3% of image
         if cutoffTop>0:
@@ -267,9 +299,9 @@ class segmenter(timeObject):
         thresh3 = thresh3.astype(np.uint8)
         self.thresh = cv.subtract(self.thresh, thresh3)
 
-    def fillParts(self, fillTop:bool=True, **kwargs) -> None:
+    def fillParts(self, **kwargs) -> None:
         '''fill the components, and remove the border if needed'''
-        if fillTop:
+        if self.closeTop:
             self.thresh = self.closeVerticalTop(self.thresh, close=True)
         if self.closing>0:
             self.thresh = closeMorph(self.thresh, self.closing)

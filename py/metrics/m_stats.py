@@ -75,13 +75,19 @@ def pooledSE(vals:list, ses:list, ns:list) -> Tuple[float, float, int]:
     
     if not len(vals)==len(ses) or not len(ses)==len(ns):
         raise ValueError(f'Mismatched array lengths in pooledSE: vals {len(vals)}, SE {len(ses)}, N {len(ns)}')
-
-    if len(ses)>0:
-        ss = [ses[i]*np.sqrt(ns[i]) for i in range(N)]  # standard deviations
-        a = np.sum([(ns[i]-1)*ss[i]**2 + (ns[i]*vals[i]**2) for i in range(N)])
-        b = n*mean**2
-        poolsd = np.sqrt((a-b)/(n-N))
-        se = poolsd/np.sqrt(n)
+       
+    
+    if len(ses)>1:
+        if n==N:
+            se = np.std(vals, ddof=1) / np.sqrt(np.size(vals))
+        else:
+            ss = [ses[i]*np.sqrt(ns[i]) for i in range(N)]  # standard deviations
+            a = np.sum([(ns[i]-1)*ss[i]**2 + (ns[i]*vals[i]**2) for i in range(N)])
+            b = n*mean**2
+            poolsd = np.sqrt((a-b)/(n-N))
+            se = poolsd/np.sqrt(n)
+    elif len(ses)==1:
+        se = ses[0]
     else:
         se = vals.sem()
     return mean, se, n

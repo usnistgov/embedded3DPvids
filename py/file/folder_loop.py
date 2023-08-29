@@ -21,6 +21,7 @@ from tools.config import cfg
 from f_tools import *
 from print_folders import *
 from file_names import *
+from tools.plainIm import *
 
 # logging
 logger = logging.getLogger(__name__)
@@ -87,13 +88,15 @@ class folderLoop:
             self.runFolder(folder)
         return self.folderErrorList
     
-    def testFolderError(self, i:int, **kwargs) -> None:
+    def testFolderError(self, i:int, openFolder:bool=False, **kwargs) -> None:
         '''test a single file that threw an error. i is the row in self.folderErrorList'''
         if i>len(self.folderErrorList):
             print(f'{i} is greater than number of error files ({len(self.folderErrorList)})')
             return
         row = self.folderErrorList[i]
         print(row)
+        if openFolder:
+            openExplorer(row['folder'])
         self.func(row['folder'], **kwargs)
         
     def openErrorFolder(self, i:int) -> None:

@@ -87,7 +87,7 @@ class cropLocs:
             raise ValueError(f'Cannot find {file} in cropLocs')
         i = (row.iloc[0]).name
         for key,val in crop.items():
-            if not self.changed and (not key in self.df or pd.isna(self.df.loc[i,key])):
+            if not self.changed and (not key in self.df or pd.isna(self.df.loc[i,key]) or not self.df.loc[i,key]==val):
                 self.changed = True
             self.df.loc[i,key] = val
             

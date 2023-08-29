@@ -93,11 +93,13 @@ class failureTest:
         self.importFailures()
         
     def countFailures(self):
-        self.bad = self.df[self.df.approved==False]
+        self.bad = self.df[(self.df.approved==False)&(~(self.df.error==''))]
         self.approved = self.df[self.df.approved==True]
+        self.unapproved = self.df[self.df.approved==False]
         self.failedLen = len(self.bad)
         self.failedFolders = len(self.bad.fostr.unique())
-        print(f'{self.failedLen} failed files, {self.failedFolders} failed folders')
+        self.uncheckedFolders = len(self.unapproved.fostr.unique())
+        print(f'{self.failedLen} failed files, {self.failedFolders} failed folders, {self.uncheckedFolders} unchecked folders')
         
     def firstBadFile(self):
         if len(self.bad)==0:
@@ -121,6 +123,7 @@ class failureTest:
         
     def importFailures(self):
         df, _ = plainIm(self.failureFile, ic=None)
+        df.fillna('', inplace=True)
         if len(df)>0:
             for i,row in df.iterrows():
                 folder = os.path.dirname(row['file'])
@@ -151,6 +154,8 @@ class failureTest:
         ffiles = self.bad[self.bad.fostr==folder]
         for i,_ in ffiles.iterrows():
             self.testFile(i, **kwargs)
+        folder = self.folder(i)
+        fh.openExplorer(os.path.join(folder, 'Usegment'))
 
     def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=True):
         '''approve the file'''

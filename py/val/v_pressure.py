@@ -212,6 +212,8 @@ class pressureVals:
         if self.localMin()<=0:
             return 
         files = self.findCalibFile0()
+        if len(files)==0:
+            return
         time = self.fileTime(self.pfd.metaFile())
         vals = pd.DataFrame([{'file':file, 'time':self.fileTime(file)} for file in files])
         vless = vals[vals.time<time]

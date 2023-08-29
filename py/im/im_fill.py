@@ -115,7 +115,7 @@ class filler:
         img_floodfill = cv.floodFill(pad, mask, (0,0), 0, (5), (0), flags=8)[1] # floodfill outer white border with black
         self.thresh = img_floodfill[1:h-1, 1:w-1]  # remove border
 
-    def fillByContours(self, amin:int=50, amax:int=5000, conCrit:int=50, moCrit:int=-10, **kwargs) -> np.array:
+    def fillByContours(self, amin:int=50, amax:int=10000, conCrit:int=50, moCrit:int=-10, **kwargs) -> np.array:
         '''fill the components using the contours, where anything with a size between amin and amax doesn't get filled'''
         self.initializeContours()
         self.filled = self.thresh.copy()

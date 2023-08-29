@@ -44,29 +44,18 @@ def horizSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
     
 def fileHorizSDTFromTag(folder:str, tag:str, **kwargs):
     '''get the filehorizSDT from a string that is in the file name'''
-    pfd = fh.printFileDict(folder)
-    pfd.findVstill()
-    i = 0
-    while i<len(pfd.vstill)-1:
-        i = i+1
-        if tag in pfd.vstill[i]:
-            fhs = fileHorizSDT(pfd.vstill[i], **kwargs)
-            if len(tag)==6:
-                return fhs
-    return fhs
+    return fileMetricFromTag(fileHorizSDT, folder, tag, **kwargs)
         
 class fileHorizSDT(fileHoriz, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, diag:int=0, acrit:int=1000, overrideSegment:bool=False, overwriteCropLocs:bool=False, **kwargs):
-        self.overrideSegment = overrideSegment
+    def __init__(self, file:str, acrit:int=2000, **kwargs):
         self.maxlen = 800
         self.fillDilation = 0
         self.grayBlur = 1
         self.segmentSteps = 0
         self.importedImages = False
-        self.overwriteCropLocs = overwriteCropLocs
-        super().__init__(file, diag=diag, acrit=acrit, **kwargs)
+        super().__init__(file, acrit=acrit, **kwargs)
         
     def addToTestFile(self) -> None:
         '''add the current measurements to the csv of intended measurements for XSSDT'''
@@ -122,11 +111,14 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 if s in self.stats:
                     self.stats.pop(s)
                     
-    def getCrop(self, export:bool=True, overwrite:bool=False):
+    def getCrop(self):
         '''get the crop position. only export if export=True and there is no existing row'''
         # rc = {'relative':True, 'w':800, 'h':275, 'wc':400, 'hc':205}
-        rc = {'relative':True, 'w':800, 'h':310, 'wc':400, 'hc':250}
-        self.makeCrop(rc, export=export, overwrite=overwrite)
+        rc = {'relative':True, 'w':1000, 'h':310, 'wc':500, 'hc':250}
+        if 'p' in self.tag:
+            rc['w'] = 800
+            rc['wc'] = 450
+        self.makeCrop(rc, export=self.exportCropLocs, overwrite=self.overwriteCropLocs)
         
     def removeThreads(self) -> None:
         '''remove zigzag threads from top right part of binary image'''
@@ -167,10 +159,13 @@ class fileHorizSDT(fileHoriz, fileSDT):
         
     def segment(self) -> None:
         '''segment the foreground'''
+        segmode = [sMode.adaptive, sMode.kmeans]
+        #segmode = [sMode.kmeans]
+        #segmode = [sMode.adaptive]
         self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
                                    , fillMode=fi.fillMode.fillByContours
-                                   , nozData=self.nd, crops=self.crop, segmentMode=[sMode.adaptive, sMode.kmeans]
-                                   , nozMode=nozMode.full, removeSharp=True
+                                   , nozData=self.nd, crops=self.crop, segmentMode=segmode
+                                   , nozMode=nozMode.full, removeSharp=True, closeTop=False
                                    , grayBlur=self.grayBlur, addLeftEdge=True, addRightEdge=True, trimNozzle=True
                                   , closing=self.fillDilation, complete=False, normalize=self.normalize)
         self.segmentSteps +=1
@@ -195,9 +190,10 @@ class fileHorizSDT(fileHoriz, fileSDT):
         self.segmenter.eraseBorderLengthComponents(lcrit=400)
         self.segmenter.eraseBorderTouchComponent(2, '-y', checks=False)
         self.segmenter.eraseBorderTouchComponent(2, '+y', checks=False)
-        if 'o' in self.tag:
-            self.segmenter.eraseBorderTouchComponent(2, '-x', checks=True)
-            self.segmenter.eraseBorderTouchComponent(2, '+x', checks=True)
+        # if 'o' in self.tag or 'p5' in self.tag or 'p4' in self.tag or 'p3' in self.tag:
+        #     self.segmenter.eraseBorderTouchComponent(2, '+x', checks=True)
+        # if 'o' in self.tag or 'p1' in self.tag or 'p2' in self.tag:
+        #     self.segmenter.eraseBorderTouchComponent(2, '-x', checks=True)
         self.segmenter.eraseBorderClingers(40)
         # self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
 
@@ -205,7 +201,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
         '''generate a new segmentation'''
         self.segment()
         self.componentMask = self.segmenter.labelsBW.copy()
-        self.exportSegment(overwrite=overwrite)
+        # self.exportSegment(overwrite=overwrite)
         
     def checkAndDims(self) -> int:
         '''check that the segmenter succeeded, get dims, and then check if dims are correct'''
@@ -220,7 +216,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
             rcrit = 0.2
         elif 'w2' in self.tag or 'd2' in self.tag:
             if 'p1' in self.tag or 'p3' in self.tag or 'p2' in self.tag:
-                rcrit = 0.5
+                rcrit = 1
             else:
                 rcrit = 1
         elif 'w3' in self.tag or 'd3' in self.tag:
@@ -275,10 +271,11 @@ class fileHorizSDT(fileHoriz, fileSDT):
         
     def measure(self) -> None:
         '''measure horizontal SDT line'''
+        newSegment = False
         if self.checkWhite(val=254):
             # white image
             if self.overrideSegment:
-                self.getCrop(overwrite=self.overwriteCropLocs)
+                self.getCrop()
                 self.cropIm(normalize=self.normalize)
                 self.im[:,:] = 0
                 self.componentMask = self.im
@@ -286,7 +283,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
             self.stats['error'] = 'white'
             return
         self.initialize()
-        self.getCrop(overwrite=self.overwriteCropLocs)
+        self.getCrop()
         self.generateIm0()
         # get the real nozzle position and pad it
         if not 'o' in self.tag:
@@ -309,14 +306,15 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 
         # generate a new segment
         if not hasattr(self, 'segmenter'):
-            self.generateSegment(overwrite=True)
-            self.exportSegment()
+            newSegment=True
+            self.generateSegment(overwrite=False)
             self.Usegment = self.componentMask.copy()
             
         # use ML
         if self.forceML:
             self.importMLsegment()
             self.reconcileImportedSegment(func='horiz', smallCrit=500)
+            newSegment=True
             
         self.segmentClean()
         
@@ -328,12 +326,13 @@ class fileHorizSDT(fileHoriz, fileSDT):
             scopy = self.segmenter
             s2 = segmenterDF(self.componentMask, im=self.im, acrit=self.acrit, diag=self.diag)
             for s in ['im', 'gray', 'thresh']:
-                setattr(s2, s, getattr(scopy, s))
+                if hasattr(scopy,s):
+                    setattr(s2, s, getattr(scopy, s))
             self.segmenter = s2
             self.segmentClean()
             o1 = self.checkAndDims()
             if o1==0:
-                self.exportSegment(overwrite=True)
+                newSegment=True
         
         # try machine learning
         if self.useML and not self.forceML:
@@ -343,6 +342,10 @@ class fileHorizSDT(fileHoriz, fileSDT):
                 self.reconcileImportedSegment(func='horiz', smallCrit=500)
                 self.segmentClean()
                 self.checkAndDims()
+                newSegment=True
+ 
+        if newSegment:
+            self.exportSegment(overwrite=True)
 
         if not self.segmenter.success:
             if self.diag>0:
@@ -350,6 +353,7 @@ class fileHorizSDT(fileHoriz, fileSDT):
             self.display()
             self.resetStats()
             return
+            
         if not 'o' in self.tag:
             self.gaps(self.pv.dEst)
         if len(self.stats)==1:

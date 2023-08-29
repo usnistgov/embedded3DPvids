@@ -46,7 +46,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class nozData(timeObject):
     '''holds metadata about the nozzle'''
     
-    def __init__(self, folder:str, maskPad:int=0, bgmode:int=2, **kwargs):
+    def __init__(self, folder:str, maskPad:int=0, bgmode:int=fcModes.lightest, **kwargs):
         super().__init__()
         self.printFolder = folder
         if 'pfd' in kwargs:
@@ -81,7 +81,7 @@ class nozData(timeObject):
         return subtracted
     
     def exportBackground(self, **kwargs):
-        self.bg.exportBackground(**kwargs)
+        self.bg.exportBackground(nd=self.nd, **kwargs)
         
     def __getattr__(self, s):
         return getattr(self.nd, s)

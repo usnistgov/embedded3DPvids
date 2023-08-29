@@ -48,12 +48,13 @@ class folderMetric(timeObject):
     export a list of failed files (Failures)
     export a row of summary values (Summary)'''
     
-    def __init__(self, folder:str, overwriteMeasure:bool=False, overwriteSummary:bool=False, overwriteCropLocs:bool=False, diag:int=0, **kwargs) -> None:
+    def __init__(self, folder:str, overwriteMeasure:bool=False, overwriteSummary:bool=False, overwriteCropLocs:bool=False, diag:int=0, splitGroups:bool=True, **kwargs) -> None:
         super().__init__()
         self.folder = folder
         self.overwriteMeasure = overwriteMeasure
         self.overwriteSummary = overwriteSummary
         self.overwriteCropLocs = overwriteCropLocs
+        self.splitGroups = splitGroups    # true to split summary values by line group (e.g. l0)
         if 'pfd' in kwargs:
             self.pfd = kwargs.pop('pfd')
         else:
@@ -64,6 +65,8 @@ class folderMetric(timeObject):
             self.pv = printVals(self.folder, pfd=self.pfd, **kwargs)
         if 'pg' in kwargs:
             self.pg = kwargs.pop('pg')
+        if 'nd' in kwargs:
+            self.nd = kwargs.pop('nd')
         self.diag = diag
         self.kwargs = kwargs
         self.depVars = []
@@ -103,8 +106,9 @@ class folderMetric(timeObject):
 
         self.du = {}
         out = []
-        failures = []
-        self.nd = nozData(self.folder, pfd=self.pfd)
+        failures = [{'file':os.path.join(self.folder, 'successes'), 'error':''}]
+        if not hasattr(self, 'nd'):
+            self.nd = nozData(self.folder, pfd=self.pfd)
         if not os.path.exists(self.pfd.nozDims):
             self.nd.detectNozzle(export=True)
             self.nd.nozDims()
@@ -115,7 +119,7 @@ class folderMetric(timeObject):
             self.nd.resetDims()
             try:
                 m, u = fm(file, pfd=self.pfd, pv=self.pv, nd=self.nd, pg=self.pg, cl=self.cl
-                          , diag=self.diag-1, exportCropLoc=False, overwriteCropLoc=self.overwriteCropLocs, **self.kwargs).values()
+                          , diag=self.diag-1, exportCropLocs=False, overwriteCropLocs=self.overwriteCropLocs, **self.kwargs).values()
                 self.du = {**self.du, **u}
             except KeyboardInterrupt as e:
                 raise e
@@ -134,7 +138,7 @@ class folderMetric(timeObject):
         self.failures = pd.DataFrame(failures)
         plainExp(self.failfn, self.failures, {'file':'', 'error':''})
         plainExp(self.fn, self.df, self.du)
-        self.cl.export()
+        self.cl.export(overwrite=self.overwriteCropLocs)
         return 0
     
     def importMeasure(self):
@@ -157,15 +161,36 @@ class folderMetric(timeObject):
             if os.path.exists(self.failfn):
                 self.failures, _ = plainIm(self.failfn, ic=0)
             else:
-                self.failures = pd.DataFrame([])
+                self.failures = pd.DataFrame([{'file':os.path.join(self.folder, 'successes'), 'error':''}])
         
+    def createEmpty(self, dd:dict) -> None:
+        dd['total'] = {}
+        if self.splitGroups:
+            for g in self.df.gname.unique():
+                dd[g] = {}
+                
+    def importSummary(self):
+        if self.splitGroups:
+            df, _ = plainIm(self.summaryFn, checkUnits=False)
+            if len(df.columns)<4:
+                self.overwriteSummary = True
+                self.summarize()
+                return
+            df['units'] = df['units'].replace({np.nan:''})
+            self.summaryUnits = dict(df['units'])
+            self.summary = {}
+            for col in df.columns:
+                if not col in ['index', 'units']:
+                    self.summary[col] = dict(df[col])
+        else:
+            self.summary, self.summaryUnits = plainImDict(self.summaryFn, unitCol=1, valCol=2)
+        self.importFailures()
         
     def summaryHeader(self) -> int:
         '''top matter for summaries. return 0 if we already have a summary, return 1 if we have measurements, return 2 if we cannot proceed'''
         retval = 2
         if os.path.exists(self.summaryFn) and not self.overwriteSummary:
-            self.summary, self.summaryUnits = plainImDict(self.summaryFn, unitCol=1, valCol=2)
-            self.importFailures()
+            self.importSummary()
             return 0
         self.importMeasure()
         if hasattr(self, 'df'):
@@ -177,6 +202,8 @@ class folderMetric(timeObject):
         self.aves = {}
         self.sems = {}
         self.ns = {}
+        for dd in [self.aves, self.sems, self.ns]:
+            self.createEmpty(dd)
         self.aveunits = {}  # dictionaries for collecting values to average later
         return retval
     
@@ -197,7 +224,7 @@ class folderMetric(timeObject):
         return s,u,f
 
     
-    def convertValue(self, key:str) -> Tuple:
+    def convertValue(self, key:str, group:str='total') -> Tuple:
         '''convert the values from px to mm'''
         uke = self.aveunits[key]
         if uke=='px':
@@ -216,31 +243,53 @@ class folderMetric(timeObject):
         self.summaryUnits[f'{key}_SE'] = u2
         self.summaryUnits[f'{key}_N'] = ''
         if key in self.sems and key in self.ns:
-            m, se, n = pooledSE(self.aves[key], self.sems[key], self.ns[key])
-            self.summary[key] = m*c
-            self.summary[f'{key}_SE'] = se*c
-            self.summary[f'{key}_N'] = n
+            m, se, n = pooledSE(self.aves[group][key], self.sems[group][key], self.ns[group][key])
+            self.summary[group][key] = m*c
+            self.summary[group][f'{key}_SE'] = se*c
+            self.summary[group][f'{key}_N'] = n
         else:
-            val = np.array(self.aves[key])
+            val = np.array(self.aves[group][key])
             val = val[~np.isnan(val)]
             if len(val)>0:
-                self.summary[key] = np.mean(val)*c
-                self.summary[f'{key}_SE'] = sem(val)*c
-                self.summary[f'{key}_N'] = len(val)
+                self.summary[group][key] = np.mean(val)*c
+                self.summary[group][f'{key}_SE'] = sem(val)*c
+                self.summary[group][f'{key}_N'] = len(val)
         
     def convertValuesAndExport(self):
         '''find changes between ovservations'''
-        self.summary = self.mr.copy()
+        self.summary = dict([[l, self.mr.copy()] for l in self.aves])
+        for gname in self.summary:
+            if gname=='total':
+                self.summary[gname]['zdepth'] = ''
+            else:
+                self.summary[gname]['zdepth'] = self.df[(self.df.gname==gname)&(self.df.pname.str.contains('p'))].zdepth.min()
+            self.summary[gname]['gname']=gname
         self.summaryUnits = self.mu.copy()
-        for key in self.aves:
-            self.convertValue(key)
-        plainExpDict(self.summaryFn, self.summary, units=self.summaryUnits)
-        
-    def dflines(self, name:str) -> pd.DataFrame:
-        if not 'o' in name:
-            return self.df[(self.df.line.str.contains(name))&(~self.df.line.str.contains('o'))]
+        self.summaryUnits['zdepth'] = 'mm'
+        self.summaryUnits['gname'] = ''
+        for group in self.aves:
+            for key in self.aves[group]:
+                self.convertValue(key, group=group)
+        self.exportSummary()
+                
+    def exportSummary(self):
+        if len(self.aves)==1:
+            plainExpDict(self.summaryFn, self.summary['total'], units=self.summaryUnits)
         else:
-            return self.df[self.df.line.str.contains(name)]
+            summary = {}
+            summary['units'] = self.summaryUnits
+            summary = pd.DataFrame({**summary, **self.summary})
+            summary.reset_index(inplace=True)
+            plainExp(self.summaryFn, summary, units={}, index=None)
+        
+    def dflines(self, name:str, group:str='total') -> pd.DataFrame:
+        if not 'o' in name:
+            lines = self.df[(self.df.line.str.contains(name))&(~self.df.line.str.contains('o'))]
+        else:
+            lines = self.df[self.df.line.str.contains(name)]
+        if not group=='total':
+            lines = lines[lines.gname==group]
+        return lines
         
     def dfline(self, name:str) -> pd.Series:
         '''get the line from the measurements dataframe'''
@@ -250,26 +299,32 @@ class folderMetric(timeObject):
         else:
             return wodf.iloc[0]
         
-    def addValue(self, name:str, value:Any, unit:str) -> None:
+    def addValue(self, name:str, value:Any, unit:str, group:str='total') -> None:
         '''add the result to the results dict list and units dict'''
-        self.addValues(name, [value], unit)
+        self.addValues(name, [value], unit, group=group)
         
-    def addValues(self, name:str, values:list, unit:str) -> None:
+    def addValues(self, name:str, values:list, unit:str, group:str='total') -> None:
         '''add the result to the results dict list and units dict'''
         if name in self.aves:
-            self.aves[name] = self.aves[name]+values
+            self.aves[group][name] = self.aves[group][name]+values
         else:
-            self.aves[name] = values
+            self.aves[group][name] = values
             self.aveunits[name] = unit
-            self.depVars.append(name)
+            if not name in self.depVars:
+                self.depVars.append(name)
             
     def addSingle(self, lineName:str, dv:list):
         '''add values for a single line name'''
         # get average values
-        lines = self.dflines(lineName)
-        for var in dv:
-            if var in lines:
-                self.addValues(f'{var}_{lineName}', list(lines[var].dropna()), self.du[var])
+        if self.splitGroups:
+            ll = self.aves.keys()
+        else:
+            ll = ['total']
+        for group in ll:
+            lines = self.dflines(lineName, group=group)
+            for var in dv:
+                if var in lines:
+                    self.addValues(f'{var}_{lineName}', list(lines[var].dropna()), self.du[var], group=group)
             
     def addSlopes(self, lineName:str, yvar:str, tunits:str, rcrit:float=0.9) -> None:
         '''for each line group, get the slope over time and add the slope to the results dict list and units dict. only get slopes if regression is good'''
@@ -283,11 +338,17 @@ class folderMetric(timeObject):
             d = reg.regPD(df, ['time'], yvar)
             if len(d)>0 and d['r2']>rcrit:
                 slope = d['b']
-                if varname in self.aves:
-                    self.aves[varname].append(slope)
+                if self.splitGroups:
+                    l = [gname, 'total']
                 else:
-                    self.aves[varname] = [slope]
-                    self.aveunits[varname] = unit
+                    l = ['total']
+                for s in l:
+                    if varname in self.aves[s]:
+                        self.aves[s][varname].append(slope)
+                    else:
+                        self.aves[s][varname] = [slope]
+                self.aveunits[varname] = unit
+                if not varname in self.depVars:
                     self.depVars.append(varname)
                     
 
@@ -309,15 +370,21 @@ class folderMetric(timeObject):
                     dmse = np.sqrt((se1**2+se2**2)/2)
                     n = n1+n2
                     name = f'delta_{var}_{nm}'
-                    if name in self.aves:
-                        self.aves[name].append(dm)
-                        self.sems[name].append(dmse)
-                        self.ns[name].append(n)
+                    if self.splitGroups:
+                        l00 = [gname, 'total']
                     else:
-                        self.aves[name] = [dm]
-                        self.sems[name] = [dmse]
-                        self.ns[name] = [n]
-                        self.aveunits[name] = self.du[var]
+                        l00 = ['total']
+                    for s in l00:
+                        if name in self.aves[s]:
+                            self.aves[s][name].append(dm)
+                            self.sems[s][name].append(dmse)
+                            self.ns[s][name].append(n)
+                        else:
+                            self.aves[s][name] = [dm]
+                            self.sems[s][name] = [dmse]
+                            self.ns[s][name] = [n]
+                    self.aveunits[name] = self.du[var]
+                    if not name in self.depVars:
                         self.depVars.append(name)
                     
 

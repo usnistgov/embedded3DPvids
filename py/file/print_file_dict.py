@@ -75,6 +75,7 @@ class printFileDict:
         self.still_unknown=[]
         self.unknown=[]
         self.phoneCam = []
+        self.confocal = []
         self.printType = ''
         
     def __getattr__(self, s:str, ext:str='csv') -> str:
@@ -372,6 +373,8 @@ class printFileDict:
                     self.sortPNG(ffull, fname)
                 elif ext=='.jpg':
                     self.phoneCam.append(ffull)
+                elif ext=='.lif':
+                    self.confocal.append(ffull)
                 else:
                     self.unknown.append(ffull) 
         self.sorted = True

@@ -48,7 +48,19 @@ pd.set_option('display.max_rows', 500)
 
 
 #----------------------------------------------
-   
+    
+def fileMetricFromTag(func, folder:str, tag:str, **kwargs):
+    '''get the filehorizSDT from a string that is in the file name'''
+    pfd = fh.printFileDict(folder)
+    pfd.findVstill()
+    i = 0
+    while i<len(pfd.vstill):
+        if tag in pfd.vstill[i]:
+            fhs = func(pfd.vstill[i], **kwargs)
+            if len(tag)==6:
+                return fhs
+        i = i+1
+    return fhs   
 
 class fileMetric(timeObject):
     '''collects data about fluid segments in an image'''
@@ -200,11 +212,11 @@ class fileMetric(timeObject):
             out = cv.imwrite(fnorig, im)
             if diag>1 and self.exportDiag>1:
                 if out:
-                    print(f'Exported {os.path.basename(fnorig)}')
+                    logging.info(f'Exported {os.path.basename(fnorig)}')
                 else:
                     folderExists = os.path.exists(os.path.dirname(fnorig))
                     writePermission = os.access(os.path.dirname(fnorig), os.W_OK)
-                    print(f'Failed to export {fnorig}. Folder exists: {folderExists}. Write permission: {writePermission}. Name length: {len(fnorig)}')
+                    logging.info(f'Failed to export {fnorig}. Folder exists: {folderExists}. Write permission: {writePermission}. Name length: {len(fnorig)}')
                     
             
     def generateIm0(self):
@@ -402,13 +414,13 @@ class fileMetric(timeObject):
         '''get the intended center position and width of the whole structure written so far, as coordinates in mm relative to the nozzle'''
         rc1 = self.pg.relativeCoords(self.tag, fixList=fixList)   # position of line 1 in mm, relative to the nozzle. 
            # we know y and z stay the same during travel, so we can just use the endpoint
-        w1 = self.progRows.iloc[0]['w']
+        w1 = self.progRows.iloc[0]['wmax']
         if w1==0 or self.progRows.a.sum()==0:
             raise ValueError(f'No flow anticipated in {self.folder} {self.name}')
         self.ideals = {}
         if self.numLines>1:
             rc2 = self.pg.relativeCoords(self.tag, self.lnum, fixList=fixList)  # position of last line in mm, relative to the nozzle
-            w2 = self.progRows.iloc[self.lnum-1]['w']    # width of that written line
+            w2 = self.progRows.iloc[self.lnum-1]['wmax']    # width of that written line
         else:
             rc2 = rc1
             w2 = w1
@@ -628,7 +640,7 @@ class fileMetric(timeObject):
     #---------------------
     
     def zdisplacement(self, dd:dict, distance:int, size:int, diag:int=0):
-        '''vertical displacement between component and nozzle'''
+        '''horizontal displacement between component and nozzle'''
         bot = dd['bot']
         out = {}
         abovey = bot-distance
@@ -647,13 +659,14 @@ class fileMetric(timeObject):
             # distance between center of nozzle and center of filament below. positive means filament is right of nozzle
         if diag>0:
             im2 = self.componentMask.copy()
+            im2 = cv.cvtColor(im2,cv.COLOR_GRAY2RGB)
             for pt in [[abovey, dd['x0a']], [abovey, dd['xfa']], [belowy, dd['x0b']], [belowy, dd['xfb']], [bot, dd['x0at']], [bot, dd['xfat']]]:
-                im2 = cv.circle(im2, (int(pt[0]), int(pt[1])), 3, (0,0,255), 3)
+                im2 = cv.circle(im2, (int(pt[1]), int(pt[0])), 3, (0,0,255), 3)
             imshow(im2)
         return out
     
     def ydisplacement(self, dd:dict, distance:int, size:int, diag:int=0):
-        '''horizontal displacement between component and nozzle'''
+        '''vertical displacement between component and nozzle'''
         out = {}
         leftx = dd['left']-distance
         rightx = dd['right']+distance

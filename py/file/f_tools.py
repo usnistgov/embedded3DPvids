@@ -254,7 +254,7 @@ def sampleInName(file:str) -> bool:
 def splitName(fname:str) -> List[str]:
     '''drop the version number from sbp name in files'''
     spl = re.split('_', fname)
-    while spl[0][-1].isnumeric():
+    while len(spl[0])>0 and spl[0][-1].isnumeric():
         spl[0] = spl[0][:-1]
     return spl
 

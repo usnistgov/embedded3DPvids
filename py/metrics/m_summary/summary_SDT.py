@@ -106,6 +106,21 @@ class summarySDT(summaryMetric):
         else:
             return s2
         
+    def printDeps(self, deps:list) -> None:
+        '''sort the dependent variables by type and print them out'''
+        pos = ['x0', 'xf', 'xc', 'y0', 'yf', 'yc', 'yBot', 'xLeft', 'yTop', 'xRight']
+        fusion = ['segments', 'roughness', 'emptiness']
+        dims = ['w', 'wn', 'h', 'hn', 'ldiff', 'meanT', 'aspect', 'aspectI', 'xshift', 'yshift', 'area', 'stdevT', 'minmaxT']
+        gaps = ['dxprint', 'dx0', 'dxf', 'space_a', 'space_at', 'dy0l', 'dyfl', 'dy0lr', 'dyflr', 'space_l', 'space_b']
+        print('\033[1mDependents:\033[0m ')
+        d = set(deps)
+        for key,l in {'Position':pos, 'Dimensions':dims, 'Fusion':fusion, 'Gaps':gaps}.items():
+            li = d.intersection(set(l))
+            if len(li)>0:
+                print(f'\t\033[31m', '{:<12}:'.format(key), '\033[0m\t',  ', '.join(list(li)))
+            d = d.difference(li)
+        if len(d)>0:
+            print(f'\t\033[31m', '{:<12}:'.format('Unsorted'), '\033[0m\t',  ', '.join(list(d)))
     
     def printKeyTable(self): 
         '''print the dependent variables gridded by title'''
@@ -114,7 +129,7 @@ class summarySDT(summaryMetric):
             s = self.strip(var)
             if not s in c:
                 c.append(s)
-        print('\033[1mDependents:\033[0m ', ', '.join(c))
+        self.printDeps(c)
         d1 = {'wp':dict([[i, f'X_w{i}p'] for i in range(1,4)])
                 , 'wo':dict([[i, f'X_w{i}o'] for i in range(1,4)])}
         if self.type!='xs':
@@ -192,7 +207,7 @@ class summarySDT(summaryMetric):
         if self.type=='vert':
             varlist = {'x0':'$x_{left}$', 'xf':'$x_{right}$', 'xc':'$x_{center}$'
                        , 'dxprint':'x shift under nozzle'
-                       , 'segments':'segments', 'w':'width', 'h':'length'
+                       , 'segments':'segments', 'w':'width', 'h':'length', 'hn':'length/intended'
                        , 'roughness':'roughness', 'emptiness':'emptiness'
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness'
                        , 'minmaxT':'thickness variation', 'ldiff':'left shrinkage'
@@ -233,8 +248,6 @@ class summarySDT(summaryMetric):
         else:
             out = out + var
         return out
- 
-            
     
     def varSymbol(self, s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
         '''get a symbolic representation of the variable
@@ -279,3 +292,41 @@ class summarySDT(summaryMetric):
             typ = re.split('_', s)[0]
             s1 = s1[len(typ)+1:]
             return s1
+        
+    def depCorrelations(self, fn:str=''):
+        '''get a table of spearman correlation strengths between all dependent variables'''
+        v = self.depVars()
+        out = []
+        for i,var1 in enumerate(v):
+            for var2 in v[i+1:]:
+                s1 = self.strip(var1)
+                s2 = self.strip(var2)
+                if not s1==s2 and not f'{s1}n'==s2 and not f'{s2}n'==s1:      
+                    spear = self.depCorrelation0(var1, var2)
+                    out.append(spear)
+        self.depCor = pd.DataFrame(out)
+        self.exportDepCorrs(fn)
+        
+    def exportDepCorrs(self, fn:str=''):
+        '''export the dependent correlations to file'''
+        if os.path.exists(os.path.dirname(fn)):
+            plainExp(fn, self.depCor, {}, index=None)
+        
+    def depCorrelation0(self, var1:str, var2:str) -> dict:
+        '''get a single correlation between two variables'''
+        spear = rg.spearman(self.ss, var1, var2)
+        spear['var1'] = var1
+        spear['var2'] = var2
+        return spear
+        
+    def depCorrelation(self, var1:str, var2:str, plot:bool=False):
+        '''get a single correlation between two variables'''
+        if plot:
+            self.ss.plot.scatter(var1, var2)
+        if hasattr(self, 'depCor'):
+            row = self.depCor[(self.depCor.var1==var1)&(self.depCor.var2==var2)]
+            if len(row)==0:
+                row = self.depCor[(self.depCor.var1==var2)&(self.depCor.var2==var1)]
+            if len(row)>0:
+                return dict(row.iloc[0])
+        return self.depCorrelation0(var1, var2)

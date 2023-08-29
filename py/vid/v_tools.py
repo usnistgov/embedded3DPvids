@@ -52,9 +52,12 @@ def frameError(pfd) -> str:
 class vidData:
     '''holds metadata and tables about video'''
     
-    def __init__(self, folder:str):
+    def __init__(self, folder:str, **kwargs):
         self.folder = folder
-        self.pfd = fh.printFileDict(folder)
+        if 'pfd' in kwargs:
+            self.pfd = kwargs['pfd']
+        else:
+            self.pfd = fh.printFileDict(folder)
         if len(self.pfd.vid)>0:
             self.file = self.pfd.vid[0]    # video file
         else:
@@ -65,7 +68,6 @@ class vidData:
         self.streamOpen = False
         self.pxpmm = self.pfd.pxpmm()
         self.frameError = frameError(self.pfd)
-        self.getProgDims()
 
     def getProgDims(self) -> int:
         '''get line starts and stops'''
@@ -252,10 +254,12 @@ class vidData:
         if not hasattr(self, 'prog'):
             self.getProgDims()
         calc = self.prog[self.prog.name.str.contains('o')].tpic
-        if len(calc)==4*len(times):
+        if len(calc)==4*len(times) or len(calc)==4*(len(times)-2):
             # extra calcs
             calc = self.prog[(self.prog.name.str.contains('o1'))|self.prog.name.str.contains('o8')].tpic
-        if not len(calc)==len(times):
+        if len(calc)==4*(len(times)-2) or len(calc)==len(times)-2:
+            times = times[2:]
+        if not (len(calc)==len(times) or len(calc)+2==len(times)):
             logging.warning(f'Mismatch in {self.folder}: {len(times)} pics and {len(calc)} progDims')
             return {'raw':[round(x,2) for x in times], 'calc':[round(x,2) for x in calc]}
         diffe = times-calc
@@ -292,7 +296,7 @@ class vidData:
                 frame = self.getFrameAtTime(row['tpic'], (overwrite and i==0))   # this also exports video stats on the first loop if overwriting
                 cv.imwrite(fn, frame)
                 if diag>0:
-                    logging.info(f'Exported {fn}')
+                    logging.info(f'Exported {os.path.basename(fn)}')
                     
     def exportGIF(self, line:str, compression:int=1, speedScale:float=1, color:bool=True, crop:dict={}, sizeCompression:int=1, prestart:float=0) -> None:
         '''export a gif of just the writing and observing of one line. line is the line name, e.g. l1w1.

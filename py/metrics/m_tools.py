@@ -15,6 +15,7 @@ import cv2 as cv
 import shutil
 import subprocess
 import time
+import pyautogui
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -38,7 +39,54 @@ pd.set_option('display.max_rows', 500)
     
 def openInPaint(file):
     '''open the file in MS paint'''
-    subprocess.Popen([cfg.path.paint, file]);
+    subprocess.Popen(["cmd", "/c", "start", "/max", cfg.path.paint, file]);
+    time.sleep(1)
+    pencilx = 344
+    pencily = 20
+    pyautogui.PAUSE = 0.05
+    w = pyautogui.size().width
+    h = pyautogui.size().height
+    pyautogui.moveTo(347, 115) # Move the mouse to the pencil button
+    pyautogui.click() # Click the mouse at its current location.
+    pyautogui.moveTo(386, 159) # Move the mouse to the dropper button
+    pyautogui.click() # Click the mouse at its current location.  
+    pyautogui.moveTo(700, 376) # select from top right
+    pyautogui.click() # Click the mouse at its current location.  
+    pyautogui.moveTo(426, 159) # Move the mouse to the magnifier button
+    pyautogui.click() # Click the mouse at its current location. 
+    pyautogui.moveTo(548, 376) # select from top right
+    pyautogui.click() # zoom
+    pyautogui.click() # zoom
+    pyautogui.click() # zoom
+    pyautogui.click() # zoom
+    pyautogui.click() # zoom
+    pyautogui.moveTo(347, 115) # Move the mouse to the pencil button
+    pyautogui.click() # Click the mouse at its current location.
+    pyautogui.moveTo(922, 120) # Move the mouse to the line thickness button
+    pyautogui.click() # Click the mouse at its current location.
+    time.sleep(0.25)
+    pyautogui.moveTo(922, 310) # Move the mouse to the select 2nd line thickness
+    pyautogui.click() # Click the mouse at its current location.
+    pyautogui.scroll(10)  # go to bottom
+    pyautogui.moveTo(300, h-120) # Move the mouse to the scroll button on bottom
+    pyautogui.mouseDown()
+    pyautogui.moveTo(w-300, h-120) # Move the mouse to the scroll button on bottom
+    pyautogui.mouseUp()
+    # pyautogui.moveTo(3821, 355) # Move the mouse to the scroll button on bottom
+    # pyautogui.mouseDown()
+    # pyautogui.moveTo(3821, 1380) # Move the mouse to the scroll button on bottom
+    # pyautogui.mouseUp()
+    pyautogui.moveTo(w*3/4, h*1/2) # Move the mouse to the bottom right
+    
+    
+def cursorFinder():
+    while True:
+        x, y = pyautogui.position()
+        positionStr = 'X: ' + str(x).rjust(4) + ' Y: ' + str(y).rjust(4) + '\n'
+        print(positionStr, end='')
+        print('\b' * len(positionStr), end='', flush=True)
+        time.sleep(0.01)
+    
     
 def openInExcel(file):
     '''open the file in MS excel'''

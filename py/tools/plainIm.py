@@ -81,10 +81,19 @@ def plainExp(fn:str, data:pd.DataFrame, units:dict, index:bool=True, diag:bool=T
     if diag:
         logging.info(f'Exported {fn}')
     
+def tryfloat(val:Any) -> Any:
+    try:
+        val = float(val)
+    except:
+        pass
+    return val
     
-def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
+def plainImDict(fn:str, unitCol:int=-1, valCol:Union[int,list]=1) -> Tuple[dict,dict]:
     '''import values from a csv into a dictionary'''
-    d = {}
+    if type(valCol) is list:
+        d = dict([[i,{}] for i in valCol])
+    else:
+        d = {}
     u = {}
     with open(fn, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -92,12 +101,12 @@ def plainImDict(fn:str, unitCol:int=-1, valCol:int=1) -> Tuple[dict,dict]:
             # save all rows as class attributes
             if unitCol>0:
                 u[row[0]] = row[unitCol]
-            val = (','.join(row[valCol:])).replace('\"', '')
-            try:
-                val = float(val)
-            except:
-                pass
-            d[row[0]]=val
+            if type(valCol) is int:
+                val = (','.join(row[valCol:])).replace('\"', '')
+                d[row[0]]=tryfloat(val)
+            elif type(valCol) is list:
+                for i in valCol:
+                    d[i][row[0]]=tryfloat(row[i])
     return d,u
 
 def plainExpDict(fn:str, vals:dict, units:dict={}, diag:bool=True, quotechar:str='|') -> None:
@@ -108,7 +117,10 @@ def plainExpDict(fn:str, vals:dict, units:dict={}, diag:bool=True, quotechar:str
             if st in units:
                 row = [st, units[st], val]
             else:
-                row = [st, val]
+                if len(units)>0:
+                    row = [st, '', val]
+                else:
+                    row = [st, val]
             writer.writerow(row)
     if diag:
         logging.info(f'Exported {fn}')
