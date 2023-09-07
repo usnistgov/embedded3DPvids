@@ -16,7 +16,6 @@ import progDim.prog_dim as pg
 import vid.v_tools as vt
 import vid.noz_detect as nt
 import metrics.m_SDT as me
-from failureTest import whiteOutFiles
 from m_tools import *
 
 
@@ -124,6 +123,12 @@ class SDTWorkflow:
         print(os.path.basename(file))
         self.testImage(os.path.basename(file), **kwargs)
         
+    def testAllFailures(self, **kwargs) -> None:
+        '''test all failed files'''
+        for i,row in self.failuredf.iterrows():
+            if i>0:
+                self.testFailure(i, **kwargs)
+        
     def getTagFromFile(self, fn) -> str:
         bn = os.path.basename(fn)
         bn = re.split('vstill_', bn)[-1]
@@ -141,18 +146,28 @@ class SDTWorkflow:
         display(df2[df2.usedML][['line', 'usedML']])
         
         
-    def openInPaint(self, tag:str):
+    def openInPaint(self, tag:str, nmax:int=100, **kwargs):
         self.initPFD()
         self.pfd.findVstill()
         for file in self.pfd.vstill:
-            if tag in os.path.splitext(os.path.basename(file))[0]:
-                openInPaint(file)
+            bn =  os.path.splitext(os.path.basename(file))[0]
+            if tag in bn:
+                spl = re.split('_', re.split(tag, bn)[-1])[0]
+                if nmax<100:
+                    try:
+                        spl = int(spl)
+                    except:
+                        print(spl)
+                else:
+                    spl = 0
+                if spl<=nmax:
+                    openInPaint(file, **kwargs)
         
-    def openLastImage(self):
-        self.vs[self.imtag].openInPaint()
+    def openLastImage(self, **kwargs):
+        self.openInPaint(self.imtag, **kwargs)
         
-    def openLastSeries(self):
-        self.openInPaint(self.imtag[:5])
+    def openLastSeries(self, **kwargs):
+        self.openInPaint(self.imtag[:5], **kwargs)
         
     def openExplorer(self):
         fh.openExplorer(self.folder)
@@ -198,22 +213,3 @@ class fullSequencer(fh.folderLoop):
 
     def run(self):
         super().run()
-        
-class manualChecker(fh.folderLoop):
-    '''recursively check all files'''
-    
-    def __init__(self, folders:Union[str,list], **kwargs):
-        super().__init__(folders, self.fullSequence, **kwargs)
-        
-    def fullSequence(self, folder:str, **kwargs) -> None:
-        '''get summaries from a single folder and add them to the running list'''
-        self.sw = SDTWorkflow(folder, **kwargs)
-        self.sw.run(**kwargs)
-
-    def exportFailures(self, fn:str) -> None:
-        '''export a list of failed files'''
-        if len(self.folderErrorList)>0:
-            plainExp(fn.replace('Failures', 'Errors'), pd.DataFrame(self.folderErrorList), {}, index=False)
-
-    def run(self):
-        super().run()  

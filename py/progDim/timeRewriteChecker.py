@@ -31,11 +31,12 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 class timeRewriteChecker:
     '''this is for checking and correcting errors in timeRewrite files'''
     
-    def __init__(self, printFolder:str, ftable:pd.DataFrame, **kwargs):
+    def __init__(self, printFolder:str, ftable:pd.DataFrame, getBlips:bool=True, **kwargs):
         self.printFolder = printFolder
         self.ftable = ftable
         self.ftable.loc[0, 'targetLine'] = 0
-        self.getBlips()
+        if getBlips:
+            self.getBlips()
         self.checkOvershoots()
             
         self.ftable.drop(columns=['xt_orig', 'yt_orig', 'zt_orig'], inplace=True)
@@ -140,6 +141,8 @@ class timeRewriteChecker:
         stopPoints = list(others.i0) + [nexts.iloc[-1]['i0']]
         # go from the back and pull targets forward
         i = len(nexts)-2
+        if i<0:
+            return
         while i>=0:
             if i==0:
                 row = fc.loc[j]

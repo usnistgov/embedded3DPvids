@@ -60,6 +60,20 @@ def isStill(file:str) -> bool:
     '''determine if the file is an unstitched image'''
     return isTripleLineStill(file) or isSingleLineStill(file) or isSDTStill(file)
 
+def isStitch(file:str) -> bool:
+    '''determine if the file is a stitched image'''
+    if not '.png' in file:
+        return False
+    if '_stitch_' in file:
+        return True
+    if not 'singleLine' in file:
+        return False
+    bn = os.path.basename(file)
+    if 'xs' in bn or 'horiz' in bn or 'vert' in bn:
+        return True
+    return False
+
+
 def printType(bn:str) -> str:
     if bn in tripleLineSBPfiles():
         return 'tripleLine'

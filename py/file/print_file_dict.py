@@ -340,7 +340,7 @@ class printFileDict:
                 self.vstill.append(ffull)
             else: 
                 self.still_unknown.append(ffull)
-        elif isStitch(ffull):
+        elif fn.isStitch(ffull):
             # stitched image
             self.stitch.append(ffull)
         elif fn.isVidStill(ffull):

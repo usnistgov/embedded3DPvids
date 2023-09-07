@@ -26,6 +26,7 @@ from val.v_print import printVals
 from progDim.prog_dim import getProgDims
 import file.file_handling as fh
 from m_tools import *
+from full_sequence import SDTWorkflow, fullSequencer
 
 # logging
 logger = logging.getLogger(__name__)
@@ -39,47 +40,6 @@ pd.set_option('display.max_rows', 500)
 #----------------------------------------------
 
 
-def whiteoutFile(file:str, val:int=255) -> None:
-    '''white out the whole file'''
-    if not os.path.exists(file):
-        return
-    im = cv.imread(file)
-    if len(im.shape)==3:
-        im[:,:,:] = val
-    else:
-        im[:,:] = val
-    cv.imwrite(file, im)
-    ff = file.replace(cfg.path.server, '')
-    if val==255:
-        logging.info(f'Whited out {ff}')
-    elif val==0:
-        logging.info(f'Blacked out {ff}')
-    else:
-        logging.info(f'Covered up {ff}')
-    
-    
-def whiteoutAll(file:str) -> None:
-    '''whiteout the file, the cropped file, the ML file, and the Usegment file'''
-    if not 'vstill' in file:
-        raise ValueError(f'whiteoutAll failed on {file}. Only allowed for vstill files')
-    whiteoutFile(file, val=255)
-    bn = os.path.basename(file)
-    folder = os.path.dirname(file)
-    cropfile = os.path.join(folder, 'crop', bn.replace('vstill', 'vcrop'))
-    if os.path.exists(cropfile):
-        whiteoutFile(cropfile, val=255)
-    ufile = os.path.join(folder, 'Usegment', bn.replace('vstill', 'Usegment'))
-    mfile = os.path.join(folder, 'MLsegment', bn.replace('vstill', 'MLsegment'))
-    mfile2 = os.path.join(folder, 'MLsegment2', bn.replace('vstill', 'MLsegment2'))
-    for filei in [ufile, mfile, mfile2]:
-        if os.path.exists(filei):
-            whiteoutFile(filei, val=0)
-
-def whiteOutFiles(folder:str, canMatch:list=[], mustMatch:list=[]) -> None:
-    '''whiteout all files that match the strings'''
-    for file in os.listdir(folder):
-        if 'vstill' in file and fh.anyIn(canMatch, file) and fh.allIn(mustMatch, file):
-            whiteoutAll(os.path.join(folder, file))
 
 
 class failureTest:
@@ -110,6 +70,11 @@ class failureTest:
         if len(self.bad)==0:
             return 'No bad folders'
         return self.bad.iloc[0]['fostr']
+    
+    def firstUnapprovedFolder(self):
+        if len(self.unapproved)==0:
+            return 'No unapproved folders'
+        return self.unapproved.iloc[0]['fostr']
     
     def file(self, i):
         row = self.df.loc[i]
@@ -150,37 +115,22 @@ class failureTest:
         if os.path.exists(file):
             self.testFunc(file, **kwargs)
         
-    def testFolder(self, folder:str, **kwargs):
-        ffiles = self.bad[self.bad.fostr==folder]
-        for i,_ in ffiles.iterrows():
-            self.testFile(i, **kwargs)
+    def testFolder(self, folder:str, testFailures:bool=False, **kwargs):
+        if testFailures:
+            ffiles = self.bad[self.bad.fostr==folder]
+            for i,_ in ffiles.iterrows():
+                self.testFile(i, **kwargs)
+        else:
+            ffiles = self.df[self.df.fostr==folder]
+            i = ffiles.iloc[0].name
         folder = self.folder(i)
         fh.openExplorer(os.path.join(folder, 'Usegment'))
+        folder2 = os.path.join(cfg.path.server, folder)
+        self.sw = SDTWorkflow(folder2)
+        self.sw.run()
+        # if not testFailures:
+        #     self.sw.showFailures()
 
-    def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=True):
-        '''approve the file'''
-        if self.df.loc[i, 'approved'] == True:
-            return
-        self.df.loc[i, 'approved'] = True
-        folder = os.path.join(cfg.path.server, self.df.loc[i, 'fostr'])
-        file = self.df.loc[i, 'file']
-        if os.path.exists(file):
-            if whiteOut:
-                whiteoutAll(file)
-
-            # set the current folder dataframe and file names to the current folder
-            self.setFolderAtt(folder)
-
-        # change the failure file in this file's folder
-        if hasattr(self, 'failuredf') and len(self.failuredf)>0:
-            self.failuredf.loc[self.failuredf.file==file, 'error'] = 'approved'
-            self.failureChanged = True
-        
-        if export:
-            self.exportFolderFailures()
-        if count:
-            self.countFailures()
-            
     def resetFolder(self):
         '''clear out the folder attributes'''
         for s in ['failuredf', 'pfd']:
@@ -212,6 +162,33 @@ class failureTest:
         file = self.file(i)
         self.testFunc(file, measure=False).disableFile()
         
+
+        
+    def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=True):
+        '''approve the file'''
+ 
+        if self.df.loc[i, 'approved'] == True:
+            return
+        self.df.loc[i, 'approved'] = True
+        folder = os.path.join(cfg.path.server, self.df.loc[i, 'fostr'])
+        file = self.df.loc[i, 'file']
+        if os.path.exists(file):
+            if whiteOut:
+                whiteoutAll(file)
+
+            # set the current folder dataframe and file names to the current folder
+            self.setFolderAtt(folder)
+
+        # change the failure file in this file's folder
+        if hasattr(self, 'failuredf') and len(self.failuredf)>0:
+            self.failuredf.loc[self.failuredf.file==file, 'error'] = 'approved'
+            self.failureChanged = True
+
+        if export:
+            self.exportFolderFailures()
+        if count:
+            self.countFailures()
+            
     def approveFolder(self, fostr:str, whiteOut:bool=True, export:bool=True):
         '''approve all files in the folder'''
         # get the list of files to approve
@@ -219,8 +196,9 @@ class failureTest:
         for i,_ in ffiles.iterrows():
             self.approveFile(i, export=False, count=False, whiteOut=whiteOut)
         
-        if export:
-            self.exportFolderFailures()
+        # if export:
+        #     self.exportFolderFailures()
+        self.sw.approve()
         self.countFailures()
             
     def approveFolderi(self, i:int, whiteOut:bool=True, export:bool=True) -> None:

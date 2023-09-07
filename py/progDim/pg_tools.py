@@ -155,8 +155,7 @@ class progDim:
             self.ftable, self.ftableUnits = splitUnits(self.ftable)   # split the units out of the header      
             self.ftable.rename(columns=timeColumns(), inplace=True)  # shorten names
         else:
-            self.ftable = []    
-            self.ftableUnits = {}
+            raise FileNotFoundError(f'No time file found in {os.path.basename(self.printFolder)}')
         if self.sbp.startswith('disturbHoriz2'):
             # correct for zero jog point
             self.correctZeroJog()
