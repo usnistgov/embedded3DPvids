@@ -110,6 +110,8 @@ class progDimsChecker:
             self.spacings = dwlines.ypic.diff()
         elif self.ppd.ptype=='horiz':
             self.spacings = dwlines.zpic.diff()
+        elif self.ppd.ptype=='under':
+            self.spacings = dwlines.ypic.diff()
     
     def checkProgDimsT(self) -> None:
         '''check programmed dimensions for a specific type of print'''

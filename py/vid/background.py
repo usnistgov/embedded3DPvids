@@ -44,7 +44,13 @@ class background:
     '''holds information about the background'''
     
     def __init__(self, printFolder:str, mode:int=2, **kwargs):
-        self.mode = mode
+        if 'mode' in kwargs:
+            self.mode = kwargs['mode']
+        else:
+            if 'Under' in printFolder:
+                self.mode = 4
+            else:
+                self.mode = 2
         self.printFolder = printFolder
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']  # print file dict

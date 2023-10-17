@@ -59,7 +59,8 @@ class failureTest:
         self.failedLen = len(self.bad)
         self.failedFolders = len(self.bad.fostr.unique())
         self.uncheckedFolders = len(self.unapproved.fostr.unique())
-        print(f'{self.failedLen} failed files, {self.failedFolders} failed folders, {self.uncheckedFolders} unchecked folders')
+        self.totalFolders = len(self.df.fostr.unique())
+        print(f'{self.failedLen} failed files, {self.failedFolders} failed folders, {self.uncheckedFolders} unchecked folders, {self.totalFolders} total folders')
         
     def firstBadFile(self):
         if len(self.bad)==0:

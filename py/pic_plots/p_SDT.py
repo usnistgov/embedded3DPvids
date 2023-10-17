@@ -52,7 +52,7 @@ class multiPlotsSDT(multiPlots):
     def keyPlots(self, **kwargs):
         '''most important plots'''
         for i in range(3):
-            for s in ['HIx', 'HOx', 'HOh', 'V']:
+            for s in ['HIx', 'HOx', 'HOh', 'V', 'HIh']:
                 self.plot(f'{s}{i+1}', spacing=0.875, **kwargs)
                 self.plot(f'{s}{i+1}', ink=self.inkList[-1], **kwargs)  
                 
@@ -69,15 +69,15 @@ class multiPlotsSDT(multiPlots):
             overlay['shape'] = '3circles'
         else:
             raise ValueError(f'Unknown object requested: {name}')
-        if 'o' in ss:
+        if 'o' in ss and not 'HIh' in name:
             overlay['color'] = 'black'
-        elif name[:-1] in ['HOx']:
+        elif name[:-1] in ['HOx', 'HIh']:
             overlay['color'] = 'white'
         if 'tag' in kwargs:
             tag = kwargs.pop('tag')
         return tag
     
-    def getCrops(self, name:str, kwargs2:dict, kwargs:dict) -> None:
+    def getCrops(self, name:str, tag:str, kwargs2:dict, kwargs:dict) -> None:
         '''get the crop dimensions'''
         if 'crops' in kwargs:
             kwargs2['crops'] = kwargs['crops']
@@ -91,6 +91,11 @@ class multiPlotsSDT(multiPlots):
                 crops = {**crops, 'w':800, 'h':275, 'wc':400, 'hc':200}
             elif name[:-1]=='V':
                 crops = {**crops, 'w':200, 'h':700, 'wc':60, 'hc':350}
+            elif name[:-1]=='HIh':
+                crops = {**crops, 'w':700, 'h':280, 'wc':250, 'hc':180}
+                if 'p' in tag[0]:
+                    crops['w'] = 400
+                    crops['wc'] = 300
             kwargs2['crops'] = crops
                 
     def checkFreeVars(self, allIn:list, kwargs2:dict, kwargs:dict) ->Tuple[list, str, str]:
@@ -132,7 +137,7 @@ class multiPlotsSDT(multiPlots):
 
     def getConcat(self, name:str) -> str:
         '''get the direction to concatenate images'''
-        if name[:-1] in ['HOh', 'HIx']:
+        if name[:-1] in ['HOh', 'HIx', 'HIh']:
             concat = 'v'
         else:
             concat = 'h'
@@ -144,7 +149,7 @@ class multiPlotsSDT(multiPlots):
             overlay['shiftdir'] = 'x'
             if name[:-1]=='HIx':
                 overlay['dx'] = 0.1
-        elif name[:-1] in ['HOx', 'HOh']:
+        elif name[:-1] in ['HOx', 'HOh', 'HIh']:
             overlay['shiftdir'] = 'y'
             if name[:-1]=='HOx':
                 overlay['dy'] = 0.1
@@ -157,7 +162,7 @@ class multiPlotsSDT(multiPlots):
         return exportFolder
 
             
-    def plot(self, name:str, showFig:bool=False, export:bool=True,  **kwargs):
+    def plot(self, name:str, getO:bool=True, getP:bool=True, showFig:bool=False, export:bool=True,  **kwargs):
         '''plot the values for name (e.g. HOx1)'''
         
         kwargs2 = {**self.kwargs.copy(), **kwargs.copy()}
@@ -165,15 +170,24 @@ class multiPlotsSDT(multiPlots):
         if not name in obj2file:
             raise ValueError(f'Unknown object requested: {name}')
         file = obj2file[name]
-        if 'x' in name:
-            s2 = ''
-        else:
-            s2 = 'p3'
-        for ss in ['o1', s2]:
+        slist = []
+        if getO:
+            slist.append('o1')
+        if getP:
+            if 'x' in name:
+                slist.append('')
+            elif 'HIh' in name:
+                slist.append('p2')
+            else:
+                slist.append('p3')
+        for ss in slist:
             allIn = [file]
             overlay = {'dx':-0.7, 'dy':-0.7}
+            if 'HIh' in name:
+                overlay['color'] = 'white'
+                overlay['dy']=-0.3
             tag = self.getTag(name, overlay, ss, kwargs2)
-            self.getCrops(name, kwargs2, kwargs)
+            self.getCrops(name, tag, kwargs2, kwargs)
             allIn, xvar, yvar = self.checkFreeVars(allIn, kwargs2, kwargs)
             concat = self.getConcat(name)
             self.getOverlay(name, overlay)

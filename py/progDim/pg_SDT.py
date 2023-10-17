@@ -45,21 +45,24 @@ class progDimsSDT(progDim):
         self.ppd.numPtimes = 5
         super().__init__(printFolder, pv, **kwargs)
 
-    def getTimeRewrite(self, diag:int=0) -> int:
+    def getTimeRewrite(self, diag:int=0, **kwargs) -> int:
         '''overwrite the target points in the time file'''
         super().getTimeRewrite(diag=diag)
-        self.rewriteChecker = timeRewriteChecker(self.printFolder, self.ftable)  # correct errors in the file
+        self.rewriteChecker = timeRewriteChecker(self.printFolder, self.ftable, **kwargs)  # correct errors in the file
         return 0
         
-    def getProgPos(self) -> None:
+    def getProgPos(self, **kwargs) -> None:
         super().getProgPos()
-        self.progPosChecker = progPosChecker(self.printFolder, self.progPos)
+        self.progPosChecker = progPosChecker(self.printFolder, self.progPos, **kwargs)
         self.progPos = self.progPosChecker.progPos
         
     def initializeProgDims(self, xs:bool=False):
         '''initialize programmed dimensions table'''
         super().initializeProgDims()
-        
+        if 'Under' in self.printFolder:
+            self.numLines = 3
+        else:
+            self.numLines = 4
         if '_1_' in os.path.basename(self.printFolder):
             # 1 write, 1 disturb
             self.ppd.ll = ['w1', 'd1']
@@ -103,7 +106,7 @@ class progDimsSDT(progDim):
         
     def splitProgPos(self, **kwargs):
         '''convert list of positions'''
-        self.progPosSplitter = progPosSplitter(self.printFolder, self.ppd, self.flagFlip, self.progPos)
+        self.progPosSplitter = progPosSplitter(self.printFolder, self.ppd, self.flagFlip, self.progPos, **kwargs)
         self.vll = self.progPosSplitter.vll
     
     #---------------------------------------        
@@ -118,17 +121,17 @@ class progDimsSDT(progDim):
         '''create an object that raises errors if the progDims don't make sense'''
         self.progDimsChecker = progDimsChecker(self.printFolder, self.progDims, self.ppd, self.pv)
 
-    def getProgDims(self, diag:bool=False):
+    def getProgDims(self, diag:bool=False, **kwargs):
         '''convert the full position table to a list of timings'''
         self.importProgPos()
         self.importFlagFlip()
-        self.initializeProgDims('XS' in self.sbp)
+        self.initializeProgDims(xs='XS' in self.sbp)
 
         self.ppd.wprog = self.getNumLines('w')
         self.ppd.dprog = self.getNumLines('d')
         self.ppd.oprog = self.getNumLines('o')
         
-        self.splitProgPos()
+        self.splitProgPos(**kwargs)
         self.labelProgDims()
         self.checkProgDims()  # check that all values are correct
         if diag:

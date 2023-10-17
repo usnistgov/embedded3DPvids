@@ -57,8 +57,12 @@ class nozData(timeObject):
         self.maskPadRight = maskPad
         self.pxpmm = self.pfd.pxpmm()
         
-        self.ndGlobal = nozDims(self.pfd)
-        self.nd = nozDims(self.pfd)
+        if 'Under' in self.printFolder:
+            self.ndGlobal = nozDimsUnder(self.pfd)
+            self.nd = nozDimsUnder(self.pfd)
+        else:
+            self.ndGlobal = nozDimsSide(self.pfd)
+            self.nd = nozDimsSide(self.pfd)
         self.fs = frameSelector(self.printFolder, self.pfd)
         
         self.bg = background(self.printFolder, pfd=self.pfd, fs=self.fs, mode=bgmode)
@@ -100,9 +104,15 @@ class nozData(timeObject):
             
         if not 'max_line_gap' in kwargs:
             kwargs['max_line_gap'] = 100
-        self.detector = nozDetector(self.fs, self.pfd, self.printFolder, **kwargs)
+        self.detector = self.createDetector(**kwargs)
         self.detector.detectNozzle(overwrite=overwrite, **kwargs)
         self.nd = self.detector.nd
+        
+    def createDetector(self, **kwargs):
+        if 'Under' in self.printFolder:
+            return nozDetectorUnder(self.fs, self.pfd, self.printFolder, **kwargs)
+        else:
+            return nozDetectorSide(self.fs, self.pfd, self.printFolder, **kwargs)
 
     #------------------------------------------------------------------------------------
 
@@ -149,7 +159,7 @@ class nozData(timeObject):
 
     def adjustEdges(self, im:np.array, crops:dict, **kwargs) -> None:
         '''adjust the boundaries of the nozzle for this specific image, knowing dimensions should be close to stored dimensions'''
-        detector = nozDetector(self.fs, self.pfd, self.printFolder)
+        detector = self.createDetector(**kwargs)
         detector.defineCritValsImage(self.nd, crops, **kwargs)
         try:
             detector.detectNozzle1(im, export=False, **kwargs)
@@ -175,8 +185,8 @@ class nozData(timeObject):
         '''conform the contour to the nozzle'''
         return self.nd.dentHull(hull, crops)
     
-    def padNozzle(self, left:int=0, right:int=0, bottom:int=0):
-        return self.nd.padNozzle(left=left, right=right, bottom=bottom)
+    def padNozzle(self, **kwargs):
+        return self.nd.padNozzle(**kwargs)
 
 
         

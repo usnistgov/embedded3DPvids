@@ -55,7 +55,7 @@ def fileMetricFromTag(func, folder:str, tag:str, **kwargs):
     pfd.findVstill()
     i = 0
     while i<len(pfd.vstill):
-        if tag in pfd.vstill[i]:
+        if tag in os.path.basename(pfd.vstill[i]):
             fhs = func(pfd.vstill[i], **kwargs)
             if len(tag)==6:
                 return fhs
@@ -372,11 +372,19 @@ class fileMetric(timeObject):
     def findNozzlePx(self) -> None:
         '''find the nozzle position on the cropped image'''
         self.nozPx = {}
-        self.nozPx['x0'] = self.nd.xL
-        self.nozPx['xf'] = self.nd.xR
-        self.nozPx['yf'] = self.nd.yB
-        self.adjustForCrop(self.nozPx, self.crop, reverse=True)
-        self.nozPx['y0'] = 0
+        if hasattr(self.nd, 'xL'):
+            self.nozPx['x0'] = self.nd.xL
+            self.nozPx['xf'] = self.nd.xR
+            self.nozPx['yf'] = self.nd.yB
+            self.adjustForCrop(self.nozPx, self.crop, reverse=True)
+            self.nozPx['y0'] = 0
+        else:
+            self.nozPx['x0'] = self.nd.xC-self.nd.r
+            self.nozPx['xf'] = self.nd.xC+self.nd.r
+            self.nozPx['yf'] = self.nd.yC+self.nd.r
+            self.nozPx['y0'] = self.nd.yC-self.nd.r
+            self.adjustForCrop(self.nozPx, self.crop, reverse=True)
+            
         
     def findIntendedPx(self) -> None:
         '''convert the intended coordinates to pixels on the cropped image'''
@@ -675,7 +683,9 @@ class fileMetric(timeObject):
         dd['y0l'], dd['yfl'] = meanBounds(self.componentMask[:, int(leftx-size/2):int(leftx+size/2)], rows=False)
         dd['y0r'], dd['yfr'] = meanBounds(self.componentMask[:, int(rightx-size/2):int(rightx+size/2)], rows=False)
         dd['y0b'], dd['yfb'] = meanBounds(self.componentMask[:, int(mid-size/2):int(mid+size/2)], rows=False)
-        for tt in [['y0b', 'y0l', 'dy0l'], ['y0b', 'y0r', 'dy0r'], ['y0l', 'y0r', 'dy0lr'], ['yfb', 'yfl', 'dyfl'], ['yfb', 'yfr', 'dyfr'], ['yfl', 'yfr', 'dyflr'], ['y0l', 'bot', 'space_l'], ['y0r', 'bot', 'space_r'], ['y0b', 'bot', 'space_b']]:
+        for tt in [['y0b', 'y0l', 'dy0l'], ['y0b', 'y0r', 'dy0r'], ['y0l', 'y0r', 'dy0lr']
+                   , ['yfb', 'yfl', 'dyfl'], ['yfb', 'yfr', 'dyfr'], ['yfl', 'yfr', 'dyflr']
+                   , ['y0l', 'bot', 'space_l'], ['y0r', 'bot', 'space_r'], ['y0b', 'bot', 'space_b']]:
             if dd[tt[0]]>0 and dd[tt[1]]>0:
                 out[tt[2]] = dd[tt[0]]-dd[tt[1]]    # displacement of top and bottom side of filament between left and right
         if diag>0:
@@ -697,19 +707,18 @@ class fileMetric(timeObject):
             if not hasattr(self, s):
                 raise ValueError(f'{s} undefined for {self.file}')
         nd = self.nd
-        
         crop = self.crop
-        
+        n0 = nd.nozBounds()
         dd = {}
-        bot = nd.yB - crop['y0']
+        bot = n0['yf'] - crop['y0']
         dd['bot'] = bot
-        dd['left'] = nd.xL - crop['x0']  
+        dd['left'] = n0['x0'] - crop['x0']  
         if hasattr(nd, 'ndGlobal'):
-            w = nd.ndGlobal.xR - nd.ndGlobal.xL
+            w = nd.ndGlobal.nozWidthPx()
             if w==0:
-                w = nd.xR-nd.xL
+                w = nd.nozWidthPx()
         else:
-            w = nd.xR-nd.xL
+            w = nd.nozWidthPx()
             
         dd['right'] = dd['left'] + w
         # dd['right'] = nd.xR - crop['x0']

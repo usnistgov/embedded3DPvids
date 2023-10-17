@@ -53,6 +53,11 @@ class folderSDT(folderMetric):
                 self.pg.importProgDims()
         self.lines = list(self.pg.progDims.name)    
         
+    def importMeasure(self):
+        super().importMeasure()
+        self.df = self.df[~(self.df.pname=='o8')]  # remove 8th observation bc frame rate too slow, often blurry
+        self.df = self.df[~(self.df.pname=='p5')]  # remove 5th printing step bc frame rate too slow, often blurry
+        
     def depvars(self) -> list:
         '''find the dependent variables measured by the function'''
         self.importMeasure()

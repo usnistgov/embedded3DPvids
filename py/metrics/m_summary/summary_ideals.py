@@ -35,7 +35,7 @@ class ideals:
         for s in ['yBot', 'xLeft', 'xshift', 'yshift', 'yTop', 'xRight'
                   , 'xc', 'yc', 'emptiness', 'roughness', 'x0', 'dxprint'
                   , 'xf', 'dx0', 'dxf', 'space_a', 'space_at', 'ldiff', 'stdevT', 'minmaxT'
-                 , 'dy0l', 'dyfl', 'dy0lr', 'dyflr', 'space_l', 'space_b']:
+                 , 'dy0l', 'dyfl', 'dy0lr', 'dyflr', 'space_l', 'space_b', 'y0', 'yf']:
             if s in yvar:
                 # all positions are measured relative to the ideal position and should be 0
                 return 0

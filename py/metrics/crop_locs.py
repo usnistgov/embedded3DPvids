@@ -50,13 +50,18 @@ class cropLocs:
         self.fn = self.pfd.newFileName('cropLocs', '.csv')
         if os.path.exists(self.fn) and not overwrite:
             self.df,_ = plainIm(self.fn, ic=0)
+            if type(self.df) is list or len(self.df)<2:
+                 self.initializeDF()
         else:
-            if len(self.pfd.vstill)==0:
-                self.pfd.findVstill()
-            self.df = pd.DataFrame({'vstill':[os.path.basename(f) for f in self.pfd.vstill]})
+            self.initializeDF()
         self.units = {'vstill':'', 'x0':'px', 'xf':'px', 'y0':'px', 'yf':'px'}
         self.df0 = self.df.copy()
         self.changed = False
+        
+    def initializeDF(self):
+        if len(self.pfd.vstill)==0:
+            self.pfd.findVstill()
+        self.df = pd.DataFrame({'vstill':[os.path.basename(f) for f in self.pfd.vstill]})
             
     def getCrop(self, file:str) -> dict:
         '''get the crop dimensions from the file'''

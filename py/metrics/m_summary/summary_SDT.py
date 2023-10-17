@@ -46,6 +46,8 @@ class summarySDT(summaryMetric):
             self.type = 'vert'
         elif 'horiz' in self.file.lower():
             self.type = 'horiz'
+        elif 'under' in self.file.lower():
+            self.type = 'under'
         else:
             raise ValueError('Cannot identify print type')
         self.importStillsSummary(diag=diag)
@@ -210,7 +212,7 @@ class summarySDT(summaryMetric):
                        , 'segments':'segments', 'w':'width', 'h':'length', 'hn':'length/intended'
                        , 'roughness':'roughness', 'emptiness':'emptiness'
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness'
-                       , 'minmaxT':'thickness variation', 'ldiff':'left shrinkage'
+                       , 'minmaxT':'thickness variation', 'ldiff':'shrinkage diference'
                        , 'dx0dt':'left edge shift/time', 'dxfdt':'$\Delta x_{right}$/time', 'dxcdt':'$\Delta x_{center}$/time'
                        , 'dwdt':'widening/time', 'dhdt':'lengthening/time'
                        , 'dsegmentsdt':'rupturing/time', 'dldiffdt':'evening/time'
@@ -231,7 +233,7 @@ class summarySDT(summaryMetric):
                        , 'segments':'segments', 'w':'length', 'wn':'length/intended', 'h':'height'
                        , 'roughness':'roughness', 'emptiness':'emptiness'
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness', 'minmaxT':'thickness variation'
-                       , 'ldiff':'left shrinkage'
+                       , 'ldiff':'shrinkage difference'
                        , 'dy0l':'$y_{top}$ shift behind/under',  'dyfl':'$y_{bottom}$ shift behind/under'
                        , 'dy0lr':'$y_{top}$ shift behind/ahead', 'dyflr':'$y_{bot}$ shift behind/ahead'
                        , 'space_l':'vert space behind/nozzle', 'space_b':'space under/nozzle'
@@ -239,6 +241,21 @@ class summarySDT(summaryMetric):
                        , 'dyBotdt':'$\Delta y_{bot}$/time', 'dyTopdt':'$\Delta y_{top}$/time'
                        , 'dwdt':'lengthening/time', 'dhdt':'widening/time'
                        , 'dycdt':'y shift/time', 'droughnessdt':'roughening/time'
+                       , 'demptiness/dt':'emptying/time', 'dmeanTdt':'thickening/time'
+                       , 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
+        elif self.type=='under':
+            varlist = {'y0':'$y_{near}$', 'yf':'$y_{far}$', 'yc':'$y_{center}$'
+                       , 'segments':'segments', 'w':'length', 'wn':'length/intended', 'h':'width'
+                       , 'roughness':'roughness', 'emptiness':'emptiness'
+                       , 'meanT':'ave thickness', 'stdevT':'stdev thickness', 'minmaxT':'thickness variation'
+                       , 'ldiff':'shrinkage difference'
+                       , 'dy0l':'$y_{near}$ shift behind/adj',  'dyfl':'$y_{far}$ shift behind/adj'
+                       , 'dy0lr':'$y_{near}$ shift behind/ahead', 'dyflr':'$y_{far}$ shift behind/ahead'
+                       , 'space_l':'horiz space behind nozzle', 'space_b':'space next to nozzle'
+                       , 'dsegmentsdt':'rupturing/time'
+                       , 'dy0dt':'$\Delta y_{near}$/time', 'dy0dt':'$\Delta y_{near}$/time'
+                       , 'dwdt':'lengthening/time', 'dhdt':'widening/time'
+                       , 'dycdt':'lateral shift/time', 'droughnessdt':'roughening/time'
                        , 'demptiness/dt':'emptying/time', 'dmeanTdt':'thickening/time'
                        , 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
         else:
@@ -256,7 +273,7 @@ class summarySDT(summaryMetric):
         if s in self.depVars():
             if self.type=='xs':
                 return self.depVarSpl(s)
-            elif self.type=='vert' or self.type=='horiz':
+            elif self.type=='vert' or self.type=='horiz' or self.type=='under':
                 return self.depVarSpl(s)
         elif s.endswith('Ratio') or s.endswith('Prod'):
             if s.endswith('Ratio'):

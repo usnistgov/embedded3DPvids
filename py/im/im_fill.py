@@ -86,9 +86,9 @@ class filler:
         imremove = self.thresh.copy()*0       # new image with contours filled
         if self.diag>0:
             self.contourLabels = self.ch.display()
-        for i in (hdf[hdf.level==3]).index:
-            if cv.contourArea(cnt[i])>50:
-                cv.drawContours(imremove, cnt, contourIdx=i, color=(255,255,255),thickness=-1)
+        for i in (self.ch.hdf[self.ch.hdf.level==3]).index:
+            if cv.contourArea(self.ch.cnt[i])>50:
+                cv.drawContours(imremove, self.ch.cnt, contourIdx=i, color=(255,255,255),thickness=-1)
         self.filled = cv.subtract(self.filled, imremove)
         return self.filled
     
@@ -97,7 +97,7 @@ class filler:
         self.gapsToFill()   # find gaps to fill
         self.filled = cv.add(self.thresh, self.gaps)  # add all gaps to the image
         if leaveHollows:
-            self.removeHollows(diag=diag)  # remove hollow parts, e.g. the inside of a hole
+            self.removeHollows()  # remove hollow parts, e.g. the inside of a hole
         if self.diag>0:
             if hasattr(self, 'hollowEmptied'):
                 imshow(self.thresh, self.contourLabels, self.gaps, self.filled, titles=['thresh', 'contourLabels', 'gaps', 'filled'])

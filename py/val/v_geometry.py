@@ -70,6 +70,16 @@ class geometryVals:
         '''check if the units are correct for this row'''
         if not foundUnit==expected:
             logging.warning(f'Bad units in {bn}: {nam}, {foundUnit}')
+            
+    def searchValues(self, target:str, aliases:List[str], d:dict, u:dict, bn:str, file:str) -> None:
+        '''look for values that can have many aliases, that you will assign a value'''
+        nozkeys = dict([[key,val] for key,val in d.items() if key in aliases])
+        if len(set(nozkeys.values()))>1 and max(nozkeys.values())-min(nozkeys.values())>0.1*min(nozkeys.values()):
+            raise ValueError(f'Multiple {target} found in {file}')
+        else:
+            k = list(nozkeys.keys())[0]
+            setattr(self, target, float(d[k]))
+            self.checkUnits(u[k], bn, self.units[target], k)
     
     def importMetaFile(self) -> int:
         '''find the metadata file. returns 0 if successful'''
@@ -79,21 +89,15 @@ class geometryVals:
         bn = fh.twoBN(file)
         d,u = plainImDict(file, unitCol=1, valCol=2)
   
-        nozkeys = dict([[key,val] for key,val in d.items() if key in ['&nid','nozzle_inner_diameter', 'nozzle_0_diameter']])
-        if len(set(nozkeys.values()))>1:
-            raise ValueError(f'Multiple nozzle diameter values found in {file}')
-        else:
-            k = list(nozkeys.keys())[0]
-            self.di = float(d[k])
-            self.checkUnits(u[k], bn, self.units['di'], k)
+        self.searchValues('di',['&nid','nozzle_inner_diameter', 'nozzle_0_diameter'], d, u, bn, file)
+        self.searchValues('do', ['&nd', 'nozzle_outer_diameter'], d, u, bn, file)
             
-            
-        for key,val in {'&nd':'do', 'camera_magnification':'', 'camera_position':'', 'nozzle_length':'lNoz', 'tubing_length':'lTub'}.items():
+        for key,val in {'camera_magnification':'', 'camera_position':'', 'nozzle_length':'lNoz', 'tubing_length':'lTub'}.items():
             if key in d:
                 try:
-                    self.do = float(d[key])
+                    setattr(self, val, float(d[key]))
                 except ValueError:
-                    self.do = d[key]
+                    setattr(self, val,  d[key])
                 if val in self.units:
                     self.checkUnits(u[key], bn, self.units[val], key)
                 

@@ -118,12 +118,12 @@ def singleDisturbName(file:str) -> str:
 
 def SDTSBPfiles() -> dict:
     '''get a dictionary of singleDoubleTriple sbp file names and their shortcuts'''
-    files = {'disturbHoriz':'DH', 'disturbVert':'DV', 'disturbXS':'DX'}
+    files = {'disturbHoriz':'DH', 'disturbVert':'DV', 'disturbXS':'DX', 'disturbUnder':'DU'}
     return files
 
 def SDTSt() -> list:
     '''get a list of disturbed line object types'''
-    return [f'{s}{i}' for s in ['HIx', 'HOx', 'HOh', 'V'] for i in [1,2,3]]
+    return [f'{s}{i}' for s in ['HIx', 'HOx', 'HOh', 'V', 'HIh'] for i in [1,2,3]]
 
 def SDTSBPPicfiles() -> dict:
     '''get a dictionary of triple line pic file names and their shortcuts'''
@@ -139,6 +139,7 @@ def SDT2FileDict() -> str:
         d[f'HOx{i}'] = f'disturbXS2_{i}_+z'
         d[f'HOh{i}'] = f'disturbHoriz3_{i}'
         d[f'V{i}'] = f'disturbVert2_{i}'
+        d[f'HIh{i}'] = f'disturbUnder_{i}'
     return d
 
 def SDTName(file:str) -> str:

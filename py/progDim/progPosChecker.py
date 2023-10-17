@@ -40,6 +40,8 @@ class progPosChecker:
             self.moveDir = '+z'
         elif 'XS' in self.printFolder:
             self.moveDir = '-x'
+        elif 'Under' in self.printFolder:
+            self.moveDir = '+x'
         self.checkExtensions()
         
 
@@ -49,6 +51,10 @@ class progPosChecker:
         # find lines that have an extension at the end
         if self.moveDir=='-x':  # xs
             vlines = pdp[(pdp.dx<0)&(pdp.zt<0)&(pdp.shift(-1).dx<0)]
+            do = ['dy', 'dz']
+            di = 'dx'
+        elif self.moveDir=='+x':  # xs
+            vlines = pdp[(pdp.dx>0)&(pdp.zt<0)&(pdp.shift(-1).dx>0)]
             do = ['dy', 'dz']
             di = 'dx'
         elif self.moveDir=='+y':  # horiz
@@ -84,7 +90,7 @@ class progPosChecker:
                 combined.loc[i,'tf_flow'] = tbreak
                 extdf.loc[i,'t0_flow'] = tbreak
             
-            if self.moveDir=='-x':
+            if self.moveDir=='-x' or self.moveDir=='+x':
                 combined.loc[i, 'xt'] = row['xt']+extendd   # move the target
             elif self.moveDir=='+y':
                 combined.loc[i, 'yt'] = row['yt']-extendd 

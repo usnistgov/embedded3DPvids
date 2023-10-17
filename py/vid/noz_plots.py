@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for taking measurements from videos of single line extrusion'''
+'''Functions for plotting nozzle detection lines on side views of the nozzle'''
 
 # external packages
 import os, sys
@@ -42,8 +42,26 @@ class nozPlotter:
     
     def __init__(self, printFolder:str):
         self.printFolder = printFolder
+        if 'Under' in self.printFolder:
+            self.under = True
+        else:
+            self.under = False
         
     def drawNozzleOnFrame(self, colors:bool=True) -> None:
+        if self.under:
+            self.drawNozzleOnFrameUnder(colors)
+        else:
+            self.drawNozzleOnFrameSide(colors)
+            
+    def drawLinesOnFrame(self) -> None:
+        if self.under:
+            self.drawLinesOnFrameUnder()
+        else:
+            self.drawLinesOnFrameSide()
+     
+    #-----------
+    
+    def drawNozzleOnFrameSide(self, colors:bool=True) -> None:
         '''draw the nozzle outline on the original frame. colors=True to draw annotations in color, otherwise in white'''
         # draw left and right edge
         if hasattr(self, 'lines'):
@@ -76,13 +94,56 @@ class nozPlotter:
                 for im in [self.line_image, self.edgeImage2]:
                     cv.circle(im,(int(l),int(nd.yB)),10,c,3)
         
-    def drawLinesOnFrame(self) -> None:
+    def drawLinesOnFrameSide(self) -> None:
         '''draw the list of all detected nozzle edge lines on the thresholded frame'''
         if hasattr(self, 'lines0') and hasattr(self, 'lines0h'):
             for df in [self.lines0, self.lines0h]:
                 for i,line in df.iterrows():
                     color = list(np.random.random(size=3) * 256)            # assign a random color to each line
                     cv.line(self.lines_image,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,4)
+                    
+    def displayNearLines(self, lines0:pd.DataFrame, im:np.array, edges:np.array) -> None:
+        print('Lines near nozzle: ', lines0)
+        if len(lines0)>0:
+            im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
+            im3 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
+            h,w = im.shape[:2]
+            for i,line in lines0.iterrows():
+                color = list(np.random.random(size=3) * 256)            # assign a random color to each line
+                cv.line(im2,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,1)
+            for i,line in lines0.iterrows():
+                cv.line(im3,(int(line['x0']),int(0)),(int(line['x0']),int(h)),color,1)
+                cv.line(im3,(int(line['xf']),int(0)),(int(line['xf']),int(h)),color,1)
+
+            imshow(im3, im2, edges, title='eraseSpillover', maxwidth=8)
+            
+    #-----------
+                    
+    def drawNozzleOnFrameUnder(self, colors:bool=True) -> None:
+        '''draw the nozzle outline on the original frame. colors=True to draw annotations in color, otherwise in white'''
+        # draw left and right edge       
+        if hasattr(self, 'nd'):
+            nd = self.nd
+            # draw corner points
+            if colors:
+                c = (0,255,0)
+            else:
+                c = (255,255,255)
+            for im in [self.line_image, self.edgeImage2]:
+                cv.circle(im,(int(nd.xC), int(nd.yC)),int(nd.r),c,3)
+        
+    def drawLinesOnFrameUnder(self) -> None:
+        '''draw the list of all detected nozzle edge lines on the thresholded frame'''
+        if hasattr(self, 'circles'):
+            circles = self.circles
+            try:
+                for i,circle in circles.iterrows():
+                    color = list(np.random.random(size=3) * 256)
+                    cv.circle(self.line_image,(int(circle['xC']),int(circle['yC'])),int(circle['r']),color,2)
+            except Exception as e:
+                pass
+            
+    #--------------------------------------------------------------------------
 
     def initLineImage(self) -> None:
         '''initialize line_image0 and line_image, which are diagnostic images that help to visualize nozzle detection metrics'''
@@ -137,18 +198,5 @@ class nozPlotter:
         plt.close()
         return fig
     
-    def displayNearLines(self, lines0:pd.DataFrame, im:np.array, edges:np.array) -> None:
-        print('Lines near nozzle: ', lines0)
-        if len(lines0)>0:
-            im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
-            im3 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
-            h,w = im.shape[:2]
-            for i,line in lines0.iterrows():
-                color = list(np.random.random(size=3) * 256)            # assign a random color to each line
-                cv.line(im2,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,1)
-            for i,line in lines0.iterrows():
-                cv.line(im3,(int(line['x0']),int(0)),(int(line['x0']),int(h)),color,1)
-                cv.line(im3,(int(line['xf']),int(0)),(int(line['xf']),int(h)),color,1)
 
-            imshow(im3, im2, edges, title='eraseSpillover', maxwidth=8)
         

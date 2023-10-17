@@ -84,6 +84,8 @@ class folderMetric(timeObject):
             self.lineType = 'xs+y'
         elif 'xs' in bn and '+z' in bn:
             self.lineType = 'xs+z'
+        elif 'under' in bn:
+            self.lineType = 'under'
         else:
             raise ValueError(f'Failed to identify line type in {self.folder}')
         
@@ -109,9 +111,6 @@ class folderMetric(timeObject):
         failures = [{'file':os.path.join(self.folder, 'successes'), 'error':''}]
         if not hasattr(self, 'nd'):
             self.nd = nozData(self.folder, pfd=self.pfd)
-        if not os.path.exists(self.pfd.nozDims):
-            self.nd.detectNozzle(export=True)
-            self.nd.nozDims()
         if not hasattr(self, 'pg'):
             self.pg  = getProgDimsPV(self.pv)
         self.cl = cropLocs(self.folder, pfd=self.pfd)
@@ -124,6 +123,8 @@ class folderMetric(timeObject):
             except KeyboardInterrupt as e:
                 raise e
             except Exception as e:
+                print(e)
+                traceback.print_exc()
                 failures.append({'file':file, 'error':e})
             else:
                 if len(m['line'])<1:
@@ -150,7 +151,11 @@ class folderMetric(timeObject):
             self.pfd = fh.printFileDict(self.folder)
         if os.path.exists(self.fn) and not self.overwriteMeasure:
             self.df, self.du = plainIm(self.fn, ic=0)
-            self.df.line.fillna('', inplace=True)
+            if 'line' in self.df:
+                self.df.line.fillna('', inplace=True)
+            else:
+                self.overwriteMeasure=True
+                self.measureFolder()
         else:
             self.measureFolder()
         self.importFailures()

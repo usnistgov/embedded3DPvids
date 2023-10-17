@@ -67,7 +67,6 @@ class progDim:
         self.geo = pv.geo
         self.press = pv.press
         self.rewritten=False
-        self.numLines = 4
         self.initializeProgDims()
         self.sbp = self.pfd.sbpName()    # name of shopbot file
 
@@ -88,7 +87,7 @@ class progDim:
                 setattr(self, s, [])
                 setattr(self, f'{s}Units', {})
                 
-    def exportGeneric(self, s:str, overwrite:bool=False) -> None:
+    def exportGeneric(self, s:str, overwrite:bool=False, **kwargs) -> None:
         '''generate data if not already found, and export'''
 #         print(f'export {s}')
         fn = getattr(self, f'{s}File')()
@@ -98,12 +97,12 @@ class progDim:
             return 0
         
         if overwrite or not hasattr(self, s):
-            getattr(self, f'get{scap}')()
+            getattr(self, f'get{scap}')(**kwargs)
           
         if hasattr(self, s) and hasattr(self, f'{s}Units') and len(getattr(self, s))>0:
             table = getattr(self, s)
-            if len(table)==0:
-                getattr(self, f'get{scap}')()
+            if len(table)==0 or ('t' in table and np.isnan(table.iloc[0]['t'])):
+                getattr(self, f'get{scap}')(**kwargs)
                 table = getattr(self, s)
                 if len(table)==0:
                     return 1
@@ -183,7 +182,7 @@ class progDim:
             self.ftable.rename(columns=timeColumns(), inplace=True)  # shorten names
             self.rewritten=True
 
-    def getTimeRewrite(self, diag:int=0) -> int:
+    def getTimeRewrite(self, diag:int=0, **kwargs) -> int:
         '''start to rewrite the target points'''
         self.importTimeFile()
         if not 'xt' in self.ftable:
@@ -195,16 +194,15 @@ class progDim:
         self.ftableUnits['ldt'] = lu
         self.ftableUnits['speed'] = f'{lu}/{tu}'
    
-    def exportTimeRewrite(self, overwrite:bool=False, diag:int=0) -> int:
+    def exportTimeRewrite(self, overwrite:bool=False, diag:int=0, **kwargs) -> int:
         '''rewrite targets and export'''
         
         fn = self.timeRewriteFile()
         if os.path.exists(fn) and not overwrite:
             # file already exists
             return 0
-        
         if not self.rewritten or overwrite:
-            self.getTimeRewrite(diag=diag)
+            self.getTimeRewrite(diag=diag, **kwargs)
             
         if hasattr(self, 'ftable') and len(self.ftable)>0:
             ftable2 = self.ftable.copy()
@@ -242,7 +240,7 @@ class progDim:
         return out
 
                 
-    def getFlagFlip(self) -> None:
+    def getFlagFlip(self, **kwargs) -> None:
         '''get the times when flags flipped'''
         self.importTimeRewrite()
         if len(self.ftable)==0:
@@ -265,8 +263,8 @@ class progDim:
  
         self.flagFlipUnits['time']=self.ftableUnits['time']
         
-    def exportFlagFlip(self, overwrite:bool=False) -> None:
-        self.exportGeneric('flagFlip', overwrite)
+    def exportFlagFlip(self, overwrite:bool=False, **kwargs) -> None:
+        self.exportGeneric('flagFlip', overwrite, **kwargs)
                 
     
                 
@@ -374,9 +372,9 @@ class progDim:
                              't0':tu, 'tf':tu, 't0_flow':tu, 'tf_flow':tu, 'speed':f'{lu}/{tu}',
                             'l':lu, 'w':lu, 'wmax':lu, 't':tu, 'a':f'{lu}^2', 'vol':f'{lu}^3'}
         
-    def exportProgPos(self, overwrite:bool=False, diag:int=0) -> int:
+    def exportProgPos(self, overwrite:bool=False, diag:int=0, **kwargs) -> int:
         '''label programmed moves and export'''
-        self.exportGeneric('progPos', overwrite=overwrite)
+        self.exportGeneric('progPos', overwrite=overwrite, **kwargs)
         
         
     #----------------------
@@ -413,21 +411,19 @@ class progDim:
                               't0':tu, 'tf':tu, 'tpic':tu, 'lprog':lu, 'ltr':lu, 'speed':f'{lu}/{tu}',
                              'xpic':lu, 'ypic':lu, 'zpic':lu}
     
-    def exportProgDims(self, overwrite:bool=False) -> None:
+    def exportProgDims(self, overwrite:bool=False, **kwargs) -> None:
         '''sort programmed moves into intended moves'''
         self.defineProgDimsUnits()
-        self.exportGeneric('progDims', overwrite=overwrite)
+        self.exportGeneric('progDims', overwrite=overwrite, **kwargs)
         
     #---------------
     
-    def exportAll(self, overwrite:bool=False, diag:int=0) -> None:
+    def exportAll(self, overwrite:bool=False, diag:int=0, **kwargs) -> None:
         '''export rewritten time, progPos, and progDims'''
-        
-        self.exportTimeRewrite(overwrite=overwrite, diag=diag)
-        self.exportFlagFlip(overwrite=overwrite)
-        self.exportProgPos(overwrite=overwrite)
-        self.exportProgDims(overwrite=overwrite)
-        
+        self.exportTimeRewrite(overwrite=overwrite, diag=diag, **kwargs)
+        self.exportFlagFlip(overwrite=overwrite, **kwargs)
+        self.exportProgPos(overwrite=overwrite, **kwargs)
+        self.exportProgDims(overwrite=overwrite, **kwargs)
     #---------------
     
     def progPosRow(self, lineName:str) -> dict:
@@ -471,11 +467,23 @@ class progDim:
             raise ValueError(f'Could not find {lineName} in progDims')
         return timeRow
     
+    
+    def coordSystem(self) -> list:
+        '''determine what axis of the pictures correspond to what axis of the shopbot'''
+        if 'Under' in self.printFolder:
+            sx = 'x'
+            sy = 'y'
+        else:
+            sx = 'y'
+            sy = 'z'
+        return sx, sy
+    
     def lineEndPoint(self, lineName:str) -> dict:
         '''get the target of the line'''
         posRow = self.progPosRow(lineName)
         end = {}
-        for s in ['y', 'z']:
+        sx,sy = self.coordSystem()
+        for s in [sx,sy]:
             end[s] = posRow[f'{s}t']
         return end
     
@@ -485,7 +493,8 @@ class progDim:
         prevRow = self.progPos.loc[posRow.name-1]
         # print(self.progPos.loc[(posRow.name-1):(posRow.name)])
         center = {}
-        for s in ['y', 'z']:
+        sx,sy = self.coordSystem()
+        for s in [sx,sy]:
             if s in fixList:
                 center[s] = posRow[f'{s}t']
             else:
@@ -499,8 +508,8 @@ class progDim:
             print(self.progDims)
             raise ValueError(f'Cannot find line {lineName} in progDims')
         timeRow = sel.iloc[0]
-        return {'y':timeRow['ypic'], 'z':timeRow['zpic']}
-
+        sx,sy = self.coordSystem()
+        return {sx:timeRow[f'{sx}pic'], sy:timeRow[f'{sy}pic']}
     
     def relativeCoords(self, tag:str, writeLine:int=1, fixList:list=[]) -> dict:
         '''get the position of the first written line in this set (e.g. l1w) relative to the nozzle at the time we took this picture (e.g. tag=l1wo). returns values in mm'''
@@ -519,6 +528,8 @@ class progDim:
         # writePoint = self.lineMidPoint(write, fixList)
         writePoint = self.linePicPoint(write)
         d = {'dx':0, 'dy':0}   # change in coords from nozzle to the region we want to see
+        sx,sy = self.coordSystem()
+        
         if 'o' in tag:
             # put the first observe point in the center. find position of observe point
             center1 = f'{write[:4]}o1'
@@ -529,12 +540,12 @@ class progDim:
                 centerPointNow = self.linePicPoint(tag)
                 # centerPointNow = self.lineEndPoint(tag)    # where this line is
                 # shift to get to the observe origin from this observe location
-                d['dx'] = centerPointNow['y'] - centerPoint1['y']  
-                d['dy'] = centerPointNow['z'] - centerPoint1['z']
+                d['dx'] = centerPointNow[sx] - centerPoint1[sx]  
+                d['dy'] = centerPointNow[sy] - centerPoint1[sy]
                 
             # shift to get to the written line from the observe origin
-            d['dx']  = d['dx'] - (centerPoint1['y'] - writePoint['y'])
-            d['dy']  = d['dy'] - (centerPoint1['z'] - writePoint['z'])
+            d['dx']  = d['dx'] - (centerPoint1[sx] - writePoint[sx])
+            d['dy']  = d['dy'] - (centerPoint1[sy] - writePoint[sy])
         else:
             # we are observing a line during writing
             if tag==write:
@@ -542,6 +553,6 @@ class progDim:
             centerPointNow = self.linePicPoint(tag)
             # centerPointNow = self.lineMidPoint(tag, fixList)    # where this line is
             # shift to get to the written line from the observe origin
-            d['dx']  = d['dx'] - (centerPointNow['y'] - writePoint['y'])
-            d['dy']  = d['dy'] - (centerPointNow['z'] - writePoint['z'])
+            d['dx']  = d['dx'] - (centerPointNow[sx] - writePoint[sx])
+            d['dy']  = d['dy'] - (centerPointNow[sy] - writePoint[sy])
         return d

@@ -107,9 +107,9 @@ class metricPlot:
         if var in self.ss:
             return True
         if 'Ratio' in var:
-            self.ss = self.ms.addRatios(self.ss, varlist=[var.replace('Ratio','')], operator='Ratio')
+            self.ss = self.ms.addRatios(varlist=[var.replace('Ratio','')], ss=self.ss, operator='Ratio')
         elif 'Prod' in var:
-            self.ss = self.ms.addRatios(self.ss, varlist=[var.replace('Prod','')], operator='Prod')
+            self.ss = self.ms.addRatios(varlist=[var.replace('Prod','')], ss=self.ss, operator='Prod')
         else:
             return False
         return True
@@ -185,6 +185,11 @@ class metricPlot:
             self.ax.set_xscale('log')
         if self.logy:
             self.ax.set_yscale('log')
+            
+    def setLinear(self) -> None:
+        '''undo any log scales'''
+        self.ax.set_xscale('linear')
+        self.ax.set_yscale('linear')
 
         
     def setUpAxes(self):

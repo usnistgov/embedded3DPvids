@@ -42,13 +42,16 @@ class progPosData:
         elif 'XS' in self.printFolder:
             self.moveDir = '-x'
             self.ptype = 'xs'
+        elif 'Under' in self.printFolder:
+            self.moveDir = '+x'
+            self.ptype = 'under'
         self.numLines = 4
 
 
 class progPosSplitter:
     '''for splitting progPos tables into lines'''
     
-    def __init__(self, printFolder:str, ppd:progPosData, flagFlip:pd.DataFrame, progPos:pd.DataFrame):
+    def __init__(self, printFolder:str, ppd:progPosData, flagFlip:pd.DataFrame, progPos:pd.DataFrame, getBlips:bool=True, **kwargs):
         self.printFolder = printFolder
         self.ppd = ppd
         self.flagFlip = flagFlip
@@ -59,7 +62,8 @@ class progPosSplitter:
         otimes = otimes.copy()
         snofftimes = self.flagFlip[(~self.flagFlip.cam.str.contains('SNAP'))&(self.flagFlip.cam.str.contains('SNOFF'))] 
         otimes['snapdt'] = [snofftimes.iloc[i]['time']-otimes.iloc[i]['time'] for i in range(len(snofftimes))]
-        otimes = otimes[otimes.snapdt>otimes.snapdt.mean()/2]  # remove very small snap times
+        if getBlips:
+            otimes = otimes[otimes.snapdt>otimes.snapdt.mean()/2]  # remove very small snap times
         self.ppd.otimes = otimes
         
         # get the moves
@@ -79,6 +83,9 @@ class progPosSplitter:
         if self.ppd.moveDir=='-x':  # xs
             vlines = pdp[(pdp.dx<0)&(pdp.zt<0)&(pdp.shift(-1).dx<0)]
             mval = vlines[f'd{md}'].min()
+        elif self.ppd.moveDir=='+x': # under
+            vlines = pdp[(pdp.dx>0)&(pdp.zt<0)&(pdp.shift(-1).dx>0)]
+            mval = vlines[f'd{md}'].max()
         elif self.ppd.moveDir=='+y':  # horiz
             vlines = pdp[(pdp.dy>0)&(pdp.zt<0)&(pdp.dx==0)&(pdp.dz==0)&(pdp.shift(-1).dy>0)]
             mval = vlines[f'd{md}'].max()
@@ -128,11 +135,16 @@ class progPosSplitter:
     #-----------------------------------------------
     
     def missingx(self) -> pd.DataFrame:
-        if '+y' in os.path.basename(self.printFolder):
+        bn = os.path.basename(self.printFolder)
+        if '+y' in bn or 'Under' in self.printFolder:
             counts = self.vll.value_counts('zt')
-        else:
+        elif '+z' in bn:
             counts = self.vll.value_counts('yt')
-        if not len(counts)==4:
+        if 'Under' in self.printFolder:
+            numCrit = 3
+        else:
+            numCrit = 4
+        if not len(counts)==numCrit:
             raise ValueError(f'Wrong number of targets in {self.printFolder}: {len(counts)}')
         missing = counts[counts<counts.max()]
         return missing
@@ -240,7 +252,7 @@ class progPosSplitter:
             self.checkLongLinesy()
         elif self.ppd.moveDir=='+z':
             self.checkLongLinesz()
-        elif self.ppd.moveDir=='-x':
+        elif self.ppd.moveDir=='-x' or self.ppd.moveDir=='+x':
             self.checkLongLinesx()
 
     

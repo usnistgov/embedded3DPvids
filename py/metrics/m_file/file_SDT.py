@@ -116,9 +116,9 @@ class fileSDT(fileDisturb):
             self.im = self.nd.subtractBackground(self.im, normalize=normalize)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
                 
-    def padNozzle(self, left:int=0, right:int=0, bottom:int=0):
+    def padNozzle(self, **kwargs):
         '''expand the nozzle'''
-        self.nd.padNozzle(left=left, right=right, bottom=bottom)
+        self.nd.padNozzle(**kwargs)
         
     def addToTraining(self, trainFolder:str=r'singleDoubleTripleML\trainingVert', s:str='componentMask', openPaint:bool=False):
         '''add the original image and the segmented image to the training dataset'''

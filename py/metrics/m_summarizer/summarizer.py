@@ -27,6 +27,7 @@ from progDim.prog_dim import getProgDims
 import file.file_handling as fh
 from m_tools import *
 from failureTest import *
+from full_sequence import SDTWorkflow
 
 # logging
 logger = logging.getLogger(__name__)
@@ -58,20 +59,28 @@ class summarizer(fh.folderLoop):
         summary = []
         failures = []
         pfd = fh.printFileDict(folder)
-        # if not (self.overwriteMeasure or self.overwriteSummary):
-        #     if hasattr(pfd, 'summary') and hasattr(pfd, 'failures') and os.path.exists(pfd.summary) and os.path.exists(pfd.failures):
-        #         summary, units = plainImDict(pfd.summary, unitCol=1, valCol=2)
-        #         failures, _ = plainIm(pfd.failures, ic=0)
-        
-        if len(summary)==0:
-            cl = self.measureClass(folder, overwrite=self.overwrite, overwriteMeasure=self.overwriteMeasure, overwriteSummary=self.overwriteSummary, exportCrop=False,  **self.kwargs)
-            if self.overwriteMeasure:
-                cl.measureFolder()
-            if self.overwriteSummary or not os.path.exists(pfd.summary):
-                summary, units, failures = cl.summarize()
-            else:
-                cl.summaryHeader()
-                summary, units, failures = cl.summaryValues()
+        # go through the full workflow if there are no nozzle dimensions
+        runFull = True
+        try:
+            pfd.nozDims
+        except:
+            runFull = True
+        else:
+            pfd.findVstill()
+            runFull=(len(pfd.vstill)==0)
+
+        if runFull:
+            sw = SDTWorkflow(folder)
+            sw.run()
+
+        cl = self.measureClass(folder, overwrite=self.overwrite, overwriteMeasure=self.overwriteMeasure, overwriteSummary=self.overwriteSummary, exportCrop=False,  **self.kwargs)
+        if self.overwriteMeasure:
+            cl.measureFolder()
+        if self.overwriteSummary or not os.path.exists(pfd.summary):
+            summary, units, failures = cl.summarize()
+        else:
+            cl.summaryHeader()
+            summary, units, failures = cl.summaryValues()
 
         if len(summary)>0:
             self.units = {**self.units, **units}

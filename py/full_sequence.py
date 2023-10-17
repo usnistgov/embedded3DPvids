@@ -48,7 +48,7 @@ class SDTWorkflow:
         
     def getProgDims(self, **kwargs):
         '''get programmed dimensions'''
-        self.pdim = pg.getProgDims(self.folder)
+        self.pdim = pg.getProgDims(self.folder, **kwargs)
         self.pdim.exportAll(**kwargs)
         self.pfd = self.pdim.pfd
         
@@ -63,7 +63,9 @@ class SDTWorkflow:
     def exportStills(self, **kwargs):
         '''export new stills'''
         self.initVD()
-        self.vd.exportStills(**kwargs)
+        if not hasattr(self, 'pdim'):
+            self.getProgDims()
+        self.vd.exportStills(pdim=self.pdim, **kwargs)
         
     def detectNozzle(self, **kwargs):
         '''detect the nozzle and export background'''
@@ -85,6 +87,8 @@ class SDTWorkflow:
             func = me.folderVertSDT
         elif 'XS' in self.folder:
             func = me.folderXSSDT
+        elif 'Under' in self.folder:
+            func = me.folderUnderSDT
         else:
             raise ValueError(f'Could not determine folder type for {self.folder}')
         
@@ -112,6 +116,8 @@ class SDTWorkflow:
             func = me.fileVertSDTFromTag
         elif 'XS' in self.folder:
             func = me.fileXSSDTFromTag
+        elif 'Under' in self.folder:
+            func = me.fileUnderSDTFromTag
         else:
             raise ValueError(f'Could not determine folder type for {self.folder}')
         self.vs[tag] = func(self.folder, tag, **kwargs)
@@ -186,7 +192,13 @@ class SDTWorkflow:
         '''white out the files'''
         whiteOutFiles(self.folder, canMatch=canMatch, mustMatch=mustMatch)
         
+    def whiteOutLast(self) -> None:
+        '''white out the last image tested'''
+        whiteOutFiles(self.folder, mustMatch=[self.imtag])
+        
     def approve(self) -> None:
+        if not os.path.exists(self.folder):
+            return
         if not hasattr(self, 'failuredf'):
             if not hasattr(self, 'pfd'):
                 self.pfd = fh.printFileDict(folder)

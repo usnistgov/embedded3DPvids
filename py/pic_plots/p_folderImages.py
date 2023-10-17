@@ -40,7 +40,7 @@ matplotlib.rc('font', size='10.0')
 #----------------------------------------------
 
 class folderImages:
-    '''imports, crops, and combines images given tags'''
+    '''imports, crops, and combines images given tags for a single folder'''
     
     def __init__(self, pv:printVals, tag:Union[str, list], concat:str='h', removeBackground:bool=False, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False,**kwargs):
         self.concat = concat

@@ -22,9 +22,11 @@ sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
 from m_folder.folder_xs_SDT import *
 from m_folder.folder_vert_SDT import *
 from m_folder.folder_horiz_SDT import *
+from m_folder.folder_under_SDT import *
 from m_file.file_xs_SDT import *
 from m_file.file_vert_SDT import *
 from m_file.file_horiz_SDT import *
+from m_file.file_under_SDT import *
 from summarizer import *
 from val.v_tables import valTables
 
@@ -88,6 +90,12 @@ class summarizerHorizSDT(summarizerSDT):
     
     def __init__(self, topFolder:str, **kwargs):
         super().__init__(topFolder, folderHorizSDT, 'Horiz', **kwargs)
+        
+class summarizerUnderSDT(summarizerSDT):
+    '''recursively create summaries. measureClass is a class definition for a folderMetric class'''
+    
+    def __init__(self, topFolder:str, **kwargs):
+        super().__init__(topFolder, folderUnderSDT, 'Under', **kwargs)
         
     
 #--------------------------------

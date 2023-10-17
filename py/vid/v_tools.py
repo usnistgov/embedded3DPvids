@@ -63,6 +63,8 @@ class vidData:
         else:
             logging.warning(f'No video file found in {self.folder}')
             self.file = ''
+        if 'dstart_manual' in kwargs:
+            self.dstart_manual = kwargs['dstart_manual']
         self.measures = []
         self.measuresUnits = []
         self.streamOpen = False
@@ -120,6 +122,7 @@ class vidData:
                     
             # adopt dstart
             if hasattr(self, 'dstart_manual'):
+                print(self.dstart_manual)
                 self.dstart = self.dstart_manual
             elif 'dstart_manual' in d:
                 self.dstart = d['dstart_manual']
@@ -136,7 +139,7 @@ class vidData:
         fn = self.vidStatsFN()  # nozzle dimensions file name
         if os.path.exists(fn) and not overwrite:
             return
-        l = ['frames', 'fps', 'duration', 'dstart']
+        l = ['frames', 'fps', 'duration', 'dstart', 'dstart_manual']
         for st in l:
             if not hasattr(self, st) or overwrite:
                 self.openStream(overwrite=overwrite)
