@@ -56,10 +56,7 @@ class printVals:
             self.valTable = valTables(self.pfd.printType)
             
         # get the sample folder
-        fi = self.printFolder
-        while not fh.sampleInName(fi):
-            fi = os.path.dirname(fi)
-        self.bn = os.path.basename(os.path.dirname(fi))
+        self.findSampleName()
         self.date = self.pfd.date
         
         if len(self.pfd.timeSeries)>0:
@@ -69,19 +66,17 @@ class printVals:
 
         self.constUnits = {}
         self.pxpmm = self.pfd.pxpmm()
-        split = re.split('_', self.bn)
-        inkShortName = split[1]
-        supShortName = split[3]
+        
 
         self.constUnits['date'] = 'yymmdd'
         
-        self.ink = fluidVals(inkShortName, 'ink', properties=fluidProperties, valTable=self.valTable, **kwargs)
-        self.sup = fluidVals(supShortName, 'sup', properties=fluidProperties, valTable=self.valTable, **kwargs)
+        self.ink = fluidVals(self.inkShortName, 'ink', properties=fluidProperties, valTable=self.valTable, **kwargs)
+        self.sup = fluidVals(self.supShortName, 'sup', properties=fluidProperties, valTable=self.valTable, **kwargs)
         
         if self.pfd.printType in ['tripleLine', 'singleDisturb', 'SDT']:
             split = re.split('_', os.path.basename(self.pfd.printFolder))
             if len(split)>1:
-                self.spacing = float(split[-1])
+                self.spacing = float(split[2])
                 self.constUnits['spacing'] = '$d_i$'
             else:
                 return
@@ -92,6 +87,28 @@ class printVals:
         self.sup.constants(self.press.vsup, self.geo.do, self.sigma)
         self.const()
         
+    def findSampleName(self):
+        fi = self.printFolder
+        fi0 = ''
+        while not fh.sampleInName(fi) and not fi0==fi:
+            fi0 = fi
+            fi = os.path.dirname(fi)
+        if fi0==fi:
+            # no sample folder found
+            for f in os.listdir(self.printFolder):
+                if '_I_' in f and '_S_' in f:
+                    spl = re.split('I_', f)[1]
+                    spl = re.split('_', spl)
+                    self.inkShortName = spl[0]
+                    self.supShortName = spl[2]
+                    self.bn = f'I_{self.inkShortName}_S_{self.supShortName}'
+                    return
+        else:
+            # sample folder found
+            self.bn = os.path.basename(os.path.dirname(fi))
+            split = re.split('_', self.bn)
+            self.inkShortName = split[1]
+            self.supShortName = split[3]
   
     def const(self) -> None:
         '''define dimensionless numbers and critical values'''

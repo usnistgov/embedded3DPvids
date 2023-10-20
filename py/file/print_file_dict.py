@@ -162,6 +162,7 @@ class printFileDict:
                 self.measure = ffull
                 return ffull
         return ''
+    
                 
     def getDate(self):
         '''get the date of the folder'''

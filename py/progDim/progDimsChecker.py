@@ -123,8 +123,7 @@ class progDimsChecker:
         else:
             num = int(spl[1])
             self.dire = ''
-        spacing = float(spl[-1])
-        intendedSpacing = self.pv.dEst*spacing
+        intendedSpacing = self.pv.dEst*self.pv.spacing
         scrit = 0.1
         
         for gnum in range(4):

@@ -50,7 +50,7 @@ def fileXSSDTFromTag(folder:str, tag:str, **kwargs):
 class fileXSSDT(fileXS, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, acrit:int=1000, **kwargs):
+    def __init__(self, file:str, acrit:int=800, **kwargs):
         self.numLines = int(re.split('_', os.path.basename(file))[1])
         super().__init__(file, acrit=acrit, **kwargs)
         
@@ -114,7 +114,7 @@ class fileXSSDT(fileXS, fileSDT):
         if 'water' in self.pv.ink.base:
             th = 140
         else:
-            th = 110
+            th = 130
         self.segmenter = segmenter(self.im, acrit=self.acrit, diag=max(0, self.diag-1)
                                    , topthresh=th
                                    , fillMode=fi.fillMode.removeBorder
@@ -139,6 +139,7 @@ class fileXSSDT(fileXS, fileSDT):
             self.componentMask = self.segmenter.labelsBW.copy()
         else:
             self.componentMask = self.segmenter.filled.copy()
+            self.componentMask[:,:] = 0
         self.exportSegment(overwrite=self.overrideSegment)
     
     def measure(self) -> None:

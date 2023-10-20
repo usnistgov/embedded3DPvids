@@ -165,7 +165,7 @@ class failureTest:
         
 
         
-    def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=True):
+    def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=False):
         '''approve the file'''
  
         if self.df.loc[i, 'approved'] == True:
@@ -190,7 +190,7 @@ class failureTest:
         if count:
             self.countFailures()
             
-    def approveFolder(self, fostr:str, whiteOut:bool=True, export:bool=True):
+    def approveFolder(self, fostr:str, whiteOut:bool=False, export:bool=True):
         '''approve all files in the folder'''
         # get the list of files to approve
         ffiles = self.df[self.df.fostr==fostr]
@@ -202,12 +202,12 @@ class failureTest:
         self.sw.approve()
         self.countFailures()
             
-    def approveFolderi(self, i:int, whiteOut:bool=True, export:bool=True) -> None:
+    def approveFolderi(self, i:int, whiteOut:bool=False, export:bool=True) -> None:
         '''approve all files in folder given a folder number'''
         fostr = self.df.loc[i, 'fostr']
         self.approveFolder(fostr, whiteOut=whiteOut, export=export)
         
-    def approveAllMatch(self, mustMatch:list=[], canMatch:list=[], export:bool=True, whiteOut:bool=True):
+    def approveAllMatch(self, mustMatch:list=[], canMatch:list=[], export:bool=True, whiteOut:bool=False):
         '''approve and whiteout all images that match the strings'''
         for i in range(len(self.df)):
             file = self.file(i)

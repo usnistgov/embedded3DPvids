@@ -163,7 +163,7 @@ class SDTWorkflow:
                     try:
                         spl = int(spl)
                     except:
-                        print(spl)
+                        spl=0
                 else:
                     spl = 0
                 if spl<=nmax:
@@ -174,6 +174,12 @@ class SDTWorkflow:
         
     def openLastSeries(self, **kwargs):
         self.openInPaint(self.imtag[:5], **kwargs)
+        
+    def openBackground(self):
+        nfn = self.pfd.newFileName('background', 'png')
+        if os.path.exists(nfn):
+            im = cv.imread(nfn)
+            imshow(im)
         
     def openExplorer(self):
         fh.openExplorer(self.folder)

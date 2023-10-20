@@ -146,6 +146,7 @@ class nozData(timeObject):
         else:
             nd = self.nd
         mask = nd.nozCover(dilate, dilate, bottomDilate, **kwargs2)
+        mask[:,-1] = 0  # make sure right edge is left open
         
         if invert:
             out = cv.subtract(frame, mask)
