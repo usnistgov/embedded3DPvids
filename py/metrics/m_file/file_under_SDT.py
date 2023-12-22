@@ -70,7 +70,7 @@ class fileUnderSDT(fileHorizSDT):
     def getCrop(self):
         '''get the crop position. only export if export=True and there is no existing row'''
         # rc = {'relative':True, 'w':800, 'h':275, 'wc':400, 'hc':205}
-        rc = {'relative':True, 'w':1000, 'h':280, 'wc':500, 'hc':180}
+        rc = {'relative':True, 'w':1000, 'h':300, 'wc':500, 'hc':220}
         if 'p' in self.tag:
             rc['w'] = 800
             rc['wc'] = 450

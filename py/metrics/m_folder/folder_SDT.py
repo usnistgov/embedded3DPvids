@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a whole folder'''
+'''Functions for collecting data from stills of triple lines, for a whole folder'''
 
 # external packages
 import os, sys

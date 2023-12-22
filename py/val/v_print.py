@@ -76,7 +76,10 @@ class printVals:
         if self.pfd.printType in ['tripleLine', 'singleDisturb', 'SDT']:
             split = re.split('_', os.path.basename(self.pfd.printFolder))
             if len(split)>1:
-                self.spacing = float(split[2])
+                if 'disturbXS' in self.printFolder:
+                    self.spacing = float(split[3])
+                else:
+                    self.spacing = float(split[2])
                 self.constUnits['spacing'] = '$d_i$'
             else:
                 return

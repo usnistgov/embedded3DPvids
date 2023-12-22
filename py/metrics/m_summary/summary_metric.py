@@ -41,7 +41,10 @@ class summaryMetric:
             
     def openFolder(self, i:int):
         '''open the folder given by the row in the ss dataframe'''
-        fh.openExplorer(self.ss.loc[i,'printFolder'])
+        fh.openExplorer(self.folderName(i))
+        
+    def folderName(self, i:int):
+        return self.ss.loc[i,'printFolder']
         
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         self.ss, self.u = plainIm(self.file)

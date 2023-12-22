@@ -109,38 +109,72 @@ class pressureVals:
         pvals = {f'pressureCh{self.channel}':self.targetPressure*100} # convert from mbar to Pa
         punits = {f'pressureCh{self.channel}':'Pa'}
         return pvals, punits
+    
         
     #-----------------
     # ShopbotPyQt after addition of _speed_ and _meta_ files
+    
+    def correctVF(self) -> None:
+        '''correct for flow speeds that weren't updated when the meta file was created'''
+        bn = os.path.basename(self.printFolder)
+        if 'VF' in bn:
+            spl = re.split('_', bn)
+            i = spl.index('VF')
+            vf = float(spl[i+1])
+        else:
+            return
+        mf = self.pfd.metaFile()
+        v,u = plainImDict(mf, unitCol=1, valCol=2)
+        if vf==v['ink_speed_channel_0']:
+            return
+        v['ink_speed_channel_0']=vf
+        c = v['calibc_channel_0']
+        b = v['calibb_channel_0']
+        a = v['caliba_channel_0']
+        if a==0:
+            p = (vf-c)/b
+        else:
+            p = (-b+np.sqrt(b^2-4*a*(c-vf)))/(2*a)
+            if p<0:
+                p = (-b-np.sqrt(b^2-4*a*c))/(2*a)
+
+        if not round(vf,6)==round(a*p**2+b*p+c,6):
+            raise ValueError('Wrong pressure in meta file')
+        v['ink_pressure_channel_0'] = p
+        shutil.copyfile(mf, mf.replace('meta', 'metOrig'))
+        plainExpDict(mf, v, u, quotechar='"')
+    
     def importMetaFile(self) -> int:
         '''find the metadata file. returns 0 if successful'''
+        self.correctVF()
         file = self.pfd.metaFile()
         if len(file)==0:
             return 1
-        with open(file, newline='') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-            for row in reader:
-                for s in ['a', 'b', 'c']:
-                    # calib params
-                    if row[0] in [f'calib{s}_channel_{self.channel}', f'calib{s}']:
-                        # store calibration constant
-                        setattr(self, f'calib{s}', float(row[2]))
-                        
-                        # check units
-                        if not row[1] in ['mm/s/mbar^2', 'mm/s/mbar','mm/s']:
-                            logging.warning(f'Bad units in {fh.twoBN(file)}: calib{s}: {row[1]}')
-                            
-                # ink speed
-                if row[0] in ['ink speed', f'ink_speed_channel_{self.channel}']:
-                    self.vink = float(row[2])
-                    if not row[1]=='mm/s':
-                        logging.warning(f'Bad units in {fh.twoBN(file)}: ink speed: {row[1]}')
+        v,u = plainImDict(self.pfd.metaFile(), unitCol=1, valCol=2)
+        for s in ['a', 'b', 'c']:
+            # calib params
+            for s1 in [f'calib{s}_channel_{self.channel}', f'calib{s}']:
+                if s1 in v:
+                    # store calibration constant
+                    setattr(self, f'calib{s}', float(v[s1]))
 
-                # support speed
-                elif row[0] in ['support speed', 'speed_move_xy']:
-                    self.vsup = float(row[2])
-                    if not row[1]=='mm/s':
-                        logging.warning(f'Bad units in {fh.twoBN(file)}: support speed: {row[1]}')
+                    # check units
+                    if not u[s1] in ['mm/s/mbar^2', 'mm/s/mbar','mm/s']:
+                        logging.warning(f'Bad units in {fh.twoBN(file)}: calib{s}: {u[s1]}')
+
+        # ink speed
+        for s in ['ink speed', f'ink_speed_channel_{self.channel}']:
+            if s in v:
+                self.vink = float(v[s])
+                if not u[s]=='mm/s':
+                    logging.warning(f'Bad units in {fh.twoBN(file)}: ink speed: {u[s]}')
+
+        # support speed
+        for s in ['support speed', 'speed_move_xy']:
+            if s in v:
+                self.vsup = float(v[s])
+                if not u[s]=='mm/s':
+                    logging.warning(f'Bad units in {fh.twoBN(file)}: support speed: {u[s]}')
         self.calculateTargetPressure()
         return 0
     

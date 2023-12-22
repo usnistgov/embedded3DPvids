@@ -260,8 +260,8 @@ class folderMetric(timeObject):
                 self.summary[group][f'{key}_SE'] = sem(val)*c
                 self.summary[group][f'{key}_N'] = len(val)
         
-    def convertValuesAndExport(self):
-        '''find changes between ovservations'''
+    def convertValuesAndExport(self, spacingNorm:str=''):
+        '''find changes between observations'''
         self.summary = dict([[l, self.mr.copy()] for l in self.aves])
         for gname in self.summary:
             if gname=='total':
@@ -269,12 +269,17 @@ class folderMetric(timeObject):
             else:
                 self.summary[gname]['zdepth'] = self.df[(self.df.gname==gname)&(self.df.pname.str.contains('p'))].zdepth.min()
             self.summary[gname]['gname']=gname
+            self.summary[gname]['spacing_adj']=0
         self.summaryUnits = self.mu.copy()
         self.summaryUnits['zdepth'] = 'mm'
         self.summaryUnits['gname'] = ''
+        self.summaryUnits['spacing_adj'] = spacingNorm
         for group in self.aves:
             for key in self.aves[group]:
                 self.convertValue(key, group=group)
+        for gname in self.summary:
+            if spacingNorm in self.summary[gname]:
+                self.summary[gname]['spacing_adj']=self.summary[gname]['spacing']/self.summary[gname][spacingNorm]
         self.exportSummary()
                 
     def exportSummary(self):

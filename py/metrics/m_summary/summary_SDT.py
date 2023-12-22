@@ -63,7 +63,7 @@ class summarySDT(summaryMetric):
         '''display the dataframe with just a few columns'''
         row2 = df[['ink_shortname','sup_shortname', xvar, 'spacing', yvar]].copy()
         display(row2.sort_values(by=yvar))
-        return df
+
     
     def reduceRows(self, yvar:str, *varargs, yvarmin:float=-10**20, yvarmax:float=10*20, **kwargs) -> pd.DataFrame:
         '''each vararg is a boolean series of self.ss, get just the rows that fit all subsets, display, and return the rows'''
@@ -72,8 +72,15 @@ class summarySDT(summaryMetric):
             rows = rows[pd.DataFrame(varargs).all()]
         rows = rows[(rows[yvar]>yvarmin)&(rows[yvar]<yvarmax)]
         return self.displayShort(rows, yvar, **kwargs)
+    
+    def roundDep(self, dep:str, n:int) -> None:
+        '''round the variable to the decimal place n'''
+        self.ss[dep] = [np.round(x,n) for x in self.ss[dep]]
+    
+    def roundDeps(self) -> None:
+        '''round the dependent variables in the table'''
+        self.roundDep('vRatio', 2)
 
-        
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         '''import the stills summary and convert sweep types, capillary numbers'''
         self.ss,self.u = plainIm(self.file, ic=False)
@@ -84,6 +91,7 @@ class summarySDT(summaryMetric):
             self.printIndeps()
             print()
             self.printKeyTable()
+        self.roundDeps()
         return self.ss,self.u
     
     def strip(self, s:str) -> None:
@@ -98,7 +106,7 @@ class summarySDT(summaryMetric):
             if si in spl:
                 spl.remove(si)
         if len(spl)>1:
-            if 'space' in spl:
+            if 'space' in spl or 'spacing' in spl:
                 return '_'.join(spl)
             else:
                 raise ValueError(f'Unexpected value {s} passed to summarySDT.strip')
@@ -254,7 +262,7 @@ class summarySDT(summaryMetric):
                        , 'space_l':'horiz space behind nozzle', 'space_b':'space next to nozzle'
                        , 'dsegmentsdt':'rupturing/time'
                        , 'dy0dt':'$\Delta y_{near}$/time', 'dy0dt':'$\Delta y_{near}$/time'
-                       , 'dwdt':'lengthening/time', 'dhdt':'widening/time'
+                       , 'dwdt':'lengthening/time', 'dwndt':'lengthening/time', 'dhdt':'widening/time'
                        , 'dycdt':'lateral shift/time', 'droughnessdt':'roughening/time'
                        , 'demptiness/dt':'emptying/time', 'dmeanTdt':'thickening/time'
                        , 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
@@ -284,10 +292,7 @@ class summarySDT(summaryMetric):
                 var1 = s[:-4]
             inksymb = self.indVarSymbol(var1, 'ink', commas=commas)[:-1]
             supsymb = self.indVarSymbol(var1, 'sup', commas=commas)[1:]
-            if inksymb=='$'+var1+'_{ink}':
-                return self.indVarSymbol(s, '', commas=commas)
-            else:
-                return f'{inksymb}{symb}{supsymb}'
+            return f'{inksymb}{symb}{supsymb}'
         elif s=='int_Ca':
             return r'$Ca=v_{ink}\eta_{sup}/\sigma$'
         elif s.startswith('ink_') or s.startswith('sup_'):

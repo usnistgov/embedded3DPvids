@@ -49,7 +49,7 @@ class folderXSSDT(folderSDT):
     # summaries
 
     def summarize(self) -> Tuple[dict,dict, pd.DataFrame]:
-        '''summarize xsical measurements in the folder and export table'''
+        '''summarize cross-sectional measurements in the folder and export table. ignore height effects because variance too large to be useful'''
         r = self.summaryHeader()
         if r==0:
             return self.summary, self.summaryUnits, self.failures
@@ -88,8 +88,11 @@ class folderXSSDT(folderSDT):
                         except ValueError:
                             pass
         
-
-        self.convertValuesAndExport()
+        if '+y' in self.folder:
+            var = 'w_w1o'
+        else:
+            var = 'h_w1o'
+        self.convertValuesAndExport(spacingNorm=var)
         
         if self.diag>0:
             self.printAll()

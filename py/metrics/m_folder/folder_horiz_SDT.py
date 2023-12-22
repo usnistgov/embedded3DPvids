@@ -94,9 +94,8 @@ class folderHorizSDT(folderSDT):
                 dv = opairvars
             self.addPair(dv, pair)                 
 
-        self.convertValuesAndExport()
+        self.convertValuesAndExport(spacingNorm='meanT_w1o')
         
         if self.diag>0:
             self.printAll()
-
         return self.summary, self.summaryUnits, self.failures

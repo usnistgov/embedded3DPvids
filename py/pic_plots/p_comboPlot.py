@@ -309,6 +309,18 @@ class comboPlot(folderPlots):
             raise ValueError('Square already filled')
         self.indicesreal = self.indicesreal.append({'x':int(xpos), 'y':int(ypos)}, ignore_index=True)
         return x0, y0, axnum
+    
+            
+    def removeFrame(self, ax) -> None:
+        '''remove the outside frame from the axis'''
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        
+    def removeFrames(self) -> None:
+        for ax in self.axs:
+            self.removeFrame(ax)
 
 
 

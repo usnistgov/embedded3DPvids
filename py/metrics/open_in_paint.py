@@ -48,7 +48,7 @@ class paintObject:
         self.openPaint(fullScreen=fullScreen)
         if onlyOpen:
             return
-        time.sleep(1)
+        time.sleep(3)
         self.selectPencil()
         self.selectDropper()
         self.selectTopRight()
@@ -103,10 +103,10 @@ class paintObject:
         pyautogui.moveTo(908, y) # Move the mouse to the select 2nd line thickness
         pyautogui.click() # Click the mouse at its current location.
         
-    def scrollRight(self):
+    def scrollRight(self, f):
         pyautogui.moveTo(300, self.h-120) # Move the mouse to the scroll button on bottom
         pyautogui.mouseDown()
-        pyautogui.moveTo(self.w-300, self.h-120) # Move the mouse to the scroll button on bottom
+        pyautogui.moveTo(300+(self.w-600)*f, self.h-120) # Move the mouse to the scroll button on bottom
         pyautogui.mouseUp()
         
     def scrollDown(self, f:float):

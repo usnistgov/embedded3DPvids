@@ -7,6 +7,7 @@ import traceback
 import logging
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
+import numpy as np
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -44,6 +45,10 @@ class ideals:
             if s in yvar:
                 # dimensions are measured relative to the ideal position and should be 1
                 return 1
+            
+        for s in ['spacing', 'spacing_adj']:
+            if s in yvar:
+                return np.sqrt(np.pi)/2
             
         raise AttributeError(f'Ideal value not found for {yvar}')
 

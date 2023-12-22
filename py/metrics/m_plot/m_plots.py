@@ -25,15 +25,15 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 sys.path.append(os.path.dirname(os.path.dirname(currentdir)))
-from m_plots_metric import *
-from m_plots_color import *
-from m_plots_contour import *
-from m_plots_mesh import *
-from m_plots_scatter import *
-from m_stats_table import *
-from m_plots_multi import *
-from m_plots_multi_SDT import *
-from m_plots_single import *
+from p_metric import *
+from p_contour import *
+from p_mesh import *
+from p_scatter import *
+from stats_table import *
+from p_multi import *
+from p_yvarlines import *
+from p_xvarlines import *
+from p_single import *
 
 # logging
 logger = logging.getLogger(__name__)

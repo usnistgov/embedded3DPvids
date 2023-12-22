@@ -165,7 +165,7 @@ class picPlots:
         for s in ['.svg', '.png']:
             self.cp.fig.savefig(f'{self.fn}{s}', bbox_inches='tight', dpi=300, transparent=True)
         logging.info(f'Exported {self.fn}')
-        
+
             
     def picPlots0(self):
         '''plot all pictures for simulations in a folder, but use automatic settings for cropping and spacing and export the result
@@ -192,6 +192,7 @@ class picPlots:
         self.cp = comboPlot(self.flist, [-self.dx, self.dx], [-self.dy, self.dy], self.imsize, gridlines=False, **self.kwargs)
         self.picPlots()
         self.exportIm()
+        self.cp.removeFrames()
 
         if not self.showFig:
             plt.close()

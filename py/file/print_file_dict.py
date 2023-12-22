@@ -18,6 +18,7 @@ sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from tools.config import cfg
 from f_tools import *
+from tools.plainIm import *
 import file_names as fn
 from levels import labelLevels
 
@@ -394,6 +395,15 @@ class printFileDict:
             if 'vstill' in f1 and 'png' in f1:
                 ffull = os.path.join(self.printFolder, f1)
                 self.vstill.append(ffull)
+                
+    def findStillTag(self, tag:str) -> str:
+        '''find a specific vstill with the given tag'''
+        if len(self.vstill)==0:
+            self.findVstill()
+        for file in self.vstill:
+            if tag in os.path.basename(file):
+                return file
+        return ''   
     
     def findMLsegment(self) -> None:
         self.MLsegment = []
@@ -535,8 +545,7 @@ class printFileDict:
         if len(self.meta)==0:
             meta = {}
         else:
-            df = pd.read_csv(self.meta[0], header=0, names=['var', 'units', 'val'])
-            meta = dict(zip(df['var'], df['val']))
+            meta,u = plainImDict(self.metaFile(), unitCol=1, valCol=2)
         if 'camera_magnification' in meta:
             cm = float(meta['camera_magnification'])
         else:

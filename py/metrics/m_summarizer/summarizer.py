@@ -104,8 +104,8 @@ class summarizer(fh.folderLoop):
         df = pd.DataFrame(self.out)
         
         if 'gname' in df:
-            plainExp(fn, df[df.gname=='total'], self.units, index=False)
-            plainExp(fn.replace('.csv', '_gname.csv'), df[~(df.gname=='total')], self.units, index=False)
+            plainExp(fn, df[df.gname=='total'], self.units, index=False)   # export averaged values
+            plainExp(fn.replace('.csv', '_gname.csv'), df[~(df.gname=='total')], self.units, index=False)  # export groups individually
         else:
             plainExp(fn, df, self.units, index=False)
         

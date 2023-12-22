@@ -34,19 +34,20 @@ class folderLoop:
     the function needs to have only one arg, folder, and all other variables need to go in kwargs
     folders could be either the top folder to recurse into, or a list of folders'''
     
-    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, printErrors:bool=True, folderDiag:int=0, **kwargs):
-        if type(folders) is list:
-            # list of specific folders
-            self.folders = []
-            for folder in folders:
-                self.folders = self.folders + printFolders(folder, mustMatch=mustMatch, canMatch=canMatch)
-        elif not os.path.exists(folders):
-            self.topFolder = ''
-            self.folders = []
-        else:
-            # top folder, recurse
-            self.topFolder = folders
-            self.folders = printFolders(folders)
+    def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, printErrors:bool=True, folderDiag:int=0, findFolders:bool=True, **kwargs):
+        if findFolders:
+            if type(folders) is list:
+                # list of specific folders
+                self.folders = []
+                for folder in folders:
+                    self.folders = self.folders + printFolders(folder, mustMatch=mustMatch, canMatch=canMatch)
+            elif not os.path.exists(folders):
+                self.topFolder = ''
+                self.folders = []
+            else:
+                # top folder, recurse
+                self.topFolder = folders
+                self.folders = printFolders(folders, mustMatch=mustMatch, canMatch=canMatch)
         self.func = func
         self.mustMatch = mustMatch
         self.canMatch = canMatch
