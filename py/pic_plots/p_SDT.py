@@ -93,9 +93,6 @@ class multiPlotsSDT(multiPlots):
                 crops = {**crops, 'w':200, 'h':700, 'wc':60, 'hc':350}
             elif name[:-1]=='HIh':
                 crops = {**crops, 'w':700, 'h':280, 'wc':250, 'hc':180}
-                if 'p' in tag[0]:
-                    crops['w'] = 400
-                    crops['wc'] = 300
             kwargs2['crops'] = crops
                 
     def checkFreeVars(self, allIn:list, kwargs2:dict, kwargs:dict) ->Tuple[list, str, str]:
@@ -156,6 +153,8 @@ class multiPlotsSDT(multiPlots):
             
     def getExportFolder(self, name:str) -> str:
         '''get the export folder and create subfolder if needed'''
+        if 'exportBn' in self.kwargs:
+            return self.exportFolder
         exportFolder =  os.path.join(self.exportFolder, name)
         if not os.path.exists(exportFolder):
             os.mkdir(exportFolder)
@@ -171,26 +170,34 @@ class multiPlotsSDT(multiPlots):
             raise ValueError(f'Unknown object requested: {name}')
         file = obj2file[name]
         slist = []
-        if getO:
-            slist.append('o1')
-        if getP:
-            if 'x' in name:
-                slist.append('')
-            elif 'HIh' in name:
-                slist.append('p2')
-            else:
-                slist.append('p3')
+        if 'tag' in kwargs:
+            slist = [kwargs['tag']]
+        else:
+            if getO:
+                slist.append('o1')
+            if getP:
+                if 'x' in name:
+                    slist.append('')
+                elif 'HIh' in name:
+                    slist.append('p2')
+                else:
+                    slist.append('p3')
+        allIn = [file]
+        overlay = {'dx':-0.7, 'dy':-0.7}
+        self.getOverlay(name, overlay)
+        concat = self.getConcat(name)
+        if 'HIh' in name:
+            overlay['color'] = 'white'
+            overlay['dy']=-0.3
+        elif 'V' in name:
+            kwargs2['rotate'] = True  # rotate 90 degress clockwise
+            overlay['shiftdir'] = 'y'
+            concat = 'v'
+        
         for ss in slist:
-            allIn = [file]
-            overlay = {'dx':-0.7, 'dy':-0.7}
-            if 'HIh' in name:
-                overlay['color'] = 'white'
-                overlay['dy']=-0.3
             tag = self.getTag(name, overlay, ss, kwargs2)
             self.getCrops(name, tag, kwargs2, kwargs)
             allIn, xvar, yvar = self.checkFreeVars(allIn, kwargs2, kwargs)
-            concat = self.getConcat(name)
-            self.getOverlay(name, overlay)
             exportFolder = self.getExportFolder(name)
             pp = picPlots(self.folder, exportFolder
                             , allIn, [], tag, showFig=showFig, export=export
@@ -198,4 +205,27 @@ class multiPlotsSDT(multiPlots):
                             , xvar=xvar, yvar=yvar, concat=concat
                             , **kwargs2)
             pp.picPlots0()
-   
+
+class singleFilePicsSDT:
+    '''plot pictures from a single folder, given tags and metadata'''    
+    
+    def __init__(self, row:Union[pd.Series, dict]):
+        self.row = row
+        self.caption = row['caption']
+        self.phase = row['phase']
+        self.direction = row['direction']
+        self.line = row['line']
+        self.num = self.line[-1]
+        self.bn = f'{self.line}_{self.direction}_{self.phase}_{self.caption}'
+        self.title = f'{self.line} {self.direction} {self.phase}: {self.caption}'
+        self.folders = [os.path.join(cfg.path.server, row['folder'])]
+        self.mp = multiPlotsSDT(self.folders[0], os.path.join(cfg.path.fig, 'SDT', 'images', 'archetypes'), exportBn=self.bn, folders=self.folders)
+        
+    def plot(self, imsize:float=2, times:bool=True, **kwargs) -> None:
+        '''plot the picture'''
+        tags = []
+        for t in ['tag1', 'tag2', 'tag3']:
+            if type(self.row[t]) is str:
+                tags.append(self.row[t])
+        dirtag = {'HOP':'HOh', 'HIP':'HIh', 'V':'V'}[self.direction]
+        self.mp.plot(f'{dirtag}{self.num}', tag=tags, ink=self.mp.inkList[0], imsize=imsize, title=self.title, times=times, **kwargs)

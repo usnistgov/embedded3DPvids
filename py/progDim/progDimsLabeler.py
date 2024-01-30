@@ -89,7 +89,6 @@ class progDimsLabeler:
             frac = 0.1 + (int(cha[-1])-1)/self.ppd.numPtimes
         else:
             frac = 0.5
-        tpic = line['t0']+line['dprog']*frac/line['speed']
         
         dmax = max(abs(line['dx']), abs(line['dy']), abs(line['dz']))
         
@@ -99,12 +98,14 @@ class progDimsLabeler:
             if not abs(dd)==dmax:
                 dd = 0
             self.progDims.loc[row,f'{cs}pic'] = line[f'{cs}t']-dd*(1-frac)
-        self.progDims.loc[row,'tpic'] = tpic
+        
         self.progDims.loc[row,'lprog'] = line['dprog']
         self.progDims.loc[row,'ltr'] = line['dtr']
         if cha[2]=='w':
             for key,val in gfl.items():
                 self.progDims.loc[row,key] = val
+        self.progDims.loc[row,'tpic'] = self.progDims.loc[row, 't0']+line['dprog']*frac/line['speed']
+                
             
     def labelObserveLine(self, cha:str, oi:int) -> int:
         '''label a group of observe pics

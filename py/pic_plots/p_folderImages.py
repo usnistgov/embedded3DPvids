@@ -42,7 +42,7 @@ matplotlib.rc('font', size='10.0')
 class folderImages:
     '''imports, crops, and combines images given tags for a single folder'''
     
-    def __init__(self, pv:printVals, tag:Union[str, list], concat:str='h', removeBackground:bool=False, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False,**kwargs):
+    def __init__(self, pv:printVals, tag:Union[str, list], concat:str='h', removeBackground:bool=False, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False, times:bool=False, scale:float=0.95, rotate:bool=False, **kwargs):
         self.concat = concat
         self.pv = pv
         self.removeBackground = removeBackground
@@ -52,6 +52,10 @@ class folderImages:
         self.removeBorders = removeBorders
         self.folder = pv.printFolder
         self.tag = tag
+        self.times = times
+        self.imfiles = []
+        self.scale = scale
+        self.rotate = rotate
         if not type(self.tag) is list:
             self.tag = [self.tag]
         self.kwargs = kwargs
@@ -84,6 +88,7 @@ class folderImages:
         tag is the name of the image type, e.g. 'xs1'. Used to find images. '''
         imfile = self.picFileFromFolder(tag)
         if os.path.exists(imfile):
+            self.imfiles.append(imfile)
             im = cv.imread(imfile)
             if self.removeBackground:
                 self.getNozData()
@@ -143,6 +148,7 @@ class folderImages:
         return im
     
     def combineImages(self, im1:np.array) -> None:
+        '''combine all of the images into a single image'''
         if self.concat=='h':
             if im1.shape[0]>self.im.shape[0]:
                 pad = im1.shape[0]-self.im.shape[0]
@@ -154,11 +160,11 @@ class folderImages:
         elif self.concat=='v':
             if im1.shape[1]>self.im.shape[1]:
                 pad = im1.shape[1]-self.im.shape[1]
-                self.im = cv.copyMakeBorder(self.im, 0, pad, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
+                self.im = cv.copyMakeBorder(self.im, 0, 0,pad, 0, cv.BORDER_CONSTANT, value=(255,255,255)) 
             elif self.im.shape[1]>im1.shape[1]:
-                pad = im.shape[1]-im1.shape[1]
-                im1 = cv.copyMakeBorder(im1, 0, pad, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
-            self.im = cv.vconcat([im1, self.im])
+                pad = self.im.shape[1]-im1.shape[1]
+                im1 = cv.copyMakeBorder(im1,0,0, pad,0, cv.BORDER_CONSTANT, value=(255,255,255))
+            self.im = cv.vconcat([self.im, im1])
         else:
             raise ValueError(f'Bad value for concat: {self.concat}')
         return 
@@ -171,6 +177,9 @@ class folderImages:
             for i,t in enumerate(self.tag):
                 im1 = self.importAndCrop(t)
                 if len(im1)>0:
+                    if self.rotate:
+                        im1 = np.rot90(im1, k=3, axes=(0,1))
+                        im1 = np.flip(im1, axis=0)
                     if len(self.im)==0:
                         self.im = im1
                     else:
@@ -182,7 +191,7 @@ class folderImages:
             traceback.print_exc()
             raise e
         if len(self.im)==0:
-            raise e
+            raise 'No images found'
         return t
     
     def wfull(self) -> Tuple[float,float,float,float]:
@@ -226,20 +235,32 @@ class folderImages:
                 else:
                     raise ValueError(f'Unexpected concat direction: {self.concat}')
                 if 'yf' in crops and 'y0' in crops and 'xf' in crops and 'x0' in crops:
+                    if self.rotate:
+                        w = crops['yf']-crops['y0']
+                        h = crops['xf']-crops['x0']
+                    else:
+                        w = crops['xf']-crops['x0']
+                        h = crops['yf']-crops['y0']
                     if crops['yf']<0:
                         heightI = height*hs
                     else:
-                        heightI = (crops['yf']-crops['y0'])*hs
+                        heightI = (h)*hs
                     if crops['xf']<0:
                         widthI = width*ws
                     else:
-                        widthI = (crops['xf']-crops['x0'])*ws
+                        widthI = (w)*ws
                     # use intended height/width to scale all pictures the same
                 elif 'w' in crops and 'h' in crops:
                     # widthI = min(width, crops['w'])*ws
                     # heightI = min(height, crops['h'])*hs
-                    widthI = crops['w']*ws
-                    heightI = crops['h']*hs
+                    if self.rotate:
+                        h = crops['w']
+                        w = crops['h']
+                    else:
+                        w = crops['w']
+                        h = crops['h']
+                    widthI = w*ws
+                    heightI = h*hs
                 else:
                     heightI = height*hs
                     widthI = width*ws
@@ -254,7 +275,6 @@ class folderImages:
         '''determine how to scale the image. dx0 is the space between images on the plot, in plot coordinates. tag is the line type, e.g. xs or horiz'''
 
         widthI, heightI, width, height = self.wfull()
-
         # fix the scaling
         pxperunit = max(widthI, heightI) # image pixels per image block
         if widthI>heightI:
@@ -361,6 +381,28 @@ class folderImages:
             x0 = x0-w/2
             rect = plt.Rectangle((x0, y0), w, h, color=color, fill=True, edgecolor=None)
             self.ax.add_patch(rect)
+            
+    def picPlotTimes(self) -> None:
+        '''add timestamps to the plots'''
+        if not self.times:
+            return
+        
+        if 'overlay' in self.kwargs and 'color' in self.kwargs['overlay']:
+            color = self.kwargs['overlay']['color']
+        else:
+            color = 'black'
+        pg, u = plainIm(self.pv.pfd.progDims)
+        for i,tag in enumerate(self.tag):
+            ti = pg[pg.name==tag].iloc[0]['tpic']
+            if 'XS' in self.folder:
+                tag0 = tag[:4]
+            else:
+                tag0 = tag[:4]+'p5'
+            t0 = pg[pg.name==tag0].iloc[0]['tpic']
+            dt = float(ti)-float(t0)
+            label = f't = {dt:0.2f} s'
+            ypos = 1-(i/len(self.tag))-0.05
+            self.ax.text(0.1, ypos, label, horizontalalignment='left', verticalalignment='top', transform=self.ax.transAxes, fontsize=8, color=color)
 
     def picPlot(self, cp, dx0:float, dy0:float) -> None:
         '''plots picture from just one folder.
@@ -390,11 +432,15 @@ class folderImages:
             return
 
         # get scaling
+        if self.rotate:
+            temp = dx0
+            dx0 = dy0
+            dy0 = dx0
         dx, dy, self.pxperunit = self.getWidthScaling(dx0, dy0)
 
-        s = 0.95 # scale images to leave white space
+        s = self.scale # scale images to leave white space
         self.im = cv.cvtColor(self.im, cv.COLOR_BGR2RGB)
-
         # plot the image
         self.ax.imshow(self.im, extent=[self.x0-dx*s, self.x0+dx*s, self.y0-dy*s, self.y0+dy*s])
         self.picPlotOverlay(t, s, dx0, dy0)
+        self.picPlotTimes()

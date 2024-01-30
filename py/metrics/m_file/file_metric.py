@@ -243,12 +243,12 @@ class fileMetric(timeObject):
             self.segmenter = segmenterDF(self.componentMask, acrit=self.acrit)
             return
         
-        if hasattr(self, 'MLsegment'):
+        if hasattr(self, 'MLsegment') and self.useML:
             self.MLsegment = self.nd.maskNozzle(self.MLsegment, crops=self.crop, invert=True)
             if self.MLsegment.sum().sum()==0:
                 delattr(self, 'MLsegment')
                
-        if hasattr(self, 'MLsegment'): 
+        if hasattr(self, 'MLsegment') and self.useML: 
             self.stats['usedML'] = True
             if hasattr(self, 'Usegment'):
                 self.segmenter = f(self.MLsegment, self.Usegment, self.acrit, diag=self.diag-1, **kwargs).segmenter
@@ -266,7 +266,8 @@ class fileMetric(timeObject):
     def importSegmentation(self) -> None:
         '''import any pre-segmented images'''
         self.importUsegment()
-        self.importMLsegment()
+        if self.useML:
+            self.importMLsegment()
         if self.diag>0:
             uu = hasattr(self, 'Usegment')
             mm = hasattr(self, 'MLsegment')

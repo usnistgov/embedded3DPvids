@@ -49,7 +49,7 @@ def fileVertSDTFromTag(folder:str, tag:str, **kwargs):
 class fileVertSDT(fileVert, fileSDT):
     '''for singledoubletriple lines'''
     
-    def __init__(self, file:str, acrit:int=3000, **kwargs):
+    def __init__(self, file:str, acrit:int=500, **kwargs):
         self.maxlen = 800
         self.fillDilation = 0
         self.grayBlur = 1
@@ -81,6 +81,8 @@ class fileVertSDT(fileVert, fileSDT):
         
     def findDisplacement(self) -> None:
         '''find the displacement of the center and dimensions relative to the intended dimensions'''
+        if not 'h' in self.stats:
+            return
         self.stats['hn'] = self.stats['h']
         self.units['hn'] = self.units['h']
         for s,ival in {'xc':'xc', 'x0':'x0', 'xf':'xf', 'dxprint':'xc'}.items():
@@ -109,7 +111,7 @@ class fileVertSDT(fileVert, fileSDT):
                     
     def getCrop(self, export:bool=True, overwrite:bool=False):
         '''get the crop position. only export if export=True and there is no existing row'''
-        rc = {'relative':True, 'w':250, 'h':800, 'wc':80, 'hc':400}
+        rc = {'relative':True, 'w':270, 'h':1000, 'wc':80, 'hc':500}
         self.makeCrop(rc, export=self.exportCropLocs, overwrite=self.overwriteCropLocs)
         
     def generateSegment(self, overwrite:bool=False):
@@ -132,7 +134,7 @@ class fileVertSDT(fileVert, fileSDT):
                                   , closing=self.fillDilation)
         self.segmenter.eraseFullWidthComponents(margin=2*self.fillDilation, checks=False) # remove glue or air
         self.segmenter.eraseLeftRightBorder(margin=2, checks=False)   # remove components touching the left or right border
-        self.segmenter.removeScragglies()  # remove scraggly components
+        #self.segmenter.removeScragglies()  # remove scraggly components
         self.segmenter.eraseBorderClingers(40)
 
     def measure(self) -> None:
@@ -169,8 +171,9 @@ class fileVertSDT(fileVert, fileSDT):
             return
         self.dims(numLines=self.lnum, largest=False, getLDiff=('o' in self.tag and not ('w1' in self.tag or 'd1' in self.tag)))
         for s in ['y0', 'yc', 'yf']:
-            self.stats.pop(s)
-            self.units.pop(s)
+            if s in self.stats:
+                self.stats.pop(s)
+                self.units.pop(s)
         if not 'o' in self.tag:
             self.gaps(self.pv.dEst)
         if len(self.stats)==1:

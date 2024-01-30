@@ -19,6 +19,7 @@ from tools.plainIm import *
 import tools.regression as rg
 from summary_ideals import *
 import file.file_handling as fh
+from config import cfg
 
 # logging
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class summaryMetric:
         fh.openExplorer(self.folderName(i))
         
     def folderName(self, i:int):
-        return self.ss.loc[i,'printFolder']
+        return os.path.join(cfg.path.server, self.ss.loc[i,'printFolderR'])
         
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         self.ss, self.u = plainIm(self.file)
@@ -116,6 +117,8 @@ class summaryMetric:
             return r'$\tau_{y'+com+'ink'+com+r'd}/\tau_{y'+com+'sup'+com+'d}$'
         elif var=='tGdRatio':
             return r'$\tau_{ink'+com+'d}/G\'_{sup'+com+'d}$'
+        elif var=='spacing_adj':
+            return 'adjusted spacing'
         else:
             if var.endswith('Inv'):
                 varsymbol = '1/'+var[:-3]
@@ -219,7 +222,7 @@ class summaryMetric:
         '''get the index of the first dependent variable'''
         return self.idx(k, self.firstDepCol())
     
-    def depVars(self):
+    def depVars(self) -> List[str]:
         k = self.ss.keys()
         firstCol = self.firstDepCol()
         deps = k[firstCol:]
@@ -227,9 +230,19 @@ class summaryMetric:
         deps = deps[~(deps.str.endswith('_N'))]
         return deps
     
+    def numericDepVars(self) -> List[str]:
+        '''get dependent variables with numeric values'''
+        out = []
+        deps = self.depVars()
+        for dep in deps:
+            l = self.ss[dep].dropna().unique()
+            if len(l)>1 and self.ss[dep].dtype in ['float64', 'int']:
+                out.append(dep)
+        return out
+    
     def depCorrelations(self):
         '''get a table of spearman correlation strengths between all dependent variables'''
-        v = self.depVars()
+        v = self.numericDepVars()
         out = []
         for i,var1 in enumerate(v):
             for var2 in v[i+1:]:

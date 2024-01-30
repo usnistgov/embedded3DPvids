@@ -76,7 +76,8 @@ class fileXSSDT(fileXS, fileSDT):
             self.ideals[f'{coord}f'] = right
             self.ideals[j[1]] = abs(right - left)     # get the ideal width
             self.ideals[f'{coord}c'] = (right+left)/2  # get the ideal center
-        self.ideals['area'] = self.progRows.a.sum()
+        # self.ideals['area'] = self.progRows.a.max()
+        self.ideals['area'] = np.pi*(self.progRows.wmax.max()/2)**2
         
     def findDisplacement(self) -> None:
         '''find the displacement of the center and dimensions relative to the intended dimensions'''
@@ -125,6 +126,7 @@ class fileXSSDT(fileXS, fileSDT):
                                    , removeSharp=False
                                    )
         self.segmenter.eraseBorderComponents(10)
+        self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
         
     def generateSegment(self):
         '''generate a new segmentation'''
@@ -155,12 +157,11 @@ class fileXSSDT(fileXS, fileSDT):
                 
         if not self.overrideSegment:
             self.importSegmentation()
-        
-        if not hasattr(self, 'segmenter'):
-            self.generateSegment()                                   # segment the image
         self.findIntendedCoords()                        # find where the object should be
         self.findIntendedPx()
-        self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
+        if not hasattr(self, 'segmenter'):
+            self.generateSegment()                                   # segment the image
+        
         if not self.segmenter.success:
             if self.diag>0:
                 logging.warning(f'Segmenter failed on {self.file}')

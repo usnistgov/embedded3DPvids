@@ -175,7 +175,7 @@ class nozDetectorSide(nozDetector):
         '''use horizontal line to find nozzle corners'''
         horizLine = self.lines0h.iloc[0]                        # dominant line
         xL, yL = lineIntersect(horizLine, self.lines.loc[0])    # find the point where the horizontal line and left vertical line intersect
-        self.leftCorner = pd.Series({'xf':xL, 'yf':yL})
+        self.leftCorner = pd.Series({'xf':min(self.lines.loc[0]['x0'], self.lines.loc[0]['xf']), 'yf':yL})
         xR, yR = lineIntersect(horizLine, self.lines.loc[1])    # find the point where the horizontal line and right vertical line intersect
         self.rightCorner = pd.Series({'xf':xR, 'yf':yR})
         

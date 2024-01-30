@@ -50,6 +50,13 @@ class plotColors:
         self.clabel = clabel
         self.defaultColor = defaultColor
         self.byIndices = byIndices
+        self.swatch = True
+        
+        if self.cvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3']:
+            # qualitative
+            self.cfunc=self.qualityDict
+            self.valFunc=self.exactFunc
+            return
         
         # explicitly set the bounds of the range used for value scaling
         if 'minval' in kwargs:
@@ -66,6 +73,9 @@ class plotColors:
         if len(self.vallist)>0 and type(list(self.vallist)[0]) is str:
             # values are strings. no fractional scaling allowed
             self.byIndices=True
+            
+        if len(self.vallist)>10:
+            self.swatch = False
         
         if self.byIndices:
             # select based on the index in the list
@@ -196,6 +206,58 @@ class plotColors:
         else:
             return color
 
+    def qualityDict(self, val:str) -> str:
+        '''get a color given a quality'''
+        if val=='no change' or val=='no fusion':
+            return 'gray'
+        if val=='fuse' or val=='fuse 1 2 3':
+            return '#0c0fc7' # dark blue
+        if val=='fuse last':
+            return '#3477eb' #blue
+        if val=='fuse 1 2':
+            return '#2c8fd1' # blue
+        if val=='fuse only 1st':
+            return '#15853e' # green
+        if val=='fuse 2 3':
+            return '#808cd9' # periwinkle
+        if val=='fuse 1 3':
+            return '#5f9ac2' # blue
+        if val=='partial fuse' or val=='partial fuse 1 2 3':
+            return '#0f5e43'  # dark green
+        if val=='partial fuse 2 3': 
+            return '#5acca5'  # light green
+        if val=='partial fuse 1 2':
+            return '#08a6a8' # teal
+        if val=='partial fuse 1 3':
+            return '#468c74' # green
+        if val=='partial fuse last':
+            return '#73c957' # green
+        if val=='partial fuse only 1st':
+            return '#71990c' # oliver
+        if val=='fuse droplets':
+            return '#110c75' # indigo
+        if val=='rupture' or val=='rupture combined':
+            return '#e8092e' # red
+        if val=='rupture 2':
+            return '#9c2e1f' # burnt red
+        if val=='rupture 2 step':
+            return '#780839' # magenta
+        if val=='rupture 1':
+            return '#e0520b' # orange
+        if val=='rupture 1st':
+            return '#c98279' # pink
+        if val=='rupture 3':
+            return '#b58a09' # yellow
+        if val=='rupture both' or val=='rupture 1 2':
+            return '#e06b4a' # peach
+        if val=='fuse rupture' or val=='fuse 1 2 and rupture 12': 
+            return '#782bc4' # purple
+        if val=='rupture both fuse droplets':
+            return '#ab84e0' # light purple
+        else:
+            print(val)
+            return '#%02x%02x%02x' % tuple(np.random.choice(range(256), size=3))  # random color
+        
     
     #-------------------------
     

@@ -55,6 +55,7 @@ class contourPlot(metricPlot):
         self.grid = grid
         self.lines = lines
         super().__init__(ms, ss, dx=dx, dy=dy, **kwargs)
+        
         self.plot()
         
     def plot(self):
@@ -62,22 +63,22 @@ class contourPlot(metricPlot):
         X_unique = np.sort(self.ss[self.xvar].unique())
         Y_unique = np.sort(self.ss[self.yvar].unique())
         X, Y = np.meshgrid(X_unique, Y_unique)
-        Z = self.ss.pivot_table(index=self.xvar, columns=self.yvar, values=self.zvar).T.values
-        zmin = self.ss[self.zvar].min()
-        zmax = self.ss[self.zvar].max()
+        Z = self.ss.pivot_table(index=self.xvar, columns=self.yvar, values=self.cvar).T.values
+        zmin = self.ss[self.cvar].min()
+        zmax = self.ss[self.cvar].max()
         zmin = round(zmin, -int(np.log10(abs(zmin)))+1)
         zmax = round(zmax, -int(np.log10(abs(zmax)))+1)
         dz = (zmax-zmin)/10
         dz = round(dz, -int(np.log10(abs(dz)))+1)
         levels = np.array(np.arange(zmin, zmax, dz))
-        self.sc = self.ax.contourf(X,Y,Z, len(levels), cmap=self.cmapname)
+        self.sc = self.ax.contourf(X,Y,Z, len(levels), cmap=self.colors.cname)
         line_colors = ['black' for l in self.sc.levels]
         cp = self.ax.contour(X, Y, Z, levels=levels, colors=line_colors)
         self.ax.clabel(cp, fontsize=self.fs, colors=line_colors)
         self.setSquare()
-        vs = self.ms.varSymbol(self.zvar)
+        vs = self.ms.varSymbol(self.cvar)
         if not ('legend' in self.kwargs0 and not self.kwargs0['legend']): 
-            cbar = plt.colorbar(self.sc, label=vs)
+            cbar = plt.colorbar(self.sc, label=vs, ax=self.ax)
             cbar.ax.tick_params(labelsize=self.fs)
         self.setSquare()
         # self.ax.set_title(vs, fontsize=self.fs)

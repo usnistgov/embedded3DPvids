@@ -54,7 +54,7 @@ class summarySDT(summaryMetric):
         
     def metaVars(self) -> list:
         '''the variables that are pure metadata, not variables'''
-        out = ['bn', 'calibFile', 'date', 'fluFile', 'printFolder']
+        out = ['bn', 'calibFile', 'date', 'fluFile', 'printFolderR']
         for fluid in ['ink', 'sup']:
             out = out + [f'{fluid}_{var}' for var in ['base', 'days', 'dye', 'rheModifier', 'shortname', 'surfactant', 'surfactantWt', 'type', 'var']]
         return out
@@ -80,6 +80,7 @@ class summarySDT(summaryMetric):
     def roundDeps(self) -> None:
         '''round the dependent variables in the table'''
         self.roundDep('vRatio', 2)
+        
 
     def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
         '''import the stills summary and convert sweep types, capillary numbers'''
@@ -122,9 +123,12 @@ class summarySDT(summaryMetric):
         fusion = ['segments', 'roughness', 'emptiness']
         dims = ['w', 'wn', 'h', 'hn', 'ldiff', 'meanT', 'aspect', 'aspectI', 'xshift', 'yshift', 'area', 'stdevT', 'minmaxT']
         gaps = ['dxprint', 'dx0', 'dxf', 'space_a', 'space_at', 'dy0l', 'dyfl', 'dy0lr', 'dyflr', 'space_l', 'space_b']
+        qualitative = [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax']
+        extra = ['l0w1', 'l0w1relax',  'l0w2','l0w2relax', 'l0d2', 'l0d2relax'
+                       , 'l2w1', 'l2w1relax', 'l2w2', 'l2w2relax', 'l2d2', 'l2d2relax']
         print('\033[1mDependents:\033[0m ')
         d = set(deps)
-        for key,l in {'Position':pos, 'Dimensions':dims, 'Fusion':fusion, 'Gaps':gaps}.items():
+        for key,l in {'Position':pos, 'Dimensions':dims, 'Fusion':fusion, 'Gaps':gaps, 'Qualitative':qualitative, 'Extra':extra}.items():
             li = d.intersection(set(l))
             if len(li)>0:
                 print(f'\t\033[31m', '{:<12}:'.format(key), '\033[0m\t',  ', '.join(list(li)))
@@ -220,7 +224,7 @@ class summarySDT(summaryMetric):
                        , 'segments':'segments', 'w':'width', 'h':'length', 'hn':'length/intended'
                        , 'roughness':'roughness', 'emptiness':'emptiness'
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness'
-                       , 'minmaxT':'thickness variation', 'ldiff':'shrinkage diference'
+                       , 'minmaxT':'thickness variation', 'ldiff':'shrinkage difference'
                        , 'dx0dt':'left edge shift/time', 'dxfdt':'$\Delta x_{right}$/time', 'dxcdt':'$\Delta x_{center}$/time'
                        , 'dwdt':'widening/time', 'dhdt':'lengthening/time'
                        , 'dsegmentsdt':'rupturing/time', 'dldiffdt':'evening/time'
@@ -315,17 +319,22 @@ class summarySDT(summaryMetric):
             s1 = s1[len(typ)+1:]
             return s1
         
+    def importDepCorrelations(self, fn:str=''):
+        '''import dependent variable correlations from file'''
+        self.depCor, u = plainIm(fn)
+        
     def depCorrelations(self, fn:str=''):
         '''get a table of spearman correlation strengths between all dependent variables'''
-        v = self.depVars()
+        v = self.numericDepVars()
         out = []
         for i,var1 in enumerate(v):
             for var2 in v[i+1:]:
                 s1 = self.strip(var1)
                 s2 = self.strip(var2)
-                if not s1==s2 and not f'{s1}n'==s2 and not f'{s2}n'==s1:      
+                if not s1==s2 and not f'{s1}n'==s2 and not f'{s2}n'==s1:  
                     spear = self.depCorrelation0(var1, var2)
-                    out.append(spear)
+                    if len(spear)>0:
+                        out.append(spear)
         self.depCor = pd.DataFrame(out)
         self.exportDepCorrs(fn)
         

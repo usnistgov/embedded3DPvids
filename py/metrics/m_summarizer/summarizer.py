@@ -81,6 +81,12 @@ class summarizer(fh.folderLoop):
         else:
             cl.summaryHeader()
             summary, units, failures = cl.summaryValues()
+            
+        if hasattr(pfd, 'manual') and os.path.exists(pfd.manual):
+            # add manual measurements
+            manual, mu = plainImDict(pfd.manual, unitCol=1, valCol=2)
+            summary['total'] = {**summary['total'], **manual}
+            units = {**units, **mu}
 
         if len(summary)>0:
             self.units = {**self.units, **units}

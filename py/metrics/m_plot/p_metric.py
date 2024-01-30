@@ -70,6 +70,7 @@ class metricPlot:
             self.mvar = mvar
         self.ms = ms   # dataframe that holds all data
         self.ss = ss.copy()
+        self.dropna()
         self.plotType = plotType
         self.logx = logx
         self.logy = logy
@@ -85,6 +86,13 @@ class metricPlot:
         if not self.justLegend:
             self.checkValid()    # check that inputs are valid
             self.setUpAxes()
+            
+    def dropna(self):
+        l = []
+        for li in [self.xvar, self.yvar, self.cvar, self.mvar]:
+            if li in self.ss and not li in l:
+                l.append(li)
+        self.ss.dropna(subset=l, inplace=True)
             
     def setUpDims(self):
         '''set up the plot'''
@@ -364,6 +372,9 @@ class metricPlot:
         logx and logy True to space variables on log scale
         dx and dy are spacing as a fraction of the total range
         rigid=True means that we use the center of the square as the x,y value and use no error. This is for color maps.'''
+        if self.dx==0 and self.dy==0:
+            # use all points
+            return pd.DataFrame([{'x':row[self.xvar], 'y':row[self.yvar], 'c':row[self.cvar]} for i,row in ss2.iterrows()])
         xl = self.evenlySpace(self.xvar, self.logx, self.dx)
         if len(xl)==0:
             return []
@@ -381,6 +392,7 @@ class metricPlot:
                 if len(ss3)>0 or rigid:
                     df2.append(self.gridValue(ss3, rigid, x, y, xl, yl, i, j))
         df2 = pd.DataFrame(df2)
+        df2.dropna(inplace=True)
         return df2
 
     def toGroups(self, ss2:pd.DataFrame) -> pd.DataFrame:
@@ -388,6 +400,9 @@ class metricPlot:
         xvar, yvar, zvar are variable names (columns in ss2)
         logx and logy True to space variables on log scale
         dx and dy are spacing as a fraction of the total range'''
+        if self.dx==0 and self.dy==0:
+            # use all points
+            return pd.DataFrame([{'x':row[self.xvar], 'y':row[self.yvar], 'c':row[self.cvar]} for i,row in ss2.iterrows()])
         if not ((self.dx==1) or (self.dy==1)):
             # x or y need to be averaged for groups to work. if both are split, use a grid
             return self.toGrid()

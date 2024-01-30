@@ -33,6 +33,7 @@ from stats_table import *
 from p_multi import *
 from p_yvarlines import *
 from p_xvarlines import *
+from p_qualityScatter import *
 from p_single import *
 
 # logging

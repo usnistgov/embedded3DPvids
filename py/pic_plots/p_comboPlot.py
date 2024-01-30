@@ -353,16 +353,17 @@ class multiPlots:
         self.spacingList = ['0.500', '0.625', '0.750', '0.875', '1.000', '1.250']
         
         for subfolder in os.listdir(self.folder):
-            spl = re.split('_', subfolder)
-            for i,s in enumerate(spl):
-                if s=='I' and not spl[i+1] in self.inkList:
-                    self.inkList.append(spl[i+1])
-                elif s=='S' and not spl[i+1] in self.supList:
-                    self.supList.append(spl[i+1])
-                elif s=='VI' and not spl[i+1] in self.inkvList:
-                    self.inkvList.append(spl[i+1])
-                elif s=='VS' and not spl[i+1] in self.supvList:
-                    self.supvList.append(spl[i+1])
+            if os.path.isdir(os.path.join(self.folder, subfolder)):
+                self.addToLists(subfolder)
+        if len(self.inkList)==0:
+            self.addToLists(os.path.basename(self.folder))
+            if len(self.inkList)==0:
+                self.addToLists(os.path.basename(os.path.dirname(self.folder)))
+                if len(self.inkList)==0:
+                    if 'P_vs' in self.folder:
+                        if '8_3.50' in self.folder:
+                            self.inkList.append('PDMSS8-S85-0.05')
+                            self.supList.append('3.50')
         
         self.inkList = self.sortList(self.inkList)         
         # determine how many variables must be defined for a 2d plot
@@ -372,7 +373,20 @@ class multiPlots:
             l = getattr(self, f'{s}List')
             if len(l)>1:
                 self.freevars+=1
-                self.freevarList.append(s)  
+                self.freevarList.append(s) 
+                
+    def addToLists(self, subfolder:str) -> None:
+        '''split the elements of the subfolder basename and use it to lay out the list of inks and supports'''
+        spl = re.split('_', subfolder)
+        for i,s in enumerate(spl):
+            if s=='I' and not spl[i+1] in self.inkList:
+                self.inkList.append(spl[i+1])
+            elif s=='S' and not spl[i+1] in self.supList:
+                self.supList.append(spl[i+1])
+            elif s=='VI' and not spl[i+1] in self.inkvList:
+                self.inkvList.append(spl[i+1])
+            elif s=='VS' and not spl[i+1] in self.supvList:
+                self.supvList.append(spl[i+1])
                 
     def sortList(self, l:list) -> list:
         '''sort the list by values'''
@@ -383,10 +397,7 @@ class multiPlots:
         fvl.sort_values(by=['rheWt', 'surfactantWt'], inplace=True)
         fvl.reset_index(inplace=True)
         return list(fvl.shortname)
-        
-        
-            
-        
+
     def spacingPlots(self, name:str, showFig:bool=False, export:bool=True):
         '''run all plots for object name (e.g. HOB, HIPxs)'''
         for spacing in self.spacingList:

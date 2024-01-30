@@ -59,8 +59,9 @@ class yvarlines(multiPlot):
         if 'sharey' in kwargs:
             self.sharey = kwargs['sharey']
             kwargs.pop('sharey')
-        self.ss.sort_values(by=cvar, inplace=True)
-        self.legendVals = self.ss[cvar].unique()
+        if mode=='scatter':
+            self.ss.sort_values(by=cvar, inplace=True)
+            self.legendVals = self.ss[cvar].unique()
         super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, **kwargs)
         self.groupPCols()
         self.plots()
@@ -110,26 +111,34 @@ class yvarlines(multiPlot):
                 for l in lcommon[1:]:
                     i = self.plist.index(l)   # get index of 2nd column
                     self.axs[0,i].get_shared_y_axes().join(self.axs[0,i0], self.axs[0,i])  # share the y axes for these columns
+                    
+    def getY(self) -> str:
+        if self.mode=='scatter':
+            y = self.yvar
+        else:
+            y = self.cvar
+        return y
         
     def getYvar(self, l:int, p:int) -> str:
         '''get the yvar for this l value and p value'''
+        y = self.getY()
         if p=='write':
-            yvar = f'delta_{self.yvar}_write{l}'
+            yvar = f'delta_{y}_write{l}'
         elif p=='disturb':
-            yvar = f'delta_{self.yvar}_disturb{l}'
+            yvar = f'delta_{y}_disturb{l}'
         elif p[-2:]=='dt':
             ww = p[1]
-            yvar = f'd{self.yvar}dt_{ww}{l}o'
+            yvar = f'd{y}dt_{ww}{l}o'
         else:
             ww = p[0]
             p1 = p[1:]
             
             if p1=='p':
-                yvar = f'{self.yvar}_{ww}{l}p'
+                yvar = f'{y}_{ww}{l}p'
             elif p1=='o':
-                yvar = f'{self.yvar}_{ww}{l}o'
+                yvar = f'{y}_{ww}{l}o'
             elif p1=='relax':
-                yvar = f'delta_{self.yvar}_{ww}{l}relax'
+                yvar = f'delta_{y}_{ww}{l}relax'
             else:
                 raise ValueError(f'Could not determine variable for {l}, {p}')
         return yvar
@@ -170,7 +179,7 @@ class yvarlines(multiPlot):
         '''either a mesh plot or a contour plot'''
         kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'yvar':self.yvar
                                          , 'ax':self.axs[i,j], 'fig':self.fig
-                                         , 'plotType':self.plotType, 'legendVals':self.legendVals}}
+                                         , 'plotType':self.plotType}}
         if not y in self.ss:
             self.fig.delaxes(self.axs[i,j])
             return 
@@ -262,7 +271,7 @@ class yvarlines(multiPlot):
             
         # figure title
         l = self.llist[0]
-        yy = self.ms.varSymbol(f'{self.yvar}_w1o').replace('1st written ', '')
+        yy = self.ms.varSymbol(f'{self.getY()}_w1o').replace('1st written ', '')
         yy = f'Line {l} {yy}'
         self.fig.suptitle(yy)
         
@@ -281,7 +290,7 @@ class yvarlines(multiPlot):
             self.columnTitle(self.firstRow(j),j,killWritten)
 
         # figure title
-        yy = self.ms.varSymbol(f'{self.yvar}_w1o').replace('1st written ', '')
+        yy = self.ms.varSymbol(f'{self.getY()}_w1o').replace('1st written ', '')
         if killWritten:
             if write:
                 yy = f'Write {yy}'

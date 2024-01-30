@@ -84,7 +84,8 @@ class scatterPlot(metricPlot):
                                   ,linestyle='None', zorder=100
                                   ,c=df2['c'], cmap=self.cmapname
                                   ,**varargs)
-
+        if not 'xerr' in df2:
+            return
         # plot error bars
         for s in ['label', 'linewidth']:
             if s in varargs:
@@ -105,7 +106,8 @@ class scatterPlot(metricPlot):
         '''plot series, with constant color'''
         # plot points
         self.sc = self.ax.scatter(df2['x'],df2['y'], **varargs)
-        
+        if not 'xerr' in df2:
+            return
         # plot error bar
         for s in ['label', 'facecolors', 'edgecolors', 's', 'fillstyle', 'marker', 'linewidth']:
             if s in varargs:
@@ -154,23 +156,30 @@ class scatterPlot(metricPlot):
             # even population in groups and get error bars
             df2 = self.toGroups(ssi)
         self.plotSeries(df2, style)
-            
-    def addLegends(self):
-        '''add legend to the plot'''
         
-        # no legend
-        if ('legend' in self.kwargs0 and self.kwargs0['legend']==False):
-            return
-    
-        self.legend = plotLegend(self.colors, self.markers, self.ms, self.lines, fs=self.fs, **self.kwargs0)
+    def addLegend(self, **kwargs) -> None:
+        self.legend = plotLegend(self.colors, self.markers, self.ms, self.ss, self.lines, fs=self.fs, **self.kwargs0)
+        
         
         # color bar legend
-        if len(self.colors.vallist)>10 and self.cvar in self.ss:
+        if not self.colors.swatch and len(self.colors.vallist) and self.cvar in self.ss:
             self.cbar = self.legend.colorBar(self.fig, **self.kwargs0)
             return
         
         # swatch legend
-        self.legend.swatchLegend(self.fig, self.ax, **self.kwargs0)
+        self.legend.swatchLegend(self.fig, self.ax, **kwargs, **self.kwargs0)
+            
+    def addLegends(self):
+        '''add legend to the plot'''
+        # no legend
+        if ('legend' in self.kwargs0 and self.kwargs0['legend']==False):
+            return
+        self.addLegend()
+        
+    def createLegend(self):
+        '''this axis just going to be a legend'''
+        self.addLegend(legendloc='center')
+        self.ax.axis('off')
             
             
     def regressionSS(self) -> None:
@@ -240,16 +249,4 @@ class scatterPlot(metricPlot):
         self.fixTicks()
         if self.plotReg:
             self.regressionSS()
-            
-    def createLegend(self):
-        '''this axis just going to be a legend'''
-        self.legend = plotLegend(self.colors, self.markers, self.ms, self.lines, **self.kwargs0)
-        
-        # color bar legend
-        if len(self.colors.vallist)>10 and self.cvar in self.ss:
-            self.cbar = self.legend.colorBar(self.fig, **self.kwargs0)
-            return
-        
-        # swatch legend
-        self.legend.swatchLegend(self.fig, self.ax, legendloc='center', **self.kwargs0)
-        self.ax.axis('off')
+

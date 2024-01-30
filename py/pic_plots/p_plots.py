@@ -56,6 +56,9 @@ class picPlots:
             
     def imFn(self) -> str:
         '''Construct an image file name with no extension. Exportfolder is the folder to export to. Label is any given label. Topfolder is the folder this image refers to, e.g. singlelines. Insert any extra values in kwargs as keywords'''
+        if 'exportBn' in self.kwargs:
+            self.fn = os.path.join(self.exportFolder, self.kwargs['exportBn'])
+            return self.fn
         if type(self.tag) is list:
             label = "_".join(self.tag)
         else:
@@ -123,14 +126,35 @@ class picPlots:
 
     def picPlots(self) -> None:
         '''plot all pictures for simulations in a folder'''
+        if len(self.flist)==1:
+            scale=1
+        else:
+            scale = 0.95
         for pv in self.cp.pvlists:
-            fi = folderImages(pv, self.tag, **self.kwargs)
+            fi = folderImages(pv, self.tag, scale=scale, **self.kwargs)
             fi.getImages()
             fi.picPlot(self.cp, self.dx, self.dy)
-        self.cp.figtitle = self.tags2Title()
-        self.cp.clean()
+        self.clean()
         
+    def clean(self) -> None:
+        '''clean up the plot'''
+        self.cp.figtitle = self.tags2Title()
+        
+        if len(self.flist)==1:
+            # predefined folder. remove all plotting stuff
+            self.cp.axs[0].set_title(None)
+            self.cp.axs[0].axis('off')
+            self.cp.fig.tight_layout()
+        else:
+            self.cp.clean()
+        if 'title' in self.kwargs:
+            self.cp.axs[0].set_title(self.kwargs['title'], fontsize=8)
+    
     def getFolders(self) -> None:
+        '''get the list of folders to plot'''
+        if 'folders' in self.kwargs:
+            self.flist = self.kwargs.pop('folders')
+            return
         self.flist = fh.printFolders(self.topFolder, tags=self.allIn, someIn=self.dates, **self.kwargs)
         self.flist.reverse()
         

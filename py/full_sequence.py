@@ -73,6 +73,11 @@ class SDTWorkflow:
         self.nv = nt.nozData(self.folder, pfd = self.pfd)
         self.nv.detectNozzle(**kwargs)
         
+    def shiftNozzleLeft(self, dx:int=3, **kwargs) -> None:
+        '''shift the left edge of the nozzle to the left and save'''
+        self.nv.nd.xL = self.nv.nd.xL-dx
+        self.nv.nd.exportNozzleDims(overwrite=True)
+        
     def exportBackground(self, **kwargs):
         '''export the background'''
         if not hasattr(self, 'nv'):
@@ -152,9 +157,12 @@ class SDTWorkflow:
         display(df2[df2.usedML][['line', 'usedML']])
         
         
-    def openInPaint(self, tag:str, nmax:int=100, **kwargs):
+    def openInPaint(self, tag:str, nmin:int=0, nmax:int=100, usegment:bool=False, **kwargs):
         self.initPFD()
         self.pfd.findVstill()
+        if usegment:
+            kwargs['dropper'] = False
+            kwargs['white'] = True
         for file in self.pfd.vstill:
             bn =  os.path.splitext(os.path.basename(file))[0]
             if tag in bn:
@@ -166,14 +174,22 @@ class SDTWorkflow:
                         spl=0
                 else:
                     spl = 0
-                if spl<=nmax:
+                if spl<=nmax and spl>=nmin:
+                    if usegment:
+                        file = os.path.join(os.path.dirname(file), 'Usegment', os.path.basename(file).replace('vstill', 'Usegment'))
                     openInPaint(file, **kwargs)
         
     def openLastImage(self, **kwargs):
         self.openInPaint(self.imtag, **kwargs)
         
+    def openLastUsegment(self, **kwargs):
+        self.openInPaint(self.imtag, usegment=True, **kwargs)
+        
     def openLastSeries(self, **kwargs):
         self.openInPaint(self.imtag[:5], **kwargs)
+        
+    def openLastUsegmentSeries(self, **kwargs):
+        self.openInPaint(self.imtag[:5], usegment=True, **kwargs)
         
     def openBackground(self):
         nfn = self.pfd.newFileName('background', 'png')
@@ -188,6 +204,7 @@ class SDTWorkflow:
         '''open the nozDims spreadsheet and a writing line image'''
         if os.path.exists(self.pfd.nozDims):
             openInExcel(self.pfd.nozDims)
+            print(self.pfd.nozDims)
         self.pfd.findVstill()
         for file in self.pfd.vstill:
             if 'w1p3' in file:

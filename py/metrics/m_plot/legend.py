@@ -50,7 +50,7 @@ class plotLegend:
         self.colors = colors
         self.markers = markers
         self.ms = ms
-        self.filedf = self.ms.ss
+        self.filedf = filedf
         self.line = line
         self.fs = fs
         self.referenceHandles = {}

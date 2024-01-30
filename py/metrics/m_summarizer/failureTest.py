@@ -93,7 +93,8 @@ class failureTest:
         if len(df)>0:
             for i,row in df.iterrows():
                 folder = os.path.dirname(row['file'])
-                df.loc[i, 'fostr'] = folder.replace(cfg.path.server, '')[1:]
+                df.loc[i, 'fostr'] = folder
+                df.loc[i, 'file'] = os.path.join(cfg.path.server, df.loc[i, 'file'])
                 df.loc[i, 'fistr'] = os.path.basename(row['file'])
                 if not 'approved' in row:
                     df.loc[i, 'approved'] = False
@@ -127,7 +128,7 @@ class failureTest:
         folder = self.folder(i)
         fh.openExplorer(os.path.join(folder, 'Usegment'))
         folder2 = os.path.join(cfg.path.server, folder)
-        self.sw = SDTWorkflow(folder2)
+        self.sw = SDTWorkflow(folder2, **kwargs)
         self.sw.run()
         # if not testFailures:
         #     self.sw.showFailures()

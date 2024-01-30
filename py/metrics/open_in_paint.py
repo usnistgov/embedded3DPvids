@@ -40,7 +40,7 @@ pd.set_option('display.max_rows', 500)
 
 class paintObject:
     
-    def __init__(self, file:str, fullScreen:bool=True, scrollDown:float=1, scrollRight:float=1, dropper:bool=False, thickness:int=3, zoom:int=5, onlyOpen:bool=False, **kwargs):
+    def __init__(self, file:str, fullScreen:bool=True, scrollDown:float=1, scrollRight:float=1, dropper:bool=False, thickness:int=3, zoom:int=5, onlyOpen:bool=False, white:bool=False, pause:float=3, **kwargs):
         self.file = file
         pyautogui.PAUSE = 0.1
         self.w = pyautogui.size().width
@@ -48,7 +48,7 @@ class paintObject:
         self.openPaint(fullScreen=fullScreen)
         if onlyOpen:
             return
-        time.sleep(3)
+        time.sleep(pause)
         self.selectPencil()
         self.selectDropper()
         self.selectTopRight()
@@ -63,6 +63,8 @@ class paintObject:
             self.scrollDown(scrollDown)
         if dropper:
             self.selectDropper()
+        if white:
+            self.selectWhite()
         self.moveFrac(3/4, 1/2)
         
     def openPaint(self, fullScreen:bool=True):
@@ -117,6 +119,11 @@ class paintObject:
         
     def moveFrac(self, wfrac:float, hfrac:float):
         pyautogui.moveTo(int(self.w*wfrac), int(self.h*hfrac)) # Move the mouse to the bottom right
+        
+    def selectWhite(self) -> None:
+        '''select the white color in paint'''
+        pyautogui.moveTo(1090, 137) # Move the mouse to the pencil button
+        pyautogui.click() # Click the mouse at its current location.
 
     
 def openInPaint(file, **kwargs):

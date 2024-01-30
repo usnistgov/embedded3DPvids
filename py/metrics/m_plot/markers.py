@@ -56,6 +56,12 @@ class plotMarkers:
         self.lineList = lineList
         self.line = lines
         
+        if self.mvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3']:
+            # qualitative
+            self.mfunc=self.qualityDict
+            self.mvalFunc=self.exactFunc
+            return
+        
         if mvar=='const' or mvar=='' or len(self.vallist)>len(markerList):
             if not 'marker' in kwargs:
                 kwargs['marker'] = self.markerList[0]
@@ -133,6 +139,58 @@ class plotMarkers:
     def dictLine(self, val):
         '''get the line style from a dictionary'''
         return self.lDict[val]
+    
+    def qualityDict(self, val:str) -> str:
+        '''get a color given a quality'''
+        if val=='no change' or val=='no fusion':
+            return 's'
+        if val=='fuse' or val=='fuse 1 2 3':
+            return 'o' # dark blue
+        if val=='fuse last':
+            return '$V$' 
+        if val=='fuse 1 2':
+            return '$p$' # blue
+        if val=='fuse only 1st':
+            return '$T$'
+        if val=='fuse 2 3':
+            return '$ꟼ$' # periwinkle
+        if val=='fuse 1 3':
+            return '$Y$'
+        if val=='partial fuse' or val=='partial fuse 1 2 3':
+            return '$W$'  # dark green
+        if val=='partial fuse 2 3': 
+            return '$IU$'  # light green
+        if val=='partial fuse 1 2':
+            return '$UI$' # teal
+        if val=='partial fuse 1 3':
+            return '$H$' # teal
+        if val=='partial fuse last':
+            return '$M$' 
+        if val=='partial fuse only 1st':
+            return '$J$'
+        if val=='fuse droplets':
+            return 'P' # indigo
+        if val=='rupture' or val=='rupture combined':
+            return '8' # red
+        if val=='rupture 2':
+            return '$E$' # burnt red
+        if val=='rupture 1':
+            return '$Ǝ$' # orange
+        if val=='rupture 1st':
+            return '$ↄ$'
+        if val=='rupture 3':
+            return '$K$' # yellow
+        if val=='rupture both' or val=='rupture 1 2':
+            return 'X' # peach
+        if val=='rupture 2 step':
+            return '$\#$'
+        if val=='fuse rupture' or val=='fuse 1 2 and rupture 12': 
+            return '<' # purple
+        if val=='rupture both fuse droplets':
+            return '>' # light purple
+        else:
+            print(val)
+            return self.markerList[int(np.random.randint(len(self.markerList), size=1))]
     
     #-----------------------------
     

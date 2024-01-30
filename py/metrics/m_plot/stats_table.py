@@ -218,7 +218,7 @@ class regressionTable:
                 if 'spacing' in var:
                     xvar = var
                 else:
-                    if self.logx:
+                    if self.logx and not var in ['zdepth']:
                         xvar = f'{var}_log'
                     else:
                         xvar = var
@@ -463,6 +463,8 @@ class regressionTableSDT(regressionTable):
     def indepVars(self) -> list:
         '''a  list of the nondimensional variables for nonzero surface tension'''
         self.constList = ['spacing', 'spacing_adj']
+        if 'zdepth' in self.ss:
+            self.constList.append('zdepth')
         self.ratioList = ['GtaRatio', 'tGdRatio', 'GaRatio', 'GdRatio', 'tau0aRatio', 'tau0dRatio']
         l0 = ['Re', 'Bma', 'Bmd', 'visc0']
         

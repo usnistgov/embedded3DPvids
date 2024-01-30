@@ -46,6 +46,7 @@ class printVals:
         self.fluidProperties = fluidProperties
         tic = time.perf_counter()
         self.printFolder = folder
+        self.printFolderR = os.path.relpath(folder, cfg.path.server)
         if 'pfd' in kwargs:
             self.pfd = kwargs['pfd']
         else:
@@ -173,7 +174,7 @@ class printVals:
            
     def metarow(self) -> Tuple[dict,dict]:
         '''row holding metadata'''
-        mlist = ['printFolder', 'bn', 'date', 'sigma', 'fluFile']
+        mlist = ['printFolderR', 'bn', 'date', 'sigma', 'fluFile']
         meta = dict([[i,getattr(self,i)] for i in mlist])
         munits = dict([[i, self.constUnits.get(i, '')] for i in mlist])
         meta['calibFile'] = self.press.calibFile

@@ -100,7 +100,7 @@ class meshPlot(metricPlot):
     
     def scaleZ(self, df2:pd.DataFrame) -> pd.DataFrame:
         '''scale z to a reasonable order so we can see labels'''
-        self.zlabel = self.ms.varSymbol(self.zvar)
+        self.zlabel = self.ms.varSymbol(self.cvar)
         maxval = max(abs(df2.c))
         if maxval>10**-1 and maxval<10**2:
             return df2
@@ -125,7 +125,7 @@ class meshPlot(metricPlot):
             self.sc = self.ax.pcolormesh(self.piv, cmap=self.cmapname
                                          , vmin=self.kwargs0['vmin'], vmax=self.kwargs0['vmax'])
         else:
-            self.sc = self.ax.pcolormesh(self.piv, cmap=self.cmapname)
+            self.sc = self.ax.pcolormesh(self.piv, cmap=self.colors.cname)
         if self.dx>0:
             xpos, xticks = self.getMeshTicks(True, self.logx)
         else:

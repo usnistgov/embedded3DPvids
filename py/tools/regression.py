@@ -100,6 +100,10 @@ def regPD(df:pd.DataFrame, xcols:List[str], ycol:str, order:int=1, intercept:Uni
 def spearman(df:pd.DataFrame, xcol:str, ycol:str) -> dict:
     '''get spearman rank correlation'''
     ssi = df.dropna(subset=[xcol, ycol]) # drop na in colums
+    if len(ssi)<10:
+        return {}
+    if len(ssi[xcol].unique())<2 or len(ssi[ycol].unique())<2:
+        return {}
     corr, p = stats.spearmanr(ssi[xcol], ssi[ycol])
     return {'spearman_corr':corr, 'spearman_p':p}
     

@@ -192,8 +192,8 @@ class fileHorizSDT(fileHoriz, fileSDT):
         self.segmenter.eraseBorderTouchComponent(2, '+y', checks=False)
         # if 'o' in self.tag or 'p5' in self.tag or 'p4' in self.tag or 'p3' in self.tag:
         #     self.segmenter.eraseBorderTouchComponent(2, '+x', checks=True)
-        if 'o' in self.tag or 'p1' in self.tag or 'p2' in self.tag:
-            self.segmenter.eraseBorderTouchComponent(2, '-x', checks=True)
+        # if 'o' in self.tag or 'p1' in self.tag or 'p2' in self.tag:
+            # self.segmenter.eraseBorderTouchComponent(2, '-x', checks=True)
         self.segmenter.eraseBorderClingers(40)
         # self.segmenter.selectCloseObjects(self.idealspx)  # remove bubbles and debris that are far from the main object
 
