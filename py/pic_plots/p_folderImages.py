@@ -42,7 +42,7 @@ matplotlib.rc('font', size='10.0')
 class folderImages:
     '''imports, crops, and combines images given tags for a single folder'''
     
-    def __init__(self, pv:printVals, tag:Union[str, list], concat:str='h', removeBackground:bool=False, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False, times:bool=False, scale:float=0.95, rotate:bool=False, **kwargs):
+    def __init__(self, pv:printVals, tag:Union[str, list], concat:str='h', removeBackground:bool=False, whiteBalance:bool=True, normalize:bool=True, removeBorders:bool=False, times:bool=False, scale:float=0.95, rotate:bool=False, spacerThickness:int=10, **kwargs):
         self.concat = concat
         self.pv = pv
         self.removeBackground = removeBackground
@@ -56,6 +56,7 @@ class folderImages:
         self.imfiles = []
         self.scale = scale
         self.rotate = rotate
+        self.spacerThickness=spacerThickness
         if not type(self.tag) is list:
             self.tag = [self.tag]
         self.kwargs = kwargs
@@ -93,6 +94,10 @@ class folderImages:
             if self.removeBackground:
                 self.getNozData()
                 im = self.nd.subtractBackground(im)
+            if self.whiteBalance:
+                im = vm.white_balance(im)
+            if self.normalize:
+                im = vm.normalize(im)
             return im
         else:
             return []
@@ -141,30 +146,46 @@ class folderImages:
         im = self.cropImage(im, tag)
         if self.removeBorders:
             im = vm.removeBorders(im, normalizeIm=False)
-        if self.whiteBalance:
-            im = vm.white_balance(im)
-        if self.normalize:
-            im = vm.normalize(im)
         return im
     
     def combineImages(self, im1:np.array) -> None:
         '''combine all of the images into a single image'''
         if self.concat=='h':
+            # stack horizontally
             if im1.shape[0]>self.im.shape[0]:
+                # pad the combined image
                 pad = im1.shape[0]-self.im.shape[0]
                 self.im = cv.copyMakeBorder(self.im, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255)) 
             elif self.im.shape[0]>im1.shape[0]:
+                # pad the new image
                 pad = self.im.shape[0]-im1.shape[0]
                 im1 = cv.copyMakeBorder(im1, pad, 0, 0,0, cv.BORDER_CONSTANT, value=(255,255,255))
-            self.im = cv.hconcat([self.im, im1]) # add to the right
+                
+            if self.spacerThickness>0:
+                # add a spacer between the images
+                spacer = 255*np.ones((im1.shape[0], self.spacerThickness, 3), dtype=np.uint8)  # create a white gap between images
+                self.im = cv.hconcat([self.im, spacer, im1])
+            else:
+                # don't add a spacer
+                self.im = cv.hconcat([self.im, im1])
         elif self.concat=='v':
+            # stack vertically
             if im1.shape[1]>self.im.shape[1]:
+                # pad the combined image
                 pad = im1.shape[1]-self.im.shape[1]
                 self.im = cv.copyMakeBorder(self.im, 0, 0,pad, 0, cv.BORDER_CONSTANT, value=(255,255,255)) 
             elif self.im.shape[1]>im1.shape[1]:
+                # pad the new image
                 pad = self.im.shape[1]-im1.shape[1]
                 im1 = cv.copyMakeBorder(im1,0,0, pad,0, cv.BORDER_CONSTANT, value=(255,255,255))
-            self.im = cv.vconcat([self.im, im1])
+                
+            if self.spacerThickness>0:
+                # add space between the images
+                spacer = 255*np.ones((self.spacerThickness, im1.shape[1], 3), dtype=np.uint8)  # create a white gap between images
+                self.im = cv.vconcat([self.im, spacer, im1])
+            else:
+                # stick iamges together with no gap
+                self.im = cv.vconcat([self.im, im1])
         else:
             raise ValueError(f'Bad value for concat: {self.concat}')
         return 

@@ -34,7 +34,9 @@ from p_multi import *
 from p_yvarlines import *
 from p_xvarlines import *
 from p_qualityScatter import *
+from p_multi_specific import *
 from p_single import *
+from p_SDT import *
 
 # logging
 logger = logging.getLogger(__name__)

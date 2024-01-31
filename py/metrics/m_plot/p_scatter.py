@@ -58,7 +58,7 @@ class scatterPlot(metricPlot):
         '''
     
     def __init__(self, ms, ss:pd.DataFrame, plotReg:bool=False
-                 , grid:bool=True, lines:bool=False, dx:float=0.1, dy:float=1, **kwargs):
+                 , grid:bool=True, lines:bool=False, dx:float=0.1, dy:float=1, wideLegend:bool=False, **kwargs):
         self.plotReg = plotReg
         self.grid = grid
         self.lines = lines
@@ -67,7 +67,7 @@ class scatterPlot(metricPlot):
         if not self.justLegend:
             self.plot()
         else:
-            self.createLegend()
+            self.createLegend(wideLegend=wideLegend)
             
     def getMarkers(self):
         '''get the marker styles'''
@@ -75,7 +75,8 @@ class scatterPlot(metricPlot):
             vallist = list(self.ss[self.mvar].unique())
         else:
             vallist = []
-        self.markers = plotMarkers(vallist, self.mvar, self.ms.varSymbol(self.mvar), self.sizes.markersize, self.sizes.linewidth, lines=self.lines, **self.kwargs0)
+        self.markers = plotMarkers(vallist, self.mvar, self.ms.varSymbol(self.mvar)
+                                   , self.sizes.markersize, self.sizes.linewidth, lines=self.lines, **self.kwargs0)
             
     def plotSeriesGradient(self, df2:pd.DataFrame, varargs:dict) -> None:
         '''plot the series with gradient color based on zvar'''
@@ -157,9 +158,9 @@ class scatterPlot(metricPlot):
             df2 = self.toGroups(ssi)
         self.plotSeries(df2, style)
         
-    def addLegend(self, **kwargs) -> None:
-        self.legend = plotLegend(self.colors, self.markers, self.ms, self.ss, self.lines, fs=self.fs, **self.kwargs0)
-        
+    def addLegend(self, wideLegend:bool=False, **kwargs) -> None:
+        '''add the legend to the plot'''
+        self.legend = plotLegend(self.colors, self.markers, self.ms, self.ss, self.lines, fs=self.fs, wideLegend=wideLegend, **self.kwargs0)
         
         # color bar legend
         if not self.colors.swatch and len(self.colors.vallist) and self.cvar in self.ss:
@@ -176,9 +177,9 @@ class scatterPlot(metricPlot):
             return
         self.addLegend()
         
-    def createLegend(self):
+    def createLegend(self, wideLegend:bool=False):
         '''this axis just going to be a legend'''
-        self.addLegend(legendloc='center')
+        self.addLegend(legendloc='center', wideLegend=wideLegend)
         self.ax.axis('off')
             
             

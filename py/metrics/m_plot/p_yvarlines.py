@@ -110,7 +110,7 @@ class yvarlines(multiPlot):
                 i0 = self.plist.index(lcommon[0])   # get index of first column
                 for l in lcommon[1:]:
                     i = self.plist.index(l)   # get index of 2nd column
-                    self.axs[0,i].get_shared_y_axes().join(self.axs[0,i0], self.axs[0,i])  # share the y axes for these columns
+                    self.axs[0,i].sharey(self.axs[0,i0])  # share the y axes for these columns
                     
     def getY(self) -> str:
         if self.mode=='scatter':

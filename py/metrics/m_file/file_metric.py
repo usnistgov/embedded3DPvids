@@ -569,6 +569,18 @@ class fileMetric(timeObject):
         if hasattr(self, 'hull2'):
             cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 2)
         return cm
+    
+    def ldiffIm(self, export:bool=False, display:bool=True) -> np.array:
+        '''add annotations for length asymmetry to the initial image'''
+        im = self.im0.copy()
+        if hasattr(self, 'hull2'):
+            cv.drawContours(im, [self.hull2], -1, (255,255,255), 2)
+        if display:
+            imshow(im)
+        if export:
+            self.ldiffIm = im
+            self.exportImage('ldiffIm', 'annotations', 'ldiff', overwrite=True)
+        return im
 
     
     def sumsAndWidths(self, horiz:bool) -> Tuple[list, list]:

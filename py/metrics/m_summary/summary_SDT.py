@@ -303,11 +303,12 @@ class summarySDT(summaryMetric):
             fluid = s[:3]
             var = s[4:]
             return self.indVarSymbol(var, fluid, commas=commas)
+        elif s=='pressureCh0':
+            return 'Extrusion pressure (Pa)'
+        elif s=='spacing_adj':
+            return 'adjusted spacing'
         else:
-            if s=='pressureCh0':
-                return 'Extrusion pressure (Pa)'
-            else:
-                return s
+            return s
 
         if not s in varlist:
             return s

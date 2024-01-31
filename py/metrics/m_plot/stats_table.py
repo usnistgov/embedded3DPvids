@@ -13,6 +13,7 @@ import string
 from scipy import stats
 import csv
 from IPython.display import display, Math
+import matplotlib.pyplot as plt
 
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -373,9 +374,11 @@ class regressionTable:
         for i,coeff in enumerate(self.bestVars.values()):
             self.xvl.labelAx(i, f's = {coeff}')
         if self.export:
-            fn = os.path.join(self.exportFolder, 'plots', f'{self.label[4:]}')
+            fn = os.path.join(self.exportFolder, 'plots', 'regression', f'{self.label[4:]}')
             
             self.xvl.export(fn)
+        if not self.printOut:
+            plt.close(self.xvl.fig)
 
 
 class regressionTables:
@@ -452,12 +455,18 @@ class regressionTableSingle(regressionTable):
 class regressionTableSDT(regressionTable):
     '''for holding a single regression table for singledoubletriple prints'''
     
-    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, yvar:str, getLinReg:bool=False, trimVariables:bool=True, spacing:float=0, **kwargs):
+    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, yvar:str, getLinReg:bool=False, trimVariables:bool=True, spacing:float=0, Camin:float=0, Camax:float=0, **kwargs):
         if spacing>0:
             ss0 = ss[ss.spacing==spacing]
         else:
             ss0 = ss
         self.spacing = spacing
+        self.Camin = Camin
+        self.Camax = Camax
+        if Camin>0:
+            ss0 = ss0[ss0.int_Ca>=Camin]
+        if Camax>0:
+            ss0 = ss0[ss0.int_Ca<=Camax]
         super().__init__(ms, ss0, yvar, getLinReg=getLinReg, trimVariables=trimVariables, **kwargs)
         
     def indepVars(self) -> list:
@@ -473,6 +482,11 @@ class regressionTableSDT(regressionTable):
         else:
             self.varlist = l0
             
+    def addToCaptions(self, addition:str) -> None:
+        '''add description to the short and long captions'''
+        self.shortCaption = f'{self.shortCaption}{addition}'
+        self.longCaption = f'{self.longCaption}{addition}'
+            
     def getCaptions(self) -> None:
         '''get captions for a singledoubletriple table'''
         if 'nickname' in self.kwargs:
@@ -480,13 +494,21 @@ class regressionTableSDT(regressionTable):
         else:
             self.nickname = self.ms.varSymbol(self.yvar)
         self.shortCaption = f'Linear regressions for {self.nickname}'
-        if self.spacing>0:
-            self.shortCaption = f'{self.shortCaption} at a spacing of {self.spacing}$d_i$'
-            self.label = f'tab:{self.yvar}{self.tag}{int(self.spacing*1000)}Reg'
-        else:
-            self.label = f'tab:{self.yvar}{self.tag}Reg'
         self.longCaption = r'Table of Spearman rank correlations for \\textbf{'+self.nickname+r'}'
+        self.label = f'tab:{self.yvar}_{self.tag}'
         if self.spacing>0:
-            self.longCaption = self.longCaption + f' at a spacing of {self.spacing}$d_i$'
+            addition = f' at a spacing of {self.spacing}$d_i$'
+            self.addToCaptions(addition)
+            self.label = f'{self.label}_{int(self.spacing*1000)}'
+        if self.Camin>0:
+            addition = f' at a Ca greater than or equal to {self.Camin}'
+            self.addToCaptions(addition)
+            self.label = f'{self.label}_Camin{self.Camin}'
+        if self.Camax>0:
+            addition = f' at a Ca less than or equal to {self.Camax}'
+            self.addToCaptions(addition)
+            self.label = f'{self.label}_Camax{self.Camax}'
+
+        self.label = f'{self.label}_Reg'
         self.longCaption = self.longCaption + r'. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \\ref{tab:variableDefs}.'
         

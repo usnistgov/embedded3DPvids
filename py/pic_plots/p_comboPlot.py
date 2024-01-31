@@ -307,7 +307,7 @@ class comboPlot(folderPlots):
             self.xylistsreal[axnum].append([x,y])
         else:
             raise ValueError('Square already filled')
-        self.indicesreal = self.indicesreal.append({'x':int(xpos), 'y':int(ypos)}, ignore_index=True)
+        self.indicesreal = pd.concat([self.indicesreal, pd.DataFrame([{'x':int(xpos), 'y':int(ypos)}])], ignore_index=True)
         return x0, y0, axnum
     
             

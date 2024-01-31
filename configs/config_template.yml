@@ -1,21 +1,27 @@
 ---
 
 path:
+    excel: "C:/Program Files (x86)/Microsoft Office/root/Office16/EXCEL.EXE"
     logs: "logs"
     log_config: "configs/logging.yml"
-    server: "myfolder"
-    fig: "myfolder"
-    rheTable: "myfolder/vidRhe.xlsx"
-    sigmaTable: "myfolder/litsurfacetension.xlsx"
-    densityTable: "myfolder/vidDensities.xlsx"
-    pCalibFolder: "myfolder"
-    openFoamFolder: "myfolder"
+    paint: "C:/Windows/System32/mspaint.exe"
+    server: "my/videos/are/stored/here"
+    fig: "export/figures/here"
+    rheTable: 
+        SDT: "rheology/folder/vidRheSDT.csv"
+        single: "rheology/folder/vidRhe.xlsx"
+    sigmaTable: 
+        SDT: "surfaceTension/folder/interfacial_tension_SDT.csv"
+        single: "surfaceTension/folder/interfacial_tension_singleLine.xlsx"
+    densityTable: 
+        SDT: "density/folder/vidDensitiesSDT.csv"
+        single: "density/folder/vidDensities.xlsx"
+    pCalibFolder: "folder/flow rates"
+    openFoamFolder: "myfolder/openfoam/summaries"
+    pyqtFolder: "myfolder/GitHub/ShopbotPyQt/SBP_files"
 const:
-    di: 0.603
-    do: 0.907
-    vink: 5
-    vsup: 5
-    pxpmm: 139 # px/mm
-    
- 
-    
+    di: 0.603   # nozzle inner diameter. this is only used if there is no metadata in the folder
+    do: 0.907   # nozzle outer diameter. this is only used if there is no metadata in the folder
+    vink: 5     # flow speed. this is only used if there is no metadata in the folder
+    vsup: 5     # translation speed. this is only used if there is no metadata in the folder
+    pxpmm: 71   # x1: 139, x0.5: 71. this is only used if there is no metadata in the folder

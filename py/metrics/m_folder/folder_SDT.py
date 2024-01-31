@@ -7,6 +7,7 @@ import traceback
 import logging
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from typing import List, Dict, Tuple, Union, Any, TextIO
 import re
 import numpy as np
@@ -171,13 +172,17 @@ class folderSDT(folderMetric):
         llist = self.writeGroups()
         out = [(f'{ll}p', f'{ll}o') for ll in llist]
     
-    def plotValue(self, yvar:str, xvar:str='wtime', fn:str='') -> None:
+    def plotValue(self, yvar:str, xvar:str='wtime', fn:str='', figsize:tuple=(8,6), fontsize:int=8, legend:bool=True, legendLoc:str='inset', **kwargs) -> None:
         '''plot values over time'''
+        plt.rcParams.update({'font.size': 8})
         if not hasattr(self, 'df'):
             self.importMeasure()
         if not yvar in self.df or not xvar in self.df:
             return
-        fig, ax = plt.subplots(figsize=(8,6))
+        if 'ax' in kwargs:
+            ax = kwargs['ax']
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
         df2 = self.df.sort_values(by='wtime')
         colors = ['#033F63', '#c7a63a', '#7C9885', '#e391c1']
         
@@ -193,29 +198,46 @@ class folderSDT(folderMetric):
             else:
                 mfc = 'none'
                 edgecolor = color
-            dfa = df[df.pname.str.contains('p')]
-            dfb = df[df.pname.str.contains('o')]
+            dfa = df[df.pname.str.contains('p')]   # printing
+            dfb = df[df.pname.str.contains('o')]  # observing
             for j,dfi in enumerate([dfa, dfb]):
                 if j==0:
                     kwargs = {'label':label[0]}
                 else:
                     kwargs = {}
-                ax.scatter(dfi[xvar], dfi[yvar], marker=marker, color=color, facecolors=mfc, **kwargs)
-                ax.plot(dfi[xvar], dfi[yvar], color=color, linestyle=linestyle)
+                xl = dfi[xvar]
+                yl = dfi[yvar]
+                if not pd.isna(yl.iloc[0]):
+                    ax.scatter(xl, yl, marker=marker, color=color, facecolors=mfc, s=10, **kwargs)
+                    ax.plot(xl, yl, color=color, linestyle=linestyle)
+                    if legend and legendLoc=='annotate':
+                        lnum = label[0][1]
+                        if label[0][2]=='w':
+                            ax.text(xl.iloc[-1]+1, yl.iloc[-1], f'depth {lnum}', fontsize=fontsize, color=color, ha='left')
+                        else:
+                            ax.text(xl.iloc[0]-1, yl.iloc[0], f'depth {lnum}', fontsize=fontsize, color=color, ha='right')
 
         ux = self.du[xvar]
         if xvar=='time':
-            ax.set_xlabel(f'Time since action ({ux})')
+            ax.set_xlabel(f'Time since action ({ux})', fontsize=fontsize)
         elif xvar=='wtime':
-            ax.set_xlabel(f'Time since writing ({ux})')
+            ax.set_xlabel(f'Time since writing ({ux})', fontsize=fontsize)
         else:
-            ax.set_xlabel(f'{xvar} ({ux})')
+            ax.set_xlabel(f'{xvar} ({ux})', fontsize=fontsize)
         u = self.du[yvar]
-        ax.set_ylabel(f'{yvar} ({u})', rotation=90)
+        ax.set_ylabel(f'{yvar} ({u})', rotation=90, fontsize=fontsize)
         # ax.set_xscale('log')
         # ax.set_yscale('log')
-        plt.legend()
-        fig.tight_layout()
+        if legend and not legendLoc=='annotate':
+            ax.legend(fontsize=fontsize, frameon=False)
+        ax.set_box_aspect(1)
+        ax.xaxis.set_major_locator(MultipleLocator(3))
+        ax.xaxis.set_major_formatter('{x:.0f}')
+
+        # For the minor ticks, use no labels; default NullFormatter.
+        ax.xaxis.set_minor_locator(MultipleLocator(1))
+        
+      #  fig.tight_layout()
         if len(fn)>0 and os.path.exists(os.path.dirname(fn)):
             fn0 = os.path.splitext(fn)[0]
             for s in ['.png', '.svg']:

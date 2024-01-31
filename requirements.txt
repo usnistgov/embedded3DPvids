@@ -1,0 +1,14 @@
+imageio==2.33.1
+ipython==8.6.0
+matplotlib==3.7
+numpy==1.26.3
+opencv-python==4.9.0.80
+openpy-xl==3.1.2
+pandas==2.2.0
+pyautogui==0.9.54
+python_box==7.1.1
+python-magic-bin==0.4.14
+PyYAML==6.0.1
+scikit_learn==1.4.0
+scipy==1.12.0
+seaborn==0.13.2

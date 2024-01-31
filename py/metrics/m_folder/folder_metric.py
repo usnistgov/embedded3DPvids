@@ -152,7 +152,7 @@ class folderMetric(timeObject):
         if os.path.exists(self.fn) and not self.overwriteMeasure:
             self.df, self.du = plainIm(self.fn, ic=0)
             if 'line' in self.df:
-                self.df.line.fillna('', inplace=True)
+                self.df.fillna({'line':0}, inplace=True)
             else:
                 self.overwriteMeasure=True
                 self.measureFolder()

@@ -46,6 +46,7 @@ class plotLegend:
                  , filedf:pd.DataFrame
                  , line:bool=False
                  , fs:int=10
+                 , wideLegend:bool=False
                  ,**kwargs):
         self.colors = colors
         self.markers = markers
@@ -53,6 +54,8 @@ class plotLegend:
         self.filedf = filedf
         self.line = line
         self.fs = fs
+        self.wideLegend = wideLegend
+        self.colorList = ['Black']
         self.referenceHandles = {}
 
     def colorPatches(self) -> list:
@@ -66,7 +69,9 @@ class plotLegend:
     
     def idealLine(self):
         '''create a handle for the ideal value line'''
-        return mlines.Line2D([], [], color='gray'
+        color = 'gray'
+        self.colorList.append(color)
+        return mlines.Line2D([], [], color=color
                                , marker='None'
                                , linestyle='dashed'
                                , label='Ideal')
@@ -116,12 +121,13 @@ class plotLegend:
         
     def getMultiMarker(self, cval, mval):
         '''get a marker object to add to handles, knowing that colors and markers depend on cval and mval'''
-        return mlines.Line2D([], [], markeredgecolor=self.colors.getColor(cval)
+        color = self.colors.getColor(cval)
+        return mlines.Line2D([], [], markeredgecolor=color
                                , markerfacecolor='None'
-                               , color=self.colors.getColor(cval)
+                               , color=color
                                , marker=self.markers.getMarker(mval)
                                , linestyle=self.markers.getLine(mval)
-                               , label=self.markerLabel(cval, mval))
+                               , label=self.markerLabel(cval, mval)), color
         
     def hasElements(self, cval, mval) -> bool:
         '''determine if there might be elements in this set. for example, if cval is sigma,ink_velocity and mval is sigma, and they have different sigma values, then there will be no elements'''
@@ -141,7 +147,9 @@ class plotLegend:
         for mval in self.markers.vallist:
             for cval in self.colors.vallist:
                 if self.hasElements(cval, mval):
-                    plist.append(self.getMultiMarker(cval, mval))
+                    mm,color = self.getMultiMarker(cval, mval)
+                    plist.append(mm)
+                    self.colorList.append(color)
         self.plist = ph+plist
         return self.plist
     
@@ -178,8 +186,18 @@ class plotLegend:
             loc = 'center'
         else:
             raise ValueError(f'Unexpected legendloc {legendloc}')
+        patches = self.patches()
+        if self.wideLegend:
+            ncols = len(patches)
+            ncols = min(7, ncols)
+        else:
+            ncols = 1
+        self.swatches = ax.legend(handles=patches, bbox_to_anchor=bbox
+                                  , loc=loc, ncols=ncols, frameon=False, fontsize=self.fs)
         
-        self.swatches = ax.legend(handles=self.patches(), bbox_to_anchor=bbox, loc=loc, frameon=False, fontsize=self.fs)
+        # change font colors to match ticks
+        for i,text in enumerate(self.swatches.get_texts()):
+            text.set_color(self.colorList[i])
             
     
     def colorBar(self, fig, legendy:float=-0.1, legendloc:str='below', **kwargs) -> None:
