@@ -40,14 +40,14 @@ class folderLoop:
                 # list of specific folders
                 self.folders = []
                 for folder in folders:
-                    self.folders = self.folders + printFolders(folder, mustMatch=mustMatch, canMatch=canMatch)
+                    self.folders = self.folders + printFolders(folder, mustMatch=mustMatch, canMatch=canMatch, **kwargs)
             elif not os.path.exists(folders):
                 self.topFolder = ''
                 self.folders = []
             else:
                 # top folder, recurse
                 self.topFolder = folders
-                self.folders = printFolders(folders, mustMatch=mustMatch, canMatch=canMatch)
+                self.folders = printFolders(folders, mustMatch=mustMatch, canMatch=canMatch, **kwargs)
         self.func = func
         self.mustMatch = mustMatch
         self.canMatch = canMatch
@@ -59,13 +59,16 @@ class folderLoop:
     def runFolder(self, folder:str) -> None:
         '''run the function on one folder'''
         if not isPrintFolder(folder):
+            # self.folderErrorList.append({'folder':folder, 'error':'not a print folder'})
             return
         
         # check that the folder matches all keys
         if not allIn(self.mustMatch, folder):
+            # self.folderErrorList.append({'folder':folder, 'error':f'does not match {self.mustMatch}'})
             return
         
         if not anyIn(self.canMatch, folder):
+            # self.folderErrorList.append({'folder':folder, 'error':f'does not match {self.canMatch}'})
             return
 
         if self.folderDiag>0:

@@ -86,6 +86,7 @@ class summarySDT(summaryMetric):
         '''import the stills summary and convert sweep types, capillary numbers'''
         self.ss,self.u = plainIm(self.file, ic=False)
         self.flipInv()
+        [self.addDnormAdj(fluid, dire) for fluid in ['ink', 'sup'] for dire in ['a', 'd']]
         for col in ['ink_surfactantWt', 'sup_surfactantWt']:
             self.ss[col] = self.ss[col].fillna(0)
         if diag:
@@ -107,7 +108,7 @@ class summarySDT(summaryMetric):
             if si in spl:
                 spl.remove(si)
         if len(spl)>1:
-            if 'space' in spl or 'spacing' in spl:
+            if 'space' in spl or 'spacing' in spl or 'adj' in spl:
                 return '_'.join(spl)
             else:
                 raise ValueError(f'Unexpected value {s} passed to summarySDT.strip')
@@ -126,12 +127,15 @@ class summarySDT(summaryMetric):
         qualitative = [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax']
         extra = ['l0w1', 'l0w1relax',  'l0w2','l0w2relax', 'l0d2', 'l0d2relax'
                        , 'l2w1', 'l2w1relax', 'l2w2', 'l2w2relax', 'l2d2', 'l2d2relax']
+        adjustments = [f'{fluid}_dnorm{dire}_adj' for fluid in ['ink', 'sup'] for dire in ['a', 'd']]
         print('\033[1mDependents:\033[0m ')
         d = set(deps)
-        for key,l in {'Position':pos, 'Dimensions':dims, 'Fusion':fusion, 'Gaps':gaps, 'Qualitative':qualitative, 'Extra':extra}.items():
+        for key,l in {'Position':pos, 'Dimensions':dims, 'Fusion':fusion, 'Gaps':gaps, 'Qualitative':qualitative, 'Extra':extra, 'Adjustments':adjustments}.items():
             li = d.intersection(set(l))
             if len(li)>0:
-                print(f'\t\033[31m', '{:<12}:'.format(key), '\033[0m\t',  ', '.join(list(li)))
+                li = list(li)
+                li.sort()
+                print(f'\t\033[31m', '{:<12}:'.format(key), '\033[0m\t',  ', '.join(li))
             d = d.difference(li)
         if len(d)>0:
             print(f'\t\033[31m', '{:<12}:'.format('Unsorted'), '\033[0m\t',  ', '.join(list(d)))
@@ -183,6 +187,22 @@ class summarySDT(summaryMetric):
     def addLogs(self, varlist:List[str], **kwargs) -> pd.DataFrame:
         '''add log values for the list of variables to the dataframe'''
         return super().addLogs(self.firstDepCol(), varlist, **kwargs)
+    
+    def addDnormAdj(self, fluid:str, dire:str) -> None:
+        '''add an adjusted dnorm value based on the actual line thickness for a fluid (ink or sup) and direction (ascending or descending)'''
+        dire = dire[0]
+        tau = f'{fluid}_tau0{dire}'
+        dnorm = f'{fluid}_dnorm{dire}_adj'
+        if self.type=='vert' or self.type=='horiz' or self.type=='under':
+            t = 'meanT_w1o'
+        elif 'XS+y' in self.file:
+            t = 'w_w1o'
+        elif 'XS+z' in self.file:
+            t = 'h_w1o'
+        else:
+            raise ValueError('Could not determine print type')
+        self.ss[dnorm] = [(row[t]*row['dEst'])/(row['sigma']/row[tau]) if row['sigma']>0 else 0 for i,row in self.ss.iterrows()]
+        self.u[dnorm]=''
     
     def depVarSpl(self, s:str) -> str:
         '''split the dependent variable to convert it to a new name'''

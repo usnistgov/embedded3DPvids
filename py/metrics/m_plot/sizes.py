@@ -36,12 +36,12 @@ class sizes:
                 maxwidth = 6.5
             self.getFigSize(maxwidth, 8.5)
             self.markersize=20
-            self.linewidth = 1
+            self.linewidth = 0.75
         elif self.plotType=='paperhalf':
             self.fs = 8
             self.getFigSize(3.25, 3.25)
             self.markersize = 20
-            self.linewidth = 1
+            self.linewidth = 0.75
         elif self.plotType=='notebook':
             self.fs = 10
             self.getFigSize(10, 10)

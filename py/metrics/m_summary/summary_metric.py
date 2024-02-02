@@ -80,7 +80,10 @@ class summaryMetric:
             com = ','
         else:
             com = '.'
-        last = var[-1]
+        if var[-3:]=='adj':
+            last = var[-5]
+        else:
+            last = var[-1]
         if not last in ['a', 'd']:
             last = ''
         else:
@@ -92,9 +95,13 @@ class summaryMetric:
         elif var[:3]=='dPR':
             return '$d_{PR'+com+fluid+last+'}$'
         elif var[:5]=='dnorm':
-            return '$\overline{d_{PR'+com+fluid+last+'}}$'
-        elif var[:5]=='dnorm' and var[-3]=='Inv':
-            return '$1/\overline{d_{PR'+com+fluid+last+'}}$'
+            if var[-3:]=='Inv':
+                return '$1/\overline{d_{PR'+com+fluid+last+'}}$'
+            elif var[-3:]=='adj':
+                last = f'{last},adj'
+                return '$\overline{d_{PR'+com+fluid+last+'}}$'
+            else:
+                return '$\overline{d_{PR'+com+fluid+last+'}}$'
         elif var[:2]=='Bm':
             return '$Bm_{'+fluid+last+'}$'
         elif var=='rate':
@@ -119,6 +126,7 @@ class summaryMetric:
             return r'$\tau_{ink'+com+'d}/G\'_{sup'+com+'d}$'
         elif var=='spacing_adj':
             return 'adjusted spacing'
+        
         else:
             if var.endswith('Inv'):
                 varsymbol = '1/'+var[:-3]
@@ -199,6 +207,9 @@ class summaryMetric:
         iv = self.indepVars()
         mv = self.metaVars()
         const = list(filter(lambda x: not x in mv, iv))
+        for s in [f'{fluid}_dnorm{dire}_adj' for fluid in ['ink', 'sup'] for dire in ['a', 'd']]:
+            if s in self.ss:
+                const.append(s)
         print('\033[1mIndependents:\033[0m ')  
         for key,l in {'meta':mv, 'const':const}.items():
             self.printList(lambda x:(not 'sup' in x and not 'ink' in x), l, f'{key}    ')
@@ -228,6 +239,8 @@ class summaryMetric:
         deps = k[firstCol:]
         deps = deps[~(deps.str.endswith('_SE'))]
         deps = deps[~(deps.str.endswith('_N'))]
+        adjustments = [f'{fluid}_dnorm{dire}_adj' for fluid in ['ink', 'sup'] for dire in ['a', 'd']]
+        deps = list(set(deps).difference(set(adjustments)))
         return deps
     
     def numericDepVars(self) -> List[str]:

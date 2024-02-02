@@ -55,7 +55,7 @@ class qualityScatter(multiPlot):
         if 'sharey' in kwargs:
             self.sharey = kwargs['sharey']
             kwargs.pop('sharey')
-        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, **kwargs)
+        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, **kwargs)
         self.combineLegendBox()
         self.plots()
         
@@ -106,10 +106,11 @@ class qualityScatter(multiPlot):
 class qualityScatterSpacing(multiPlot):
     '''for plotting quality as color on the same x and y var on different axes, for different spacings'''
     
-    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, cvar0:str
+    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, cvar0:str, y0var:str='spacing_adj'
                  , write:bool=True, relax:bool=True, dx:float=0.05, dy:float=0.05, **kwargs):
         self.xvar = xvar
         self.yvar = yvar
+        self.y0var = y0var
         self.cvar0 = cvar0  # l1w1, l1w2, l1w3, l1d2, or l1d2 or l1w2w3
         self.write=write
         self.relax=relax
@@ -133,7 +134,7 @@ class qualityScatterSpacing(multiPlot):
         if 'sharey' in kwargs:
             self.sharey = kwargs['sharey']
             kwargs.pop('sharey')
-        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, **kwargs)
+        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, **kwargs)
         self.combineLegendBox()
         self.groupCols()
         self.plots()
@@ -255,7 +256,7 @@ class qualityScatterSpacing(multiPlot):
             else:
                 title = 'simplified'
                 ss = self.sssimple
-                kwargs['yvar']='spacing_adj'
+                kwargs['yvar'] = self.y0var
                 kwargs['logy'] = False
                 kwargs['dy'] = 0.15
         elif j==1:

@@ -21,6 +21,7 @@ from tools.config import cfg
 import f_tools as ft
 import levels as le
 import file_names as fn
+from tools.plainIm import plainIm
 
 
 # logging
@@ -54,8 +55,12 @@ def getPrintFolder(folder:str, **kwargs) -> str:
     levels = le.labelLevels(folder)
     return levels.printFolder()
  
-def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[], **kwargs) -> List[str]:
+def printFolders(topFolder:str, tags:List[str]=[''], someIn:List[str]=[],  **kwargs) -> List[str]:
     '''Get a list of bottom level print folders in the top folder'''
+    if 'folderFile' in kwargs:
+        fostrlist, _ = plainIm(kwargs['folderFile'])
+        if len(fostrlist)>0:
+            return [os.path.join(cfg.path.server, fostr) for fostr in fostrlist['fostr']]
     if 'mustMatch' in kwargs:
         tags = kwargs['mustMatch']
     if 'canMatch' in kwargs:

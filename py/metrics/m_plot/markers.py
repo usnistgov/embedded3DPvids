@@ -171,7 +171,7 @@ class plotMarkers:
         if val=='fuse droplets':
             return 'P' # indigo
         if val=='rupture' or val=='rupture combined':
-            return '8' # red
+            return 'X' # red
         if val=='rupture 2':
             return '$E$' # burnt red
         if val=='rupture 1':
@@ -181,7 +181,7 @@ class plotMarkers:
         if val=='rupture 3':
             return '$K$' # yellow
         if val=='rupture both' or val=='rupture 1 2':
-            return 'X' # peach
+            return '$8$' # peach
         if val=='rupture 2 step':
             return '$\#$'
         if val=='fuse rupture' or val=='fuse 1 2 and rupture 12': 
@@ -201,7 +201,7 @@ class plotMarkers:
     def markerStyle(self, val:Any, color:str) -> dict:
         '''get the marker styling'''
         out = {'marker':self.getMarker(val), 'color':color, 'linewidth':self.lineWidth, 's':self.markerSize}
-        if self.filledMarker:
+        if self.filledMarker or val in ['no change', 'no fusion']:
             out['facecolors'] = color
             out['edgecolors'] = 'none'
         else:

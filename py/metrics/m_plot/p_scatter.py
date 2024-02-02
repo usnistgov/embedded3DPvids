@@ -58,7 +58,8 @@ class scatterPlot(metricPlot):
         '''
     
     def __init__(self, ms, ss:pd.DataFrame, plotReg:bool=False
-                 , grid:bool=True, lines:bool=False, dx:float=0.1, dy:float=1, wideLegend:bool=False, **kwargs):
+                 , grid:bool=True, lines:bool=False, dx:float=0.1, dy:float=1
+                 , wideLegend:bool=False, **kwargs):
         self.plotReg = plotReg
         self.grid = grid
         self.lines = lines
@@ -85,6 +86,8 @@ class scatterPlot(metricPlot):
                                   ,linestyle='None', zorder=100
                                   ,c=df2['c'], cmap=self.cmapname
                                   ,**varargs)
+        if not self.errorBars:
+            return
         if not 'xerr' in df2:
             return
         # plot error bars
@@ -107,6 +110,8 @@ class scatterPlot(metricPlot):
         '''plot series, with constant color'''
         # plot points
         self.sc = self.ax.scatter(df2['x'],df2['y'], **varargs)
+        if not self.errorBars:
+            return
         if not 'xerr' in df2:
             return
         # plot error bar

@@ -81,7 +81,8 @@ class xvarlines(multiPlot):
             return   
         
         if type(self.yideal) is dict:
-            kwargs['yideal'] = self.yideal[y]
+            if y in self.yideal:
+                kwargs['yideal'] = self.yideal[y]
         else:
             kwargs['yideal'] = self.yideal.yideal(y)
         self.objs[i,j] = scatterPlot(self.ms, self.ss

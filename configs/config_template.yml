@@ -19,6 +19,7 @@ path:
     pCalibFolder: "folder/flow rates"
     openFoamFolder: "myfolder/openfoam/summaries"
     pyqtFolder: "myfolder/GitHub/ShopbotPyQt/SBP_files"
+    folderList: "export/figures/here/list_of_folders_relative_to_server"
 const:
     di: 0.603   # nozzle inner diameter. this is only used if there is no metadata in the folder
     do: 0.907   # nozzle outer diameter. this is only used if there is no metadata in the folder

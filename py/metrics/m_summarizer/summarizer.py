@@ -94,6 +94,14 @@ class summarizer(fh.folderLoop):
                 self.out.append(summary)
             else:
                 self.out = self.out+list(summary.values())
+        else:
+            # failed to collect any data
+            if not os.path.exists(folder):
+                error = 'folder does not exist'
+            else:
+                error = 'failed to collect data'
+            self.failures = pd.concat([self.failures, pd.DataFrame([{'file':folder, 'error':error}])])
+                
         if len(failures)>0:
             flist = []
             for i,row in failures.iterrows():

@@ -89,3 +89,44 @@ def shrinkagePlot(ms, fstri:str, export:bool=True) -> None:
     if export:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shrinkage_{orie}'))
     return yvl
+
+def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
+    '''plot the shift in position'''
+    if orie=='HOP':
+        near = 'yTop'
+        far = 'yBot'
+        nearstr = 'y_{top}'
+        farstr= 'y_{bot}'
+    elif orie=='HIP':
+        near = 'y0'
+        far = 'yf'
+        nearstr = 'y_{near}'
+        farstr = 'y_{far}'
+    elif orie=='V':
+        near = 'xf'
+        far = 'x0'
+        nearstr = 'x_{near}'
+        farstr = 'x_{far}'
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[[xvar for i in range(3)] for j in range(2)]
+                       , yvars=[[f'{var}_w1o', f'delta_{var}_disturb1', f'{var}_w2o'] for var in [near, far]]
+                       , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=False, sharex=True, legendAbove=True, tightLayout=False
+                   , logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=True)
+    [yvl.shareAxes(i,j,0,0,s) for s in ['x','y'] for (i,j) in [(0,2), (1,0), (1,2)]]
+    [yvl.shareAxes(0,1,1,1,s) for s in ['x', 'y']]
+    yvl.plots()
+    [yvl.axs[0,j].set_ylabel('$'+nearstr+'$ ($d_{est}$)', fontsize=8) for j in [0,2]]
+    [yvl.axs[1,j].set_ylabel('$'+farstr+'$ ($d_{est}$)', fontsize=8) for j in [0,2]]
+    [yvl.axs[0,j].set_ylabel('$\Delta '+nearstr+'$ ($d_{est}$)', fontsize=8) for j in [1]]
+    [yvl.axs[1,j].set_ylabel('$\Delta '+farstr+'$ ($d_{est}$)', fontsize=8) for j in [1]]
+    [yvl.axs[i,0].set_title('After writing line 1', fontsize=8) for i in [0,1]]
+    [yvl.axs[i,1].set_title('While disturbing line 1', fontsize=8) for i in [0,1]]
+    [yvl.axs[i,2].set_title('After writing line 2', fontsize=8) for i in [0,1]]
+    if xvar=='tau0aRatio':
+        for j in [0,1,2]:
+            for i in [0,1]:
+                yvl.axs[i,j].set_xticks([0.03, 0.1, 0.3])
+                yvl.axs[i,j].xaxis.set_major_formatter('{x:.2f}')
+                yvl.axs[i,j].yaxis.set_minor_locator(MultipleLocator(0.1))
+    if export:
+        yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_{orie}'))
+    return yvl

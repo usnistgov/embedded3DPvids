@@ -152,7 +152,7 @@ class folderMetric(timeObject):
         if os.path.exists(self.fn) and not self.overwriteMeasure:
             self.df, self.du = plainIm(self.fn, ic=0)
             if 'line' in self.df:
-                self.df.fillna({'line':0}, inplace=True)
+                self.df.fillna({'line':'', 'gname':''}, inplace=True)
             else:
                 self.overwriteMeasure=True
                 self.measureFolder()
@@ -349,6 +349,8 @@ class folderMetric(timeObject):
             if len(d)>0 and d['r2']>rcrit:
                 slope = d['b']
                 if self.splitGroups:
+                    if not type(gname) is str:
+                        gname = gname[0]
                     l = [gname, 'total']
                 else:
                     l = ['total']
@@ -381,6 +383,8 @@ class folderMetric(timeObject):
                     n = n1+n2
                     name = f'delta_{var}_{nm}'
                     if self.splitGroups:
+                        if not type(gname) is str:
+                            gname = gname[0]
                         l00 = [gname, 'total']
                     else:
                         l00 = ['total']

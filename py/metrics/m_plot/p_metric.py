@@ -53,6 +53,7 @@ class metricPlot:
                  , dx:float=0.1, dy:float=1
                  , empty:bool=True
                  , justLegend:bool=False
+                 , errorBars:bool=True
                  ,  **kwargs):
         self.kwargs0 = kwargs
         self.xvar = xvar
@@ -81,6 +82,7 @@ class metricPlot:
         self.dy = dy
         self.empty = empty
         self.justLegend = justLegend
+        self.errorBars = errorBars
         self.setUpDims()
         self.getStyles()
         if not self.justLegend:
@@ -349,13 +351,13 @@ class metricPlot:
             yerr = 0
         else:
             # measure mean and standard error
-            xm, xerr, _ = pooledSEDF(ss3, self.xvar)
+            xm, xerr, _ = pooledSEDF(ss3, self.xvar, error=self.errorBars)
             
-            ym, yerr, _ = pooledSEDF(ss3, self.yvar)
+            ym, yerr, _ = pooledSEDF(ss3, self.yvar, error=self.errorBars)
         if self.cvar in ss3:
             # get value for coloring
             try:
-                c0, _, _ = pooledSEDF(ss3, self.cvar)
+                c0, _, _ = pooledSEDF(ss3, self.cvar, error=self.errorBars)
             except:
                 c0 = 0
         else:
@@ -364,7 +366,10 @@ class metricPlot:
             xerr = 0
         if pd.isna(yerr):
             yerr = 0
-        return {'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0}
+        if self.errorBars:
+            return {'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0}
+        else:
+            return {'x':xm, 'y':ym, 'c':c0}
     
     def toGrid(self, ss2:pd.DataFrame, rigid:bool=False) -> pd.DataFrame:
         '''convert the data to an evenly spaced grid. 
@@ -422,16 +427,19 @@ class metricPlot:
         df2 = []
         for i in range(numgrps):
             ss3 = ss2.iloc[((i-1)*pergrp):min(len(ss2),(i*pergrp))]
-            xm, xerr, _ = pooledSEDF(ss3, self.xvar)
-            ym, yerr, _ = pooledSEDF(ss3, self.yvar)
+            xm, xerr, _ = pooledSEDF(ss3, self.xvar, error=self.errorBars)
+            ym, yerr, _ = pooledSEDF(ss3, self.yvar, error=self.errorBars)
             if self.zvar in ss3:
                 try:
-                    c0, _, _ = pooledSEDF(ss3, self.zvar)
+                    c0, _, _ = pooledSEDF(ss3, self.zvar, error=self.errorBars)
                 except:
                     c0 = 0
             else:
                 c0 = 0
-            df2.append({'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0})
+            if self.errorBars:
+                df2.append({'x':xm, 'xerr':xerr, 'y':ym, 'yerr':yerr, 'c':c0})
+            else:
+                df2.append({'x':xm, 'y':ym, 'c':c0})
         df2 = pd.DataFrame(df2)
         return df2
     

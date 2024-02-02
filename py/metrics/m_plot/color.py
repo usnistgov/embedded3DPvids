@@ -209,9 +209,9 @@ class plotColors:
     def qualityDict(self, val:str) -> str:
         '''get a color given a quality'''
         if val=='no change' or val=='no fusion':
-            return 'gray'
+            return '#bcbcbc'
         if val=='fuse' or val=='fuse 1 2 3':
-            return '#0c0fc7' # dark blue
+            return '#6081c5' # dark blue
         if val=='fuse last':
             return '#3477eb' #blue
         if val=='fuse 1 2':
@@ -237,7 +237,7 @@ class plotColors:
         if val=='fuse droplets':
             return '#110c75' # indigo
         if val=='rupture' or val=='rupture combined':
-            return '#e8092e' # red
+            return '#e06b4a' # peach
         if val=='rupture 2':
             return '#9c2e1f' # burnt red
         if val=='rupture 2 step':
@@ -251,7 +251,7 @@ class plotColors:
         if val=='rupture both' or val=='rupture 1 2':
             return '#e06b4a' # peach
         if val=='fuse rupture' or val=='fuse 1 2 and rupture 12': 
-            return '#782bc4' # purple
+            return '#18da3f' # green
         if val=='rupture both fuse droplets':
             return '#ab84e0' # light purple
         else:

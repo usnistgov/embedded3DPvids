@@ -67,11 +67,14 @@ def pooledSESingle(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
     return mean, se
 
 
-def pooledSE(vals:list, ses:list, ns:list) -> Tuple[float, float, int]:
+def pooledSE(vals:list, ses:list, ns:list, error:bool=True) -> Tuple[float, float, int]:
     '''given list of means, standard errors, and sizes, calculate the pooled mean, standard error, and sample size for a group of values, each with their own standard error. https://en.wikipedia.org/wiki/Pooled_variance'''
     N = len(vals)   # number of means
     n = np.sum(ns)  # number of samples
     mean = np.sum([(ns[i]*vals[i]) for i in range(N)])/n # weighted mean
+    if not error:
+        # don't calculate error
+        return mean, 0, n
     
     if not len(vals)==len(ses) or not len(ses)==len(ns):
         raise ValueError(f'Mismatched array lengths in pooledSE: vals {len(vals)}, SE {len(ses)}, N {len(ns)}')
@@ -92,7 +95,7 @@ def pooledSE(vals:list, ses:list, ns:list) -> Tuple[float, float, int]:
         se = vals.sem()
     return mean, se, n
 
-def pooledSEDF(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
+def pooledSEDF(df:pd.DataFrame, var:str, error:bool=True) ->  Tuple[float, float]:
     '''given a dataframe and a variable name, calculate the pooled mean, standard error, and sample size for a group of values, each with their own standard error'''
     sevar = f'{var}_SE'
     nvar = f'{var}_N'
@@ -111,7 +114,7 @@ def pooledSEDF(df:pd.DataFrame, var:str) ->  Tuple[float, float]:
     vals = list(df2[var])
     ses = list(df2[sevar])
     ns = list(df2[nvar])
-    return pooledSE(vals, ses, ns)
+    return pooledSE(vals, ses, ns, error=error)
 
 def tossBigSE(df:pd.DataFrame, column:str, quantile:float=0.9):
     '''toss rows with big standard errors from the list'''
