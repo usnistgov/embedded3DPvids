@@ -109,3 +109,4 @@ class nozDetector:
         # if all modes failed:
         self.np.drawDiagnostics(diag) # show diagnostics
         raise ValueError(f'Failed to detect nozzle after {loops*len(modes)} iterations')
+        

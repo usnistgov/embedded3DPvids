@@ -40,8 +40,8 @@ matplotlib.rc('font', size='10.0')
 class picPlots:
     '''this creates a figure that is a grid of pictures'''
     
-    def __init__(self, topFolder:str, exportFolder:str, allIn:List[str], dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, imsize:float=6.5, export:bool=True, **kwargs):
-        self.concat = 'h'
+    def __init__(self, topFolder:str, exportFolder:str, allIn:List[str], dates:List[str], tag:str, overwrite:bool=False, showFig:bool=True, imsize:float=6.5, export:bool=True, concat:str='h', **kwargs):
+        self.concat = concat
         self.topFolder = topFolder
         self.bn = os.path.basename(self.topFolder)
         self.exportFolder = exportFolder
@@ -147,6 +147,8 @@ class picPlots:
             self.cp.fig.tight_layout()
         else:
             self.cp.clean()
+        for ax in self.cp.axs:
+            ax.tick_params(axis=u'both', which=u'both',length=0)
         if 'title' in self.kwargs:
             self.cp.axs[0].set_title(self.kwargs['title'], fontsize=8)
     
@@ -213,6 +215,7 @@ class picPlots:
             return
 
         self.getDims()
+        # print(self.dx, self.dy)
         self.cp = comboPlot(self.flist, [-self.dx, self.dx], [-self.dy, self.dy], self.imsize, gridlines=False, **self.kwargs)
         self.picPlots()
         self.exportIm()

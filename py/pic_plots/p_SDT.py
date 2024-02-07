@@ -37,16 +37,15 @@ matplotlib.rc('font', size='10.0')
 class multiPlotsSDT(multiPlots):
     '''given a sample type folder, plot values'''
     
-    def __init__(self, folder:str, exportFolder:str, **kwargs):
+    def __init__(self, folder:str, exportFolder:str, transpose:bool=False, **kwargs):
         super().__init__(folder, exportFolder, ['*'], **kwargs)
-      
-
         if 'vels' in os.path.basename(folder):
             self.xvar = 'ink.v'
             self.yvar = 'sup.v'
         else:
             self.xvar = 'ink.var'
             self.yvar = 'sup.var'
+        
             
             
     def keyPlots(self, **kwargs):
@@ -84,7 +83,7 @@ class multiPlotsSDT(multiPlots):
         else:
             crops = {'relative':True}
             if name[:-1]=='HIx':
-                crops = {**crops, 'w':200, 'h':150, 'wc':50, 'hc':110}
+                crops = {**crops, 'w':150, 'h':150, 'wc':50, 'hc':110}
             elif name[:-1]=='HOx':
                 crops = {**crops, 'w':100, 'h':250, 'wc':50, 'hc':200}
             elif name[:-1]=='HOh':
@@ -116,7 +115,7 @@ class multiPlotsSDT(multiPlots):
             sup = kwargs['sup']
             allIn.append(f'S_{sup}')
             kwargs2['S'] = sup
-            xvar = self.yvar
+            # xvar = self.yvar
             freevars+=1
         if 'inkv' in kwargs:
             inkv = kwargs['inkv']
@@ -130,10 +129,16 @@ class multiPlotsSDT(multiPlots):
             freevars+=1
         if freevars+2<self.freevars:
             raise ValueError(f'Too many variables to plot. Designate {self.freevarList} where needed')
-        return allIn, xvar, yvar
+        if 'transpose' in kwargs and kwargs['transpose']:
+            return allIn, yvar, xvar
+        else:
+            return allIn, xvar, yvar
 
-    def getConcat(self, name:str) -> str:
+    def getConcat(self, name:str, kwargs) -> str:
         '''get the direction to concatenate images'''
+        if 'concat' in kwargs:
+            concat = kwargs.pop('concat')
+            return concat
         if name[:-1] in ['HOh', 'HIx', 'HIh']:
             concat = 'v'
         else:
@@ -185,12 +190,12 @@ class multiPlotsSDT(multiPlots):
         allIn = [file]
         overlay = {'dx':-0.7, 'dy':-0.7}
         self.getOverlay(name, overlay)
-        concat = self.getConcat(name)
+        concat = self.getConcat(name, kwargs2)
         if 'HIh' in name:
             overlay['color'] = 'white'
             overlay['dy']=-0.3
         elif 'V' in name:
-            kwargs2['rotate'] = True  # rotate 90 degress clockwise
+            kwargs2['rotate'] = True  # rotate 90 degrees clockwise
             overlay['shiftdir'] = 'y'
             concat = 'v'
         
@@ -203,6 +208,7 @@ class multiPlotsSDT(multiPlots):
                             , allIn, [], tag, showFig=showFig, export=export
                             , overlay=overlay
                             , xvar=xvar, yvar=yvar, concat=concat
+                          , spacerThickness=0
                             , **kwargs2)
             pp.picPlots0()
 
@@ -229,3 +235,4 @@ class singleFilePicsSDT:
                 tags.append(self.row[t])
         dirtag = {'HOP':'HOh', 'HIP':'HIh', 'V':'V'}[self.direction]
         self.mp.plot(f'{dirtag}{self.num}', tag=tags, ink=self.mp.inkList[0], imsize=imsize, title=self.title, times=times, **kwargs)
+        

@@ -277,3 +277,4 @@ class nozDetectorSide(nozDetector):
 
         if 'xf' in self.crops:
             self.nd.adjustForCrop(self.crops)
+            

@@ -305,6 +305,7 @@ class folderImages:
             dy = dy0*height/pxperunit
             dx = dy*width/height
 
+        # print(widthI, heightI, width, height, dx, dy, dx0, dy0)
         return dx, dy, pxperunit
     
     def parseTag(self, tag:str) -> dict:
@@ -453,10 +454,10 @@ class folderImages:
             return
 
         # get scaling
-        if self.rotate:
-            temp = dx0
-            dx0 = dy0
-            dy0 = dx0
+        # if self.rotate:
+        #     temp = dx0
+        #     dx0 = dy0
+        #     dy0 = dx0
         dx, dy, self.pxperunit = self.getWidthScaling(dx0, dy0)
 
         s = self.scale # scale images to leave white space
@@ -465,3 +466,4 @@ class folderImages:
         self.ax.imshow(self.im, extent=[self.x0-dx*s, self.x0+dx*s, self.y0-dy*s, self.y0+dy*s])
         self.picPlotOverlay(t, s, dx0, dy0)
         self.picPlotTimes()
+        

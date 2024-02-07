@@ -193,7 +193,7 @@ class plotLegend:
         else:
             ncols = 1
         self.swatches = ax.legend(handles=patches, bbox_to_anchor=bbox
-                                  , loc=loc, ncols=ncols, frameon=False, fontsize=self.fs)
+                                  , loc=loc, ncol=ncols, frameon=False, fontsize=self.fs)
         
         # change font colors to match ticks
         for i,text in enumerate(self.swatches.get_texts()):
@@ -215,3 +215,4 @@ class plotLegend:
             
         cbar = plt.colorbar(sm, cax=cbaxes, orientation=ori)
         cbar.ax.set_xlabel(self.colors.clabel, fontsize=self.fs)
+        

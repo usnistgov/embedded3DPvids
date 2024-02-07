@@ -79,12 +79,12 @@ class folderXSSDT(folderSDT):
             for num in range(4):
                 wo = self.dfline(f'l{num}{p1}')  # get measurements of images
                 do = self.dfline(f'l{num}{p2}')  
-                time = self.pairTime([f'l{num}{p1}', f'l{num}{p2}'])  # get time between images
+                # time = self.pairTime([f'l{num}{p1}', f'l{num}{p2}'])  # get time between images
                 if len(wo)>0 and len(do)>0:
                     for s in ovars:
                         try:
                             u = self.du[s]
-                            self.addValue(f'delta_{s}_{title}', difference(do, wo, s)/time, f'{u}/{tunits}')
+                            self.addValue(f'delta_{s}_{title}', difference(do, wo, s), f'{u}')
                         except ValueError:
                             pass
         

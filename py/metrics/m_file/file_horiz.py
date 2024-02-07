@@ -188,3 +188,4 @@ class fileHoriz(fileMetric):
         dispunits = dict([[ii, 'px'] for ii in disps])
         self.stats = {**self.stats, **disps}
         self.units = {**self.units, **dispunits}
+        

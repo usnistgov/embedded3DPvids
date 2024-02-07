@@ -130,3 +130,34 @@ def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
     if export:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_{orie}'))
     return yvl
+
+def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
+    '''plot the shift in position'''
+    near = 'yTop'
+    far = 'yBot'
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[[xvar] for i in range(4)]
+                       , yvars=[[f'delta_{var}_{change}'] for var in [near, far] for change in ['disturb1', 'write2']]
+                       , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=True, sharex=True, legendAbove=False, tightLayout=True
+                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.5, 8))
+    for j in [0,1,2,3]:
+        yvl.axs[j,0].yaxis.set_minor_locator(MultipleLocator(0.05))
+    if export:
+        yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_xs_{orie}'))
+    return yvl
+
+def fusionPlot(ms, orie:str, export:bool=False) -> None:
+    sp = mp.scatterPlot(ms, ms.ss, xvar='tau0aRatio', yvar='roughness_w2o', cvar='spacing', logx=True, plotType='paper', figsize=(3*6.5/7.2, 2.5*6.5/7.2))
+    # sp.ax.set_xticks([30, 100, 300])
+    # sp.ax.set_xticklabels([30, 100, 300])
+    sp.ax.set_ylim([0, 1])
+    sp.ax.yaxis.set_minor_locator(MultipleLocator(0.1))
+    sp.ax.set_ylabel('Roughness after writing line 2', fontsize=8)
+    if orie=='HIP':
+        sp.ax.set_title('Horizontal in plane', fontsize=8)
+    elif orie=='HOP':
+        sp.ax.set_title('Horizontal out of plane', fontsize=8)
+    elif orie=='V':
+        sp.ax.set_title('Vertical', fontsize=8)
+    if export:
+        sp.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'fusion_{orie}'))
+    return sp
