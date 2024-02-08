@@ -107,6 +107,8 @@ class metricPlot:
             self.fs = self.kwargs0.pop('fs')
         else:
             self.fs = self.sizes.fs
+        if 'markersize' in self.kwargs0:
+            self.sizes.markersize = self.kwargs0['markersize']
         plt.rc('font', size=self.fs) 
         
         if 'fig' in self.kwargs0:
@@ -371,7 +373,7 @@ class metricPlot:
         else:
             return {'x':xm, 'y':ym, 'c':c0}
     
-    def toGrid(self, ss2:pd.DataFrame, rigid:bool=False) -> pd.DataFrame:
+    def toGrid(self, ss2:pd.DataFrame, rigid:bool=False, **kwargs) -> pd.DataFrame:
         '''convert the data to an evenly spaced grid. 
         xvar, yvar, zvar are variable names (columns in ss2)
         logx and logy True to space variables on log scale

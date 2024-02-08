@@ -69,6 +69,8 @@ class multiPlot:
         self.fs, self.figsize, self.markersize, self.linewidth = sizes(self.rows, self.cols, self.plotType).values()
         if 'figsize' in self.kwargs0:
             self.figsize = self.kwargs0['figsize']
+        if 'markersize' in self.kwargs0:
+            self.markersize = self.kwargs0['markersize']
         plt.rc('font', size=self.fs) 
 
         if self.legendAbove:

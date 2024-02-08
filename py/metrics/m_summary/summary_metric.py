@@ -87,9 +87,16 @@ class summaryMetric:
         if not last in ['a', 'd']:
             last = ''
         else:
-            last = com+{'a':'asc', 'd':'desc'}[last]
+            if len(fluid)>0:
+                last0 = com
+            else:
+                last0 = ''
+            last = last0+{'a':'asc', 'd':'desc'}[last]
         if var=='visc' or var=='visc0':
-            return '$\eta_{'+fluid+'}$'
+            if len(fluid)>0:
+                return '$\eta_{'+fluid+'}$'
+            else:
+                return '$\eta$'
         elif var=='tau0':
             return '$\tau_{y'+com+fluid+'}$'
         elif var[:3]=='dPR':
@@ -105,11 +112,17 @@ class summaryMetric:
         elif var[:2]=='Bm':
             return '$Bm_{'+fluid+last+'}$'
         elif var=='rate':
-            return '$\dot{\gamma}_{'+fluid+'}$'
+            if len(fluid)>0:
+                return '$\dot{\gamma}_{'+fluid+'}$'
+            else:
+                return '$\dot{\gamma}$'
         elif var=='val':
             return {'ink':'ink', 'sup':'support'}[fluid]
         elif var[:5]=='Gstor':
-            return '$G\'_{'+fluid+last+'}$'
+            if len(fluid)>0:
+                return '$G\'_{'+fluid+last+'}$'
+            else:
+                return '$G\'$'
         elif var[:4]=='tau0':
             return r'$\tau_{y'+com+fluid+last+'}$'
         elif var=='GaRatio':

@@ -34,18 +34,64 @@ matplotlib.rc('font', size='10.0')
 
 #-------------------------------------------------------------
 
+def simplifyOutliers(ss:pd.DataFrame) -> None:
+    '''simplify rare morphologies'''
+    ss.replace({'fuse 1 2 bubbles':'fuse 1 2'
+                , 'fuse 1 2 partial fuse 2 3':'fuse 1 2 3'
+                , 'fuse 12 3':'fuse 2 3'
+                , 'rupture 1 fuse 2 3':'fuse rupture'
+                , 'rupture 1 fuse droplets':'fuse rupture'
+                , 'rupture 2 fuse droplets':'fuse rupture'
+                , 'rupture1':'rupture 1'
+                , 'fuse bubbles':'fuse'}, inplace=True)
+    
+def simplifyMorphologies(ss:pd.DataFrame) -> None:
+    '''simplify all morphologies to rupture, fusion, partial fusion'''
+    ss.replace({'fuse 1 2':'fuse'
+                , 'fuse 2 3':'fuse'
+                , 'fuse 1 3':'fuse'
+                , 'fuse 1 2 3':'fuse'
+                , 'partial fuse 1 2 3':'partial fuse'
+                , 'partial fuse 2 3':'partial fuse'
+                , 'partial fuse 1 2':'partial fuse'
+                , 'partial fuse 1 3':'partial fuse'
+                , 'fuse droplets':'partial fuse'
+                , 'rupture combined':'rupture'
+                , 'rupture 1':'rupture'
+                , 'rupture 2':'rupture'
+                , 'rupture 3':'rupture'
+                , 'rupture both':'rupture'
+                , 'rupture 1 2':'rupture'
+                , 'fuse 1 2 and rupture 12':'fuse rupture'
+                , 'rupture both fuse droplets':'fuse rupture'}, inplace=True)
+    
+def plainEnglishQuality(cvar:str) -> str:
+    '''convert the measured quality variable to plain english'''
+    out = ''
+    if 'relax' in cvar:
+        s1 = 'After'
+    else:
+        s1 = 'While'
+    if cvar[2]=='w':
+        s2 = 'writing'
+    else:
+        s2 = 'disturbing'
+    line = cvar[3]
+    return f'{s1} {s2} line {line}'
+    
+
 class qualityScatter(multiPlot):
     '''for plotting quality as color on the same x and y var on different axes'''
     
-    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, simplify:bool=False, dx:float=0.05, dy:float=0.05, **kwargs):
+    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, simplify:bool=False, dx:float=0.05, dy:float=0.05, rigid:bool=True, **kwargs):
         self.xvar = xvar
         self.yvar = yvar
         self.legendMade = False
         self.ms = ms
         self.ss = ss.copy()
-        self.ss.replace({'fuse 1 2 bubbles':'fuse 1 2', 'fuse 1 2 partial fuse 2 3':'fuse 1 2 3', 'fuse 12 3':'fuse 2 3', 'rupture 1 fuse 2 3':'fuse rupture', 'rupture 1 fuse droplets':'fuse rupture', 'rupture 2 fuse droplets':'fuse rupture', 'rupture1':'rupture 1', 'fuse bubbles':'fuse'}, inplace=True)
+        simplifyOutliers(self.ss)
         if simplify:
-            self.ss.replace({'fuse 1 2':'fuse', 'fuse 2 3':'fuse', 'fuse 1 3':'fuse', 'fuse 1 2 3':'fuse', 'partial fuse 1 2 3':'partial fuse', 'partial fuse 2 3':'partial fuse', 'partial fuse 1 2':'partial fuse', 'partial fuse 1 3':'partial fuse', 'fuse droplets':'partial fuse', 'rupture combined':'rupture', 'rupture 1':'rupture', 'rupture 2':'rupture', 'rupture 3':'rupture', 'rupture both':'rupture', 'rupture 1 2':'rupture', 'fuse 1 2 and rupture 12':'fuse rupture', 'rupture both fuse droplets':'fuse rupture'}, inplace=True)
+            simplifyMorphologies(self.ss)
         self.getRC()
         if 'sharex' in kwargs:
             self.sharex = kwargs['sharex']
@@ -55,7 +101,7 @@ class qualityScatter(multiPlot):
         if 'sharey' in kwargs:
             self.sharey = kwargs['sharey']
             kwargs.pop('sharey')
-        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, **kwargs)
+        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, rigid=rigid, **kwargs)
         self.combineLegendBox()
         self.plots()
         
@@ -93,7 +139,7 @@ class qualityScatter(multiPlot):
                                  , legend=False
                                  , legendloc='right'   
                                  , **kwargs)
-        self.axs[i,j].set_title(cvar)
+        self.axs[i,j].set_title(plainEnglishQuality(cvar))
 
     def plots(self):
         '''plot all plots'''
@@ -101,13 +147,13 @@ class qualityScatter(multiPlot):
             for j in range(self.cols):
                 self.plot(i,j)
         self.clean()
-                
+
                 
 class qualityScatterSpacing(multiPlot):
     '''for plotting quality as color on the same x and y var on different axes, for different spacings'''
     
     def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, cvar0:str, y0var:str='spacing_adj'
-                 , write:bool=True, relax:bool=True, dx:float=0.05, dy:float=0.05, **kwargs):
+                 , write:bool=True, relax:bool=True, dx:float=0.05, dy:float=0.05, rigid:bool=True, **kwargs):
         self.xvar = xvar
         self.yvar = yvar
         self.y0var = y0var
@@ -117,14 +163,14 @@ class qualityScatterSpacing(multiPlot):
         self.legendMade = False
         self.ms = ms
         self.ss = ss.copy()
-        self.ss.replace({'fuse 1 2 bubbles':'fuse 1 2', 'fuse 1 2 partial fuse 2 3':'fuse 1 2 3', 'fuse 12 3':'fuse 2 3', 'rupture 1 fuse 2 3':'fuse rupture', 'rupture 1 fuse droplets':'fuse rupture', 'rupture 2 fuse droplets':'fuse rupture', 'rupture1':'rupture 1', 'fuse bubbles':'fuse'}, inplace=True)
+        simplifyOutliers(self.ss)
         if self.cvar0=='l1w2w3':
             self.createCompositeCol()   # combine w2, w2relax, and w3 to categorize overall shape
             self.relaxVar = 'l1w3relax'
         else:
             self.relaxVar = f'{self.cvar0}relax'
         self.sssimple = self.ss.copy()
-        self.sssimple.replace({'fuse 1 2':'fuse', 'fuse 2 3':'fuse', 'fuse 1 3':'fuse', 'fuse 1 2 3':'fuse', 'partial fuse 1 2 3':'partial fuse', 'partial fuse 2 3':'partial fuse', 'partial fuse 1 2':'partial fuse', 'partial fuse 1 3':'partial fuse', 'fuse droplets':'partial fuse', 'rupture combined':'rupture', 'rupture 1':'rupture', 'rupture 2':'rupture', 'rupture 3':'rupture', 'rupture both':'rupture', 'rupture 1 2':'rupture', 'fuse 1 2 and rupture 12':'fuse rupture', 'rupture both fuse droplets':'fuse rupture', 'fuse last':'fuse', 'fuse only 1st':'fuse', 'partial fuse last':'partial fuse', 'partial fuse only 1st':'partial fuse', 'rupture 1st':'rupture', 'rupture 2 step':'rupture'}, inplace=True)
+        simplifyMorphologies(self.sssimple)
         self.getRC()
         
         # override sharing
@@ -134,7 +180,7 @@ class qualityScatterSpacing(multiPlot):
         if 'sharey' in kwargs:
             self.sharey = kwargs['sharey']
             kwargs.pop('sharey')
-        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, **kwargs)
+        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, rigid=rigid, **kwargs)
         self.combineLegendBox()
         self.groupCols()
         self.plots()
@@ -273,7 +319,7 @@ class qualityScatterSpacing(multiPlot):
                                  , legend=False
                                  , legendloc='right'   
                                  , **kwargs)
-        self.axs[i,j].set_title(f'{title}\n{cvar}', fontsize=self.fs)
+        self.axs[i,j].set_title(f'{title}\n{plainEnglishQuality(cvar)}', fontsize=self.fs)
 
     def plots(self):
         '''plot all plots'''
@@ -296,3 +342,77 @@ class qualityScatterSimple(qualityScatterSpacing):
         self.sharey = False
         self.cols = 2
         self.getRows()
+
+        
+class qualityScatterXY(multiPlot):
+    '''for plotting quality  as color on arbitrary x and y var'''
+    
+    def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvars:np.array, yvars:np.array, cvar:str, simplify:bool=True, dx:float=0.05, dy:float=0.05, rigid:bool=True, **kwargs):
+        if type(xvars) is np.array:
+            self.xvars = xvars
+        else:
+            self.xvars = np.array(xvars)
+        if type(yvars) is np.array:
+            self.yvars = yvars
+        else:
+            self.yvars = np.array(yvars)
+        if not self.xvars.shape==self.yvars.shape:
+            raise ValueError('xvars and yvars must be same shape')
+        self.cvar = cvar  # l1w1, l1w1relax, l1w2, l1w2relax, etc.
+        self.legendMade = False
+        self.ms = ms
+        self.ss = ss.copy()
+        simplifyOutliers(self.ss)
+        if simplify:
+            simplifyMorphologies(self.ss)
+        self.getRC()
+        
+        # override sharing
+        if 'sharex' in kwargs:
+            self.sharex = kwargs['sharex']
+            kwargs.pop('sharex')
+        if 'sharey' in kwargs:
+            self.sharey = kwargs['sharey']
+            kwargs.pop('sharey')
+        super().__init__(self.rows, self.cols, sharex=self.sharex, sharey=self.sharey, dx=dx, dy=dy, errorBars=False, legendAbove=True, tightLayout=False, rigid=rigid, **kwargs)
+        # self.combineLegendBox()
+        self.plots()
+
+    def getRC(self) -> None:
+        '''get rows and columns'''
+        self.sharex = False
+        self.sharey = False
+        self.rows, self.cols = self.xvars.shape
+        # self.cols = self.cols+1
+        
+    def makeLegend(self) -> None:
+        '''combine the bottom right plots to put the legend'''
+        uniqueVals = pd.unique(self.ss[self.cvar].values.ravel('K'))  # get the unique values in all columns together
+        sslegen = pd.DataFrame([{'change':c} for c in uniqueVals])  # create a dataframe with all the possible morphologies
+        sslegen.dropna(inplace=True)
+        self.legendObj = scatterPlot(self.ms, sslegen, justLegend=True
+                                     , ax=self.legendAx, cvar='change', yvar='change', xvar='change'
+                                     , legendVals=list(sslegen['change']), ncol=6, fs=self.fs)
+    
+    def plot(self, i:int, j:int) -> None:
+        cvar = self.cvar
+        if not cvar in self.ss:
+            return
+        kwargs = {**self.kwargs0, **{'xvar':self.xvars[i,j], 'yvar':self.yvars[i,j], 'cvar':cvar
+                                     , 'ax':self.axs[i,j], 'fig':self.fig
+                                     , 'plotType':self.plotType}}
+        self.objs[i,j] = scatterPlot(self.ms, self.ss
+                                 , set_xlabel=(not self.sharex or (i==self.rows-1)), set_ylabel=(not self.sharey or (i==0))
+                                 , legend=False
+                                 , legendloc='right'   
+                                 , **kwargs)
+        self.axs[i,j].set_title(plainEnglishQuality(cvar), fontsize=self.fs)
+
+    def plots(self):
+        '''plot all plots'''
+        for i in range(self.rows):
+            for j in range(self.cols):
+                self.plot(i,j)
+        # self.fig.tight_layout()
+        self.makeLegend()
+        self.clean()

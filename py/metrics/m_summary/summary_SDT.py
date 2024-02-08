@@ -202,6 +202,7 @@ class summarySDT(summaryMetric):
         else:
             raise ValueError('Could not determine print type')
         self.ss[dnorm] = [(row[t]*row['dEst'])/(row['sigma']/row[tau]) if row['sigma']>0 else 0 for i,row in self.ss.iterrows()]
+            # need to rescale thickness to mm by multiplying by dEst
         self.u[dnorm]=''
     
     def depVarSpl(self, s:str) -> str:
@@ -246,7 +247,7 @@ class summarySDT(summaryMetric):
                        , 'meanT':'ave thickness', 'stdevT':'stdev thickness'
                        , 'minmaxT':'thickness variation', 'ldiff':'shrinkage difference'
                        , 'dx0dt':'left edge shift/time', 'dxfdt':'$\Delta x_{right}$/time', 'dxcdt':'$\Delta x_{center}$/time'
-                       , 'dwdt':'widening/time', 'dhdt':'lengthening/time'
+                       , 'dwdt':'widening/time', 'dhndt':'lengthening/time', 'dhdt':'lengthening/time'
                        , 'dsegmentsdt':'rupturing/time', 'dldiffdt':'evening/time'
                        , 'droughnessdt':'roughening/time', 'demptinessdt':'emptying/time'
                        , 'dmeanTdt':'thickening/time', 'dstdevTdt':'d(stdev thickness)/dt'
@@ -271,7 +272,7 @@ class summarySDT(summaryMetric):
                        , 'space_l':'vert space behind/nozzle', 'space_b':'space under/nozzle'
                        , 'dsegmentsdt':'rupturing/time'
                        , 'dyBotdt':'$\Delta y_{bot}$/time', 'dyTopdt':'$\Delta y_{top}$/time'
-                       , 'dwdt':'lengthening/time', 'dhdt':'widening/time'
+                       , 'dwdt':'lengthening/time', 'dwndt':'lengthening/time', 'dhdt':'widening/time'
                        , 'dycdt':'y shift/time', 'droughnessdt':'roughening/time'
                        , 'demptiness/dt':'emptying/time', 'dmeanTdt':'thickening/time'
                        , 'dstdevTdt':'d(stdev thickness)/dt', 'dminmaxTdt':'d(thickness variation)/time'}
@@ -327,8 +328,10 @@ class summarySDT(summaryMetric):
             return 'Extrusion pressure (Pa)'
         elif s=='spacing_adj':
             return 'adjusted spacing'
-        else:
+        elif s in ['spacing', 'zdepth']:
             return s
+        else:
+            return self.indVarSymbol(s, '', commas=commas)
 
         if not s in varlist:
             return s

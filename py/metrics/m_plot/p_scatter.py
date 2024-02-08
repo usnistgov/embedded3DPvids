@@ -157,10 +157,10 @@ class scatterPlot(metricPlot):
 
         if self.grid:
             # evenly space groups and get error bars
-            df2 = self.toGrid(ssi)
+            df2 = self.toGrid(ssi, **self.kwargs0)
         else:
             # even population in groups and get error bars
-            df2 = self.toGroups(ssi)
+            df2 = self.toGroups(ssi, **self.kwargs0)
         self.plotSeries(df2, style)
         
     def addLegend(self, wideLegend:bool=False, **kwargs) -> None:

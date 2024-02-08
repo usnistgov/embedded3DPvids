@@ -61,6 +61,8 @@ class regressionTable:
         self.package = package
         self.kwargs = kwargs
         self.bestVars = {}
+        self.coeffDict = {}
+        self.varDict = {}
         self.smax = self.ss.sigma.max()
         self.hlineRows = []
         self.dffull = pd.DataFrame([])
@@ -112,7 +114,7 @@ class regressionTable:
             if self.logx:
                 self.ss = self.ms.addLogs(varlist=[f'{v}{s1}' for v in self.varlist], ss=self.ss)
     
-    def regRow(self, df:list, xcol:str, title:str) -> None:
+    def regRow(self, df:list, d:dict, v:dict, xcol:str, title:str, label:str) -> None:
         '''get regression and correlation info for a single x,y variable combo'''
         if len(self.ss[xcol].unique())<2:
             return
@@ -124,20 +126,25 @@ class regressionTable:
         if self.getSpearman:
             spear = rg.spearman(self.ss, xcol, self.ycol)
             reg = {**reg, **spear}
+            if spear['spearman_p']<0.001:
+                d[label] = spear['spearman_corr']   # store the correlation coefficient in the dictionary
+            v[label] = xcol      # store the name of the x variable
         reg['title'] = title
         reg['var'] = xcol
-        df.append(reg)
+        df.append(reg)  # store the row in the list that will become a dataframe
     
     def createVariableTable(self, scvar:str) -> pd.DataFrame:
         '''create a table of correlations for the scaling variable, in combos of ink, sup, ink*sup, and ink/sup'''
         df = []
+        d = {}
+        v = {}
         
         if scvar=='Ca':
             if self.logx:
                 self.ss = self.ms.addLogs(ss=self.ss, varlist=['int_Ca'])
-                self.regRow(df, 'int_Ca_log', '$Ca$')           
+                self.regRow(df, d, v, 'int_Ca_log', '$Ca$', 'const')           
             else:
-                self.regRow(df, 'int_Ca', '$Ca$')    
+                self.regRow(df, d, v, 'int_Ca', '$Ca$', 'const')    
         
         # single variable correlation
         for prefix in ['ink_', 'sup_']:
@@ -146,7 +153,7 @@ class regressionTable:
             else:
                 xcol = f'{prefix}{scvar}'
             title = self.ms.varSymbol(f'{prefix}{scvar}', commas=False)
-            self.regRow(df, xcol, title)
+            self.regRow(df, d, v, xcol, title, prefix[:-1])
 
         # products and ratios
         for suffix in ['Prod', 'Ratio']:
@@ -155,67 +162,22 @@ class regressionTable:
             else:
                 xcol = f'{scvar}{suffix}'
             title = self.ms.varSymbol(f'{scvar}{suffix}', commas=False)
-            self.regRow(df, xcol, title)      
+            self.regRow(df, d, v, xcol, title, suffix)      
         df = pd.DataFrame(df)
+        if len(d)>0:
+            self.coeffDict[self.ms.varSymbol(scvar, commas=False)] = d
+            self.varDict[self.ms.varSymbol(scvar, commas=False)] = v
         return df
     
-    def labelBestFit(self, df:pd.DataFrame) -> pd.DataFrame:
-        '''find the best fits and bold them in the table'''
-        # label best fit
-        
-        if not self.getSpearman:
-            if self.getLinReg:
-                crit = df[df.r2>0.9]
-                goodfits = df[(abs(df.r2)==abs(df.r2).max())&(abs(df.r2)>0.9)]
-                for i,row in goodfits.iterrows():
-                    print(row)
-                    self.bestVars[row['var']] = row['r2']
-            else:
-                return df
-        else:
-            crit = ((abs(df.spearman_corr)>0.9*abs(df.spearman_corr).max())&(df.spearman_p<0.05)&(abs(df.spearman_corr)>0.5))   # get good variables
             
-            df['spearman_pf'] = ['{:0.1e}'.format(i) for i in df.spearman_p]         # format variables
-            df['spearman_corrf'] = ['{:0.2f}'.format(i) for i in df.spearman_corr]
-            goodfits = df[(abs(df.spearman_corr)==abs(df.spearman_corr).max())&(abs(df.spearman_corr)>0.5)]
-            for i,row in goodfits.iterrows():
-                self.bestVars[row['var']] = row['spearman_corrf']
-        if self.getLinReg:
-            df.r2 = ['{:0.2f}'.format(i) for i in df.r2]      
-        
-        self.dffull = pd.concat([self.dffull, df])
-        
-        if self.trimVariables:
-            # only take the good fits
-            df = df[crit]
-        else:
-            # bold rows that are best fit
-            ll = ['title']
-            if self.getLinReg:
-                ll.append('r2')
-            if self.getSpearman:
-                ll = ll+['spearman_corrf', 'spearman_pf']
-            for sname in ll:
-                df.loc[crit,sname] = ['$\\bm{'+(i[1:-1] if i[0]=='$' else i)+'}$' for i in df.loc[crit,sname]]
-                
-        if len(df)>0:
-            self.df = pd.concat([self.df, df])
-            self.df.reset_index(drop=True, inplace=True)
-            self.hlineRows.append(str(df.iloc[0]['title']))
-    
-    def addVariable(self, scvar:str) -> None:
-        '''add the variable to the table'''
-        df = self.createVariableTable(scvar)
-        if len(df)>0:
-            df = self.labelBestFit(df)       
-            
-        
     def addRatios(self) -> None:
         '''add the requested variables that are just ratios, one row per variable'''
         df = []
         self.ss = self.ms.addLogs(ss=self.ss, varlist=self.ratioList)
         for vlist in [self.constList, self.ratioList]:
             for var in vlist:
+                d = {}
+                v = {}
                 if 'spacing' in var:
                     xvar = var
                 else:
@@ -224,11 +186,76 @@ class regressionTable:
                     else:
                         xvar = var
                 title = self.ms.varSymbol(var, commas=False)
-                self.regRow(df, xvar, title)  
+                self.regRow(df, d, v, xvar, title, 'const')  
+                if len(d)>0:
+                    self.coeffDict[self.ms.varSymbol(xvar, commas=False)] = d
+                    self.varDict[self.ms.varSymbol(xvar, commas=False)] = v
         df = pd.DataFrame(df)
-        if len(df)>0:
-            df = self.labelBestFit(df)       
+        self.dffull = pd.concat([self.dffull, df])
+        # if len(df)>0:
+        #     df = self.labelBestFit(df)     
+    
+            
+    def getBestValue(self, var0:str, bestfit:float) -> dict:
+        '''identify the best fit in the row'''
+        d1 = self.coeffDict[var0]
+        bestKey = max(d1, key=lambda y: abs(d1[y]) if pd.notna(d1[y]) else 0)
+        bestVal = abs(d1[bestKey])
+        if bestVal<max(0.5, bestfit-0.1):
+            bestKey = ''
+        if bestKey=='Prod' or bestKey=='Ratio':
+            if 'sup' in d1:
+                supval = abs(d1['sup'])
+            else:
+                supval = 0
+            if 'ink' in d1:
+                inkval = abs(d1['ink'])
+            else:
+                inkval = 0
+            if bestVal-supval<0.05 or bestVal-inkval<0.05:
+                if supval>inkval:
+                    bestKey = 'sup'
+                else:
+                    bestKey = 'ink'
+        dout = {}
+        for key,corr in d1.items():
+            if key==bestKey:
+                dout[key] = ''.join(['$\\bm{', '{:0.2f}'.format(corr), '}$'])
+                self.bestVars[self.varDict[var0][key]] = '{:0.2f}'.format(corr)
+            elif pd.isna(corr):
+                dout[key] = ''
+            else:
+                dout[key] = '{:0.2f}'.format(corr)
+        self.coeffDict[var0] = dout
+    
+    def findBestKeys(self) -> None:
+        '''find the best correlations from the correlation dictionary'''
+        vals = [abs(item) if pd.notna(item) else 0 for row in [list(values.values()) for key,values in self.coeffDict.items()] for item in row]
+        if len(vals)>0:
+            bestfit = max(vals) # best coefficient
+            for key in self.coeffDict.keys():
+                self.getBestValue(key, bestfit)
+        self.df = self.dffull.copy()
+        if self.trimVariables:
+            self.df = self.df[self.df.title.isin(self.bestVars.keys())]
+        else:
+            return
+            # for i,row in self.df[self.df.title.isin(self.bestVars.keys())].iterrows():
+            #     for col in self.df:
+            #         val = self.df.loc[i,col]
+            #         if type(val) is str:
+            #             self.df.loc[i,col] = '$\\bm{'+(val[1:-1] if val[0]=='$' else val)+'}$'  # bold the good rows
+            #         else:
+            #             self.df.loc[i,col] = ''.join(['$\\bm{', '{:0.2f}'.format(val), '}$'])
+    
+    def addVariable(self, scvar:str) -> None:
+        '''add the variable to the table'''
+        df = self.createVariableTable(scvar)
+        self.dffull = pd.concat([self.dffull, df])
         
+        # if len(df)>0:
+        #     df = self.labelBestFit(df)       
+ 
     def addHeaders(self) -> None:
         '''add headers to the table'''
         self.df0 = self.df.copy()
@@ -239,9 +266,9 @@ class regressionTable:
             cols['r2'] = '$r^2$'
             cols['coeff'] = 'b'
         if self.getSpearman:
-            header = header+['spearman_corrf', 'spearman_pf']
-            cols['spearman_corrf'] = 'Spearman coeff'
-            cols['spearman_pf'] = 'Spearman p'
+            header = header+['spearman_corr', 'spearman_p']
+            cols['spearman_corr'] = 'Spearman coeff'
+            cols['spearman_p'] = 'Spearman p'
         if len(self.bestVars)==0:
             # no good fits. find the best one
             best = self.dffull[abs(self.dffull.spearman_corr)==abs(self.dffull.spearman_corr).max()] 
@@ -286,41 +313,61 @@ class regressionTable:
             # print(self.dftextOut)
             display(self.df)
         if self.export:
-            fn = os.path.join(self.exportFolder, 'regressionTables', f'{self.label[4:]}.tex')
+            fn = os.path.join(self.exportFolder, 'regressionTables', f'tab_{self.label[4:]}.tex')
             self.writeTextToFile(fn, self.dftextOut)
             
-    def pgfText(self) -> str:
-        '''for printing the table in latex using csv import. exports two files: one for the import command, and one for the values to export. both are .tex files, but the csv is inside one of the tex files'''
-        label=self.label.replace('_', '')
-        # import command
-        
+    def tabularShort(self) -> str:
+        '''for printing the table as a tabular latex structure, compressed to just show correlation strengths'''
+        df = self.shortDF()
+        dftext = df.to_latex(index=True, escape=False
+                             , float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '' 
+                             , caption=(self.longCaption, self.shortCaption)
+                             , column_format='rrrrrr'
+                             , label=self.label, position='H')
+        dftext = dftext.replace('\\toprule\n', '')
+        dftext = dftext.replace('\\midrule\n', '')
+        dftext = dftext.replace('\\bottomrule\n', '')
+        self.dftextOut = dftext
+        if self.printOut:
+            # print(self.dftextOut)
+            display(self.df)
+        if self.export:
+            fn = os.path.join(self.exportFolder, 'regressionTables', f'tab_{self.label[4:]}.tex')
+            self.writeTextToFile(fn, self.dftextOut)
+            
+    def pgfCaption(self) -> str:
+        '''sets up captions for pgf tables'''
+        dftextOut = '\\begin{table}\n\\centering\n\\caption['
+        dftextOut = dftextOut+self.shortCaption+r']{'+self.longCaption+'}\n'
+        dftextOut = dftextOut+'\\pgfplotstabletypeset[\n\tcol sep=comma,\n\tstring type,\n'
+        return dftextOut
+    
+    def pgfCSV(self, df:pd.DataFrame, index:bool=False) -> None:
+        '''create the csv to be imported by pgf'''
+        self.label = self.label.replace('_', '')
+        for key,val in {'10':'ten', '1':'one', '2':'two', '3':'three'}.items():
+            self.label = self.label.replace(key,val)
         dftext = r'\begin{filecontents*}{'
         dftext = dftext+self.label[4:]+'.csv'+'}\n'
-        dftext = dftext+self.df.to_csv(index=False, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '')
+        dftext = dftext+df.to_csv(index=index, float_format = lambda x: '{:0.2f}'.format(x) if pd.notna(x) else '')
         dftext = dftext+r'\end{filecontents*}'+'\n'
         dftext = dftext+ r'\pgfplotstableread[col sep=comma]{'+self.label[4:]+'.csv'+'}\\'+self.label.replace(':','')
         self.dftext = dftext
         if self.printOut:
             # print(dftext)
-            display(self.df)
+            display(df)
             # print('\n-------------\n')
         if self.export:
             fn = os.path.join(self.exportFolder, 'regressionTables', self.label[4:]+'Import.tex')
             self.writeTextToFile(fn, dftext)
-
-        # displayed table
-        dftextOut = '\\begin{table}\n\\centering\n\\caption['
-        dftextOut = dftextOut+self.shortCaption+r']{'+self.longCaption+'}\n'
-        dftextOut = dftextOut+'\\pgfplotstabletypeset[\n\tcol sep=comma,\n\tstring type,\n'
-        header = ['variable']
-        if self.getLinReg:
-            header = header + ['$r^2$','b','c']
-        if self.getSpearman:
-            header = header+['Spearman coeff','Spearman p']
+            
+    def pgfTex(self, header:list, hlines:bool) -> None:
+        '''get the start of the tex that formats the table'''
+        dftextOut = self.pgfCaption()
         for s in header:
             dftextOut = dftextOut+'\tcolumns/'+s+'/.style={column type=l},\n'
         dftextOut = dftextOut+'\tevery head row/.style={after row=\hline}'
-        if not self.trimVariables:
+        if hlines:
             # add hlines between sections
             dftextOut = dftextOut+',\n\tevery nth row={4'
             if 'Ca' in self.df.iloc[0]['variable']:
@@ -337,6 +384,37 @@ class regressionTable:
         if self.export:
             fn = os.path.join(self.exportFolder, 'regressionTables', self.label[4:]+'.tex')
             self.writeTextToFile(fn, self.dftextOut) # write import command to text file
+            
+    def pgfText(self) ->None:
+        '''for printing the table in latex using csv import. 
+        exports two files: one for the import command, and one for the values to export. 
+        both are .tex files, but the csv is inside one of the tex files'''
+        # import command
+        self.pgfCSV(self.df, index=True)
+
+        # displayed table
+        header = ['variable']
+        if self.getLinReg:
+            header = header + ['$r^2$','b','c']
+        if self.getSpearman:
+            header = header+['Spearman coeff','Spearman p']
+        self.pgfTex(header, not self.trimVariables)
+        
+    def shortDF(self) -> pd.DataFrame:
+        '''get a short dataframe with just coefficients'''
+        df = pd.DataFrame(self.coeffDict).transpose()
+        df = df.fillna('')
+        df = df.rename(columns={'const':'constant', 'sup':'support', 'Prod':'ink*support', 'Ratio':'ink/support'})
+        return df
+            
+    def pgfShort(self) -> str:
+        '''for printing the table in latex using csv import. 
+        produces a shorter table that is reshaped to only include spearman rank coefficients
+        exports two files: one for the import command, and one for the values to export. 
+        both are .tex files, but the csv is inside one of the tex files'''
+        self.pgfCSV(self.shortDF(), index=True)
+        header = ['variable', 'constant', 'ink', 'support', 'ink$\times$support', 'ink/support']
+        self.pgfTex(header, not self.trimVariables)
 
     def createTable(self) -> None:
         '''create a single table'''
@@ -351,16 +429,21 @@ class regressionTable:
         self.addRatios()
         for s2 in self.varlist:
             self.addVariable(s2)
+        self.dffull.reset_index(drop=True, inplace=True)
+        self.findBestKeys()
         
-
         # combine into table
         self.addHeaders()        
         self.getCaptions()
 
         if self.package=='tabular':
             self.tabularText()
+        elif self.package=='tabularShort':
+            self.tabularShort()
         elif self.package=='pgfplot':
             self.pgfText()
+        elif self.package=='pgfshort':
+            self.pgfShort()
         else:
             raise ValueError(f'Unexpected package {self.package}')
             
@@ -373,8 +456,10 @@ class regressionTable:
         self.xvl = xvarlines(self.ms, self.ss, xvarList=list(self.bestVars.keys()), yvar=self.ycol, cvar='vRatio', mode='scatter', dx=0.1, **kwargs)
         for i,coeff in enumerate(self.bestVars.values()):
             self.xvl.labelAx(i, f's = {coeff}')
+        if len(self.tag)>0:
+            self.xvl.fig.suptitle(self.tag)
         if self.export:
-            fn = os.path.join(self.exportFolder, 'plots', 'regression', f'{self.label[4:]}')
+            fn = os.path.join(self.exportFolder, 'plots', 'regression', f'fig_{self.label[4:]}')
             
             self.xvl.export(fn)
         if not self.printOut:
@@ -474,11 +559,12 @@ class regressionTableSDT(regressionTable):
         self.constList = ['spacing', 'spacing_adj']
         if 'zdepth' in self.ss:
             self.constList.append('zdepth')
-        self.ratioList = ['GtaRatio', 'tGdRatio', 'GaRatio', 'GdRatio', 'tau0aRatio', 'tau0dRatio']
-        l0 = ['Re', 'Bma', 'Bmd', 'visc0']
+        # self.ratioList = ['GtaRatio', 'tGdRatio', 'GaRatio', 'GdRatio', 'tau0aRatio', 'tau0dRatio']
+        self.ratioList = []
+        l0 = ['Re', 'Bma', 'Bmd', 'visc0', 'tau0a', 'tau0d']
         
         if self.smax>0:
-            self.varlist = ['Ca', 'dnorma', 'dnormd', 'We', 'Oh']+l0
+            self.varlist = ['Ca', 'dnorma', 'dnormd', 'dnorma_adj', 'dnormd_adj', 'We', 'Oh']+l0
         else:
             self.varlist = l0
             
@@ -493,13 +579,21 @@ class regressionTableSDT(regressionTable):
             self.nickname = self.kwargs['nickname']
         else:
             self.nickname = self.ms.varSymbol(self.yvar)
-        self.shortCaption = f'Linear regressions for {self.nickname}'
-        self.longCaption = r'Table of Spearman rank correlations for \\textbf{'+self.nickname+r'}'
+        self.shortCaption = f'Spearman rank correlations for {self.nickname}'
+        self.longCaption = r'Table of Spearman rank correlations for \textbf{'+self.nickname+r'}'
+        if len(self.tag)>0:
+            longtag = {'HIP':'horizontal in plane', 'HOP':'horizontal out of plane', 'V':'vertical', 'HIPx':'horizontal in plane head-on', 'HOPx':'horizontal out of plane head-on'}[self.tag]
+            self.longCaption = self.longCaption + f' for {longtag} prints'
+            self.shortCaption = self.shortCaption + f' for {longtag} prints'
         self.label = f'tab:{self.yvar}_{self.tag}'
         if self.spacing>0:
             addition = f' at a spacing of {self.spacing}$d_i$'
             self.addToCaptions(addition)
-            self.label = f'{self.label}_{int(self.spacing*1000)}'
+            if 'pgf' in self.package:
+                sname = {0.5:'tightest', 0.625:'tight', 0.750:'small', 0.875:'ideal', 1:'widest', 1.25:'widest'}[self.spacing]
+            else:
+                sname = int(1000*self.spacing)
+            self.label = f'{self.label}_{sname}'
         if self.Camin>0:
             addition = f' at a Ca greater than or equal to {self.Camin}'
             self.addToCaptions(addition)
@@ -508,7 +602,8 @@ class regressionTableSDT(regressionTable):
             addition = f' at a Ca less than or equal to {self.Camax}'
             self.addToCaptions(addition)
             self.label = f'{self.label}_Camax{self.Camax}'
-
+      
         self.label = f'{self.label}_Reg'
-        self.longCaption = self.longCaption + r'. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in table \\ref{tab:variableDefs}.'
-        
+        if 'hort' in self.package:
+            self.longCaption = self.longCaption + '. Numbers are Spearman rank correlation coefficients for correlations with a $p$-value less than 0.001. For example, the number in the row $We$ and column $ink/support$ refers to the Spearman coefficient correlating $We_{ink}/We_{sup}$ with '+self.nickname
+        self.longCaption = self.longCaption + r'. A Spearman rank correlation coefficient of -1 or 1 indicates a strong correlation. Variables are defined in Table \ref{tab:variableDefs}.'
