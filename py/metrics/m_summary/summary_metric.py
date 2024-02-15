@@ -73,44 +73,40 @@ class summaryMetric:
             self.u['int_Ca'] = ''
         return ss
             
-    def indVarSymbol(self, var:str, fluid:str, commas:bool=True) -> str:
+    def indVarSymbol(self, var:str, fluid:str, commas:bool=False) -> str:
         '''get the symbol for an independent variable, eg. dnorm, and its fluid, e.g ink
         commas = True to use commas, otherwise use periods'''
+        if len(fluid)>1:
+            fluid = fluid[0]
         if commas:
             com = ','
         else:
-            com = '.'
+            com = ''
         if var[-3:]=='adj':
             last = var[-5]
         else:
             last = var[-1]
         if not last in ['a', 'd']:
             last = ''
-        else:
-            if len(fluid)>0:
-                last0 = com
-            else:
-                last0 = ''
-            last = last0+{'a':'asc', 'd':'desc'}[last]
         if var=='visc' or var=='visc0':
             if len(fluid)>0:
                 return '$\eta_{'+fluid+'}$'
             else:
                 return '$\eta$'
         elif var=='tau0':
-            return '$\tau_{y'+com+fluid+'}$'
+            return '$\tau_{y'+com+fluid+com+last+'}$'
         elif var[:3]=='dPR':
-            return '$d_{PR'+com+fluid+last+'}$'
+            return '$d_{PR'+com+fluid+com+last+'}$'
         elif var[:5]=='dnorm':
             if var[-3:]=='Inv':
-                return '$1/\overline{d_{PR'+com+fluid+last+'}}$'
+                return '$1/\overline{d_{PR'+com+fluid+com+last+'}}$'
             elif var[-3:]=='adj':
-                last = f'{last},adj'
-                return '$\overline{d_{PR'+com+fluid+last+'}}$'
+                last = f'{last}a'
             else:
-                return '$\overline{d_{PR'+com+fluid+last+'}}$'
+                last = f'{last}e'
+            return '$DR_{'+fluid+com+last+'}$'
         elif var[:2]=='Bm':
-            return '$Bm_{'+fluid+last+'}$'
+            return '$Bm_{'+fluid+com+last+'}$'
         elif var=='rate':
             if len(fluid)>0:
                 return '$\dot{\gamma}_{'+fluid+'}$'
@@ -120,23 +116,23 @@ class summaryMetric:
             return {'ink':'ink', 'sup':'support'}[fluid]
         elif var[:5]=='Gstor':
             if len(fluid)>0:
-                return '$G\'_{'+fluid+last+'}$'
+                return '$G\'_{'+fluid+com+last+'}$'
             else:
                 return '$G\'$'
         elif var[:4]=='tau0':
-            return r'$\tau_{y'+com+fluid+last+'}$'
+            return r'$\tau_{y'+com+fluid+com+last+'}$'
         elif var=='GaRatio':
-            return '$G\'_{ink'+com+'a}/G\'_{sup'+com+'a}$'
+            return '$G\'_{i'+com+'a}/G\'_{s'+com+'a}$'
         elif var=='GdRatio':
-            return '$G\'_{ink'+com+'d}/G\'_{sup'+com+'d}$'
+            return '$G\'_{i'+com+'d}/G\'_{s'+com+'d}$'
         elif var=='GtaRatio':
-            return '$G\'_{ink'+com+r'a}/\tau_{y'+com+'sup'+com+'a}$'
+            return '$G\'_{i'+com+r'a}/\tau_{y'+com+'s'+com+'a}$'
         elif var=='tau0aRatio':
-            return r'$\tau_{y'+com+'ink'+com+r'a}/\tau_{y'+com+'sup'+com+'a}$'
+            return r'$\tau_{y'+com+'i'+com+r'a}/\tau_{y'+com+'s'+com+'a}$'
         elif var=='tau0dRatio':
-            return r'$\tau_{y'+com+'ink'+com+r'd}/\tau_{y'+com+'sup'+com+'d}$'
+            return r'$\tau_{y'+com+'i'+com+r'd}/\tau_{y'+com+'s'+com+'d}$'
         elif var=='tGdRatio':
-            return r'$\tau_{ink'+com+'d}/G\'_{sup'+com+'d}$'
+            return r'$\tau_{i'+com+'d}/G\'_{s'+com+'d}$'
         elif var=='spacing_adj':
             return 'adjusted spacing'
         
@@ -277,3 +273,4 @@ class summaryMetric:
                 spear['var2'] = var2
                 out.append(spear)
         self.depCor = pd.DataFrame(out)
+        

@@ -131,7 +131,7 @@ class picPlots:
         else:
             scale = 0.95
         for pv in self.cp.pvlists:
-            fi = folderImages(pv, self.tag, scale=scale, **self.kwargs)
+            fi = folderImages(pv, self.tag, scale=scale, concat=self.concat, **self.kwargs)
             fi.getImages()
             fi.picPlot(self.cp, self.dx, self.dy)
         self.clean()
@@ -162,7 +162,7 @@ class picPlots:
         
     def getDims(self) -> None:
         '''get the spacing between images'''
-        fi = folderImages(printVals(self.flist[0]), self.tag, **self.kwargs)
+        fi = folderImages(printVals(self.flist[0]), self.tag, concat=self.concat, **self.kwargs)
         widthI, heightI, _, _ = fi.wfull()
         if widthI<10:
             self.dx = 0.5

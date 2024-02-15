@@ -84,7 +84,7 @@ class metricPlot:
         self.justLegend = justLegend
         self.errorBars = errorBars
         self.setUpDims()
-        self.getStyles()
+        self.getStyles(**kwargs)
         if not self.justLegend:
             self.checkValid()    # check that inputs are valid
             self.setUpAxes()

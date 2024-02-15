@@ -103,6 +103,25 @@ class nozDimsUnder(nozDims):
         if 'crops' in kwargs:
             mask = vc.imcrop(mask, kwargs['crops'])
         return mask
+
+    def nozCoverRect(self, pad:int=0, val:int=255, y0:int=0, color:bool=False, **kwargs) -> np.array:
+        '''get a rectangular mask that covers everything above the nozzle'''
+        if type(val) is list:
+            mask = np.zeros((self.h, self.w, len(val)), dtype="uint8")
+            white = (255,255,255)
+        else:
+            mask = np.zeros((self.h, self.w), dtype="uint8")
+            white = 255
+        if y0<0:
+            y0 = self.yC+y0
+        else:
+            y0 = self.yC
+        mask[0:y0, self.xC-self.r-pad:self.xC+self.r+pad]=val
+        if color and len(mask.shape)==2:
+            mask = cv.cvtColor(mask, cv.COLOR_GRAY2BGR)
+        if 'crops' in kwargs:
+            mask = vc.imcrop(mask, kwargs['crops'])
+        return mask
     
     def nozBounds(self) -> dict:
         return {'x0':self.xC-self.r, 'xf':self.xC+self.r, 'y0':self.yC-self.r, 'yf':self.yC+self.r}

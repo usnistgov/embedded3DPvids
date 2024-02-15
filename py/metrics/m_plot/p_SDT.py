@@ -38,7 +38,7 @@ matplotlib.rc('font', size='10.0')
 
 #-------------------------------------------------------------
 
-def shrinkagePlot(ms, fstri:str, export:bool=True) -> None:
+def shrinkagePlot(ms, fstri:str, export:bool=True) -> mp.multiPlot:
     '''plot the lengthening over time, change in length, asymmetry, and change during disturbance for one folder
     ms is a metricSummary object
     fstri is the folder to take the single time series from
@@ -90,7 +90,7 @@ def shrinkagePlot(ms, fstri:str, export:bool=True) -> None:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shrinkage_{orie}'))
     return yvl
 
-def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
+def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
     '''plot the shift in position'''
     if orie=='HOP':
         near = 'yTop'
@@ -121,17 +121,21 @@ def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
     [yvl.axs[i,0].set_title('After writing line 1', fontsize=8) for i in [0,1]]
     [yvl.axs[i,1].set_title('While disturbing line 1', fontsize=8) for i in [0,1]]
     [yvl.axs[i,2].set_title('After writing line 2', fontsize=8) for i in [0,1]]
-    if xvar=='tau0aRatio':
-        for j in [0,1,2]:
-            for i in [0,1]:
+    
+    for j in [0,1,2]:
+        for i in [0,1]:
+            if xvar=='tau0aRatio':
                 yvl.axs[i,j].set_xticks([0.03, 0.1, 0.3])
                 yvl.axs[i,j].xaxis.set_major_formatter('{x:.2f}')
-                yvl.axs[i,j].yaxis.set_minor_locator(MultipleLocator(0.1))
+            elif xvar=='ink_tau0a':
+                yvl.axs[i,j].set_xticks([1, 5, 10])
+                yvl.axs[i,j].xaxis.set_major_formatter('{x:.0f}')
+            yvl.axs[i,j].yaxis.set_minor_locator(MultipleLocator(0.1))
     if export:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_{orie}'))
     return yvl
 
-def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
+def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
     '''plot the shift in position'''
     near = 'yTop'
     far = 'yBot'
@@ -145,7 +149,8 @@ def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> None:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_xs_{orie}'))
     return yvl
 
-def fusionPlot(ms, orie:str, export:bool=False) -> None:
+def fusionPlot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
+    '''plot fusion between filaments'''
     sp = mp.scatterPlot(ms, ms.ss, xvar='tau0aRatio', yvar='roughness_w2o', cvar='spacing', logx=True, plotType='paper', figsize=(3*6.5/7.2, 2.5*6.5/7.2))
     # sp.ax.set_xticks([30, 100, 300])
     # sp.ax.set_xticklabels([30, 100, 300])
@@ -161,3 +166,36 @@ def fusionPlot(ms, orie:str, export:bool=False) -> None:
     if export:
         sp.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'fusion_{orie}'))
     return sp
+
+def gapPlot(ms, orie:str, xvar:str='spacing', yvar:str='space_b_d1p', export:bool=False, **kwargs) -> mp.scatterPlot:
+    '''plot the gap between the nozzle and filament'''
+    sp = mp.scatterPlot(ms, ms.ss, xvar=xvar, yvar=yvar, cvar='vRatio', logx=False, plotType='paper', figsize=(2.5, 2.5), **kwargs)
+    sp.ax.set_xlabel('spacing ($d_{est}$)')
+    sp.ax.set_ylabel('gap ($d_{est}$)')
+    sp.ax.set_ylim([-0.07, 0.53])
+    sp.ax.set_xlim([0.45, 1.3])
+    sp.ax.set_yticks(np.arange(0, 0.75, 0.25))
+    sp.ax.yaxis.set_minor_locator(MultipleLocator(0.05))
+    sp.ax.set_xticks([0.5, 0.75, 1, 1.25])
+    sp.ax.xaxis.set_minor_locator(MultipleLocator(0.125))
+    t1 = {'HIP':'Horizontal in plane', 'HOP':'Horizontal out of plane', 'V':'Vertical'}[orie]
+    t2 = {'space_b_d1p':'Disturbing line 1', 'space_b_w2p':'Writing line 2'}[yvar]
+    title = f'{t1}\n{t2}'
+    sp.ax.set_title(title, fontsize=8)
+    xr = np.arange(0.5, 2.5, 0.01)
+    for vratio in [0.56, 1, 2.25]:
+        color = {2.25:'#b40426', 1:'#808080', 0.56:'#3b4cc0'}[vratio]
+        if orie=='HIP':
+            tw = (0.9-0.6)/2 # mm
+            dest = 0.603*np.sqrt(vratio)  # mm
+            do = 0.907  # mm
+            scrit = 0.5+do/(2*dest)
+        else:
+            scrit = 1
+        print(vratio, scrit)
+        yr = [0 if x<=(scrit) else x-(scrit) for x in xr]
+        sp.ax.plot(xr, yr, color=color, linestyle='dashed', linewidth=1)
+    if export:
+        sp.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'gap_{orie}_{yvar}'))
+    return sp
+    

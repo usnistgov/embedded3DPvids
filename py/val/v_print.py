@@ -200,6 +200,8 @@ class printVals:
             if valname=='var':
                 valname = 'val'
             value = getattr(fobject, valname)
+        elif varfunc=='vRatio':
+            value = round(self.ink.v/self.sup.v,2)
         elif 'self' in varfunc:
             value = getattr(self, split[1])
         else:
@@ -219,6 +221,8 @@ class printVals:
                 return f'{fluid} speed (mm/s)'
             else:
                 return ''
+        elif varfunc=='vRatio':
+            return '$v_{ink}/v_{sup}$'
         elif 'self' in varfunc:
             valname = split[1]
             return f'{valname} ({self.constUnits[valname]})'

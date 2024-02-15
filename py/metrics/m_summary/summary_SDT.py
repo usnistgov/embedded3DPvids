@@ -299,7 +299,7 @@ class summarySDT(summaryMetric):
             out = out + var
         return out
     
-    def varSymbol(self, s:str, lineType:bool=True, commas:bool=True, **kwargs) -> str:
+    def varSymbol(self, s:str, lineType:bool=True, commas:bool=False, **kwargs) -> str:
         '''get a symbolic representation of the variable
         lineType=True to include the name of the line type in the symbol
         commas = True to use commas, otherwise use periods'''

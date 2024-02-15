@@ -30,8 +30,9 @@ class sizes:
             self.linewidth = 2
         elif self.plotType=='paper':
             self.fs = 8
-            if self.cols==1:
-                maxwidth = 3.25
+            if self.cols<=2:
+                # maxwidth = 3.25
+                maxwidth=5
             else:
                 maxwidth = 6.5
             self.getFigSize(maxwidth, 8.5)

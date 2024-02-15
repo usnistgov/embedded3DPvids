@@ -171,7 +171,11 @@ class fileUnderSDT(fileHorizSDT):
         #self.segmenter.eraseBorderTouchComponent(2, '+y', checks=False)
         self.segmenter.eraseBorderClingers(40)
 
-        
+    def maskNozzleOuter(self):
+        '''mask any ink above the nozzle'''
+        mask = self.nd.nozCoverRect(crops=self.crop)
+        self.segmenter.labelsBW = cv.bitwise_and(self.segmenter.labelsBW, self.segmenter.labelsBW, mask=255-mask)
+
     def measure(self) -> None:
         '''measure horizontal SDT line'''
         newSegment = False
@@ -211,6 +215,8 @@ class fileUnderSDT(fileHorizSDT):
             self.Usegment = self.componentMask.copy()
             
         self.segmentClean()
+
+        self.maskNozzleOuter()  # mask any ink that is flowing above the nozzle, to avoid throwing off space_b measurements
  
         if newSegment:
             self.exportSegment(overwrite=True)

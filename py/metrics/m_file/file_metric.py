@@ -755,3 +755,4 @@ class fileMetric(timeObject):
                         d[ss] = d[ss]-crop[f'{si}0']*self.scale
                     else:
                         d[ss] = d[ss]+crop[f'{si}0']*self.scale
+                        

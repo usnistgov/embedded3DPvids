@@ -39,14 +39,12 @@ class multiPlotsSDT(multiPlots):
     
     def __init__(self, folder:str, exportFolder:str, transpose:bool=False, **kwargs):
         super().__init__(folder, exportFolder, ['*'], **kwargs)
-        if 'vels' in os.path.basename(folder):
+        if 'vels' in os.path.basename(folder) or 'P_vs' in folder:
             self.xvar = 'ink.v'
-            self.yvar = 'sup.v'
+            self.yvar = 'vRatio'
         else:
             self.xvar = 'ink.var'
-            self.yvar = 'sup.var'
-        
-            
+            self.yvar = 'sup.var' 
             
     def keyPlots(self, **kwargs):
         '''most important plots'''
@@ -92,6 +90,7 @@ class multiPlotsSDT(multiPlots):
                 crops = {**crops, 'w':200, 'h':700, 'wc':60, 'hc':350}
             elif name[:-1]=='HIh':
                 crops = {**crops, 'w':700, 'h':280, 'wc':250, 'hc':180}
+                #crops = {**crops, 'w':800, 'h':280, 'wc':400, 'hc':180}
             kwargs2['crops'] = crops
                 
     def checkFreeVars(self, allIn:list, kwargs2:dict, kwargs:dict) ->Tuple[list, str, str]:
@@ -136,6 +135,7 @@ class multiPlotsSDT(multiPlots):
 
     def getConcat(self, name:str, kwargs) -> str:
         '''get the direction to concatenate images'''
+
         if 'concat' in kwargs:
             concat = kwargs.pop('concat')
             return concat

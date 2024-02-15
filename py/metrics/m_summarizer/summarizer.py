@@ -73,7 +73,10 @@ class summarizer(fh.folderLoop):
             sw = SDTWorkflow(folder)
             sw.run()
 
-        cl = self.measureClass(folder, overwrite=self.overwrite, overwriteMeasure=self.overwriteMeasure, overwriteSummary=self.overwriteSummary, exportCrop=False,  **self.kwargs)
+        cl = self.measureClass(folder, overwrite=self.overwrite
+                               , overwriteMeasure=self.overwriteMeasure
+                               , overwriteSummary=self.overwriteSummary
+                               , exportCrop=False,  **self.kwargs)
         if self.overwriteMeasure:
             cl.measureFolder()
         if self.overwriteSummary or not os.path.exists(pfd.summary):

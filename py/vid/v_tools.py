@@ -301,7 +301,7 @@ class vidData:
                 if diag>0:
                     logging.info(f'Exported {os.path.basename(fn)}')
                     
-    def exportGIF(self, line:str, compression:int=1, speedScale:float=1, color:bool=True, crop:dict={}, sizeCompression:int=1, prestart:float=0) -> None:
+    def exportGIF(self, line:str, compression:int=1, speedScale:float=1, color:bool=True, crop:dict={}, sizeCompression:int=1, prestart:float=0, postend:float=0) -> None:
         '''export a gif of just the writing and observing of one line. line is the line name, e.g. l1w1.
         compression is the factor of how many frames to drop. e.g take on frame per compression frames
         speedScale is how much to speed up the video'''
@@ -310,13 +310,14 @@ class vidData:
         giffps = int(speedScale/dt)   # frames per second of the gif
         newName = self.pfd.newFileName(f'clip_{line}', 'gif')
         result = imageio.get_writer(newName, fps=giffps)
-        
+        if not hasattr(self, 'prog'):
+            self.getProgDims()
         pline = self.prog[self.prog.name.str.contains(f'{line}p')]
         if len(pline)==0:
             raise ValueError(f'Cannot find line {line}')
         t0 = pline.iloc[0]['t0']+prestart
         oline = self.prog[self.prog.name.str.contains(f'{line}o')]
-        tf = oline.iloc[-1]['tpic']
+        tf = oline.iloc[-1]['tpic']+postend
 
         for t in np.arange(t0, tf+dt, dt):
             frame = self.getFrameAtTime(t, False)

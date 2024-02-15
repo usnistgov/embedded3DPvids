@@ -91,7 +91,7 @@ class plotColors:
         if 'color' in kwargs or len(self.vallist)==0:
             # always one color
             self.cfunc = self.oneColor
-            self.valfunc = self.exactFunc
+            self.valFunc = self.exactFunc
             if 'color' in kwargs:
                 self.color = kwargs['color']
             else:

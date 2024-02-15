@@ -453,7 +453,7 @@ class regressionTable:
         
     def plotBest(self, **kwargs) -> None:
         '''plot the best correlations'''
-        self.xvl = xvarlines(self.ms, self.ss, xvarList=list(self.bestVars.keys()), yvar=self.ycol, cvar='vRatio', mode='scatter', dx=0.1, **kwargs)
+        self.xvl = xvarlines(self.ms, self.ss, xvarList=list(self.bestVars.keys()), yvar=self.ycol, cvar='vRatio', mode='scatter', dx=0.1, commas=False, **kwargs)
         for i,coeff in enumerate(self.bestVars.values()):
             self.xvl.labelAx(i, f's = {coeff}')
         if len(self.tag)>0:
