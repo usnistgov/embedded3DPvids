@@ -56,19 +56,19 @@ def shrinkagePlot(ms, fstri:str, export:bool=True) -> mp.multiPlot:
         orie = 'HIP'
         var = 'wn'
         folderClass = me.folderUnderSDT
-    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh' for i in range(3)], ['sup_Oh' for i in range(3)]]
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh' for i in range(3)], ['sup_dnorma' for i in range(3)]]
                        , yvars=[[f'd{var}dt_w1o', f'd{var}dt_d1o', f'd{var}dt_w2o'], [f'delta_{var}_disturb1', 'ldiff_w2o', '']]
                        , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=False, sharex=False, legendAbove=True, tightLayout=False
-                   , logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=True, xlim={'sup_Oh':[9, 400]})
+                   , logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=True, xlim={'sup_Oh':[9, 300], 'sup_dnorma':[0.3, 30]})
     [yvl.shareAxes(0,i,0,0,s) for s in ['x','y'] for i in [1,2]]
     [yvl.shareAxes(1,i,1,0,s) for s in ['x','y'] for i in [1]]
 
 
     yvl.plots()   # plot the data
-    for i,j in [(0,0), (0,1), (0,2), (1,0), (1,1)]:
-        yvl.axs[i,j].set_xticks([10, 100])
-        yvl.axs[i,j].yaxis.set_minor_locator(MultipleLocator(0.05))
-        yvl.axs[i,j].xaxis.set_major_formatter('{x:.0f}')
+    for i in [0,1]:
+        yvl.axs[1,i].set_xticks([1, 10])
+        yvl.axs[1,i].yaxis.set_minor_locator(MultipleLocator(0.05))
+        yvl.axs[1,i].xaxis.set_major_formatter('{x:.0f}')
     # yvl.fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
     folder = os.path.join(cfg.path.server, fstri)
     fv = folderClass(folder, overwriteMeasure=False, overwriteSummary=False, diag=0, overrideSegment=False)  # import the summary
