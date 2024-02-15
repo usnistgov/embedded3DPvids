@@ -188,6 +188,8 @@ class plotMarkers:
             return '<' # purple
         if val=='rupture both fuse droplets':
             return '>' # light purple
+        if val=='shrink':
+            return 'v'
         else:
             print(val)
             return self.markerList[int(np.random.randint(len(self.markerList), size=1))]

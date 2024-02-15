@@ -254,6 +254,8 @@ class plotColors:
             return '#18da3f' # green
         if val=='rupture both fuse droplets':
             return '#ab84e0' # light purple
+        if val=='shrink':
+            return '#486cc7'
         else:
             print(val)
             return '#%02x%02x%02x' % tuple(np.random.choice(range(256), size=3))  # random color
