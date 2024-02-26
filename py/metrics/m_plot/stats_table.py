@@ -564,7 +564,7 @@ class regressionTableSDT(regressionTable):
         l0 = ['Re', 'Bma', 'Bmd', 'visc0', 'tau0a', 'tau0d']
         
         if self.smax>0:
-            self.varlist = ['Ca', 'dnorma', 'dnormd', 'dnorma_adj', 'dnormd_adj', 'We', 'Oh']+l0
+            self.varlist = ['Ca', 'dnorma', 'dnormd', 'dnorma_adj', 'dnormd_adj', 'We', 'Oh', 'OhVV']+l0
         else:
             self.varlist = l0
             

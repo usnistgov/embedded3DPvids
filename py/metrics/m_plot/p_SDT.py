@@ -178,7 +178,7 @@ def gapPlot(ms, orie:str, xvar:str='spacing', yvar:str='space_b_d1p', export:boo
     sp = mp.scatterPlot(ms, ms.ss, xvar=xvar, yvar=yvar, cvar='vRatio', logx=False, plotType='paper', figsize=(2.5, 2.5), **kwargs)
     sp.ax.set_xlabel('spacing ($d_{est}$)')
     sp.ax.set_ylabel('gap ($d_{est}$)')
-    sp.ax.set_ylim([-0.07, 0.53])
+    sp.ax.set_ylim([-0.02, 0.53])
     sp.ax.set_xlim([0.45, 1.3])
     sp.ax.set_yticks(np.arange(0, 0.75, 0.25))
     sp.ax.yaxis.set_minor_locator(MultipleLocator(0.05))
@@ -189,16 +189,18 @@ def gapPlot(ms, orie:str, xvar:str='spacing', yvar:str='space_b_d1p', export:boo
     title = f'{t1}\n{t2}'
     sp.ax.set_title(title, fontsize=8)
     xr = np.arange(0.5, 2.5, 0.01)
-    for vratio in [0.56, 1, 2.25]:
+    if orie=='HOP':
+        vlist = [1]
+    else:
+        vlist = [0.56, 1, 2.25]
+    for vratio in vlist:
         color = {2.25:'#b40426', 1:'#808080', 0.56:'#3b4cc0'}[vratio]
         if orie=='HIP':
-            tw = (0.9-0.6)/2 # mm
             dest = 0.603*np.sqrt(vratio)  # mm
             do = 0.907  # mm
             scrit = 0.5+do/(2*dest)
         else:
             scrit = 1
-        print(vratio, scrit)
         yr = [0 if x<=(scrit) else x-(scrit) for x in xr]
         sp.ax.plot(xr, yr, color=color, linestyle='dashed', linewidth=1)
     if export:

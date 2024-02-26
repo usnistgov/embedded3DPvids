@@ -87,8 +87,13 @@ class summarySDT(summaryMetric):
         self.ss,self.u = plainIm(self.file, ic=False)
         self.flipInv()
         [self.addDnormAdj(fluid, dire) for fluid in ['ink', 'sup'] for dire in ['a', 'd']]
+        for fluid in ['ink', 'sup']:
+            self.ss[f'{fluid}_OhVV'] = [row[f'{fluid}_Oh']*row['vRatio'] for i,row in self.ss.iterrows()]
         for col in ['ink_surfactantWt', 'sup_surfactantWt']:
             self.ss[col] = self.ss[col].fillna(0)
+        for si in ['space_b_d1p', 'space_b_w2p', 'space_b_d2p', 'space_b_w3p']:
+            if si in self.ss:
+                self.ss[si] = [max(0, x) for x in self.ss[si]]
         if diag:
             self.printIndeps()
             print()
@@ -328,6 +333,8 @@ class summarySDT(summaryMetric):
             return 'Extrusion pressure (Pa)'
         elif s=='spacing_adj':
             return 'adjusted spacing'
+        elif s=='sup_OhVV':
+            return '$Oh*v_i/v_s$'
         elif s in ['spacing', 'zdepth']:
             return s
         else:

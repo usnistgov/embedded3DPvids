@@ -135,6 +135,8 @@ class summaryMetric:
             return r'$\tau_{i'+com+'d}/G\'_{s'+com+'d}$'
         elif var=='spacing_adj':
             return 'adjusted spacing'
+        elif var=='sup_OhVV':
+            return '$Oh*v_i/v_s$'
         
         else:
             if var.endswith('Inv'):
@@ -249,6 +251,7 @@ class summaryMetric:
         deps = deps[~(deps.str.endswith('_SE'))]
         deps = deps[~(deps.str.endswith('_N'))]
         adjustments = [f'{fluid}_dnorm{dire}_adj' for fluid in ['ink', 'sup'] for dire in ['a', 'd']]
+        adjustments = adjustments + ['ink_OhVV', 'sup_OhVV']
         deps = list(set(deps).difference(set(adjustments)))
         return deps
     
