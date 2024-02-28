@@ -56,7 +56,7 @@ class plotMarkers:
         self.lineList = lineList
         self.line = lines
         
-        if self.mvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3']:
+        if self.mvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3', 'l1w3end']:
             # qualitative
             self.mfunc=self.qualityDict
             self.mvalFunc=self.exactFunc
@@ -144,7 +144,7 @@ class plotMarkers:
         '''get a color given a quality'''
         if val=='no change' or val=='no fusion':
             return 's'
-        if val=='fuse' or val=='fuse 1 2 3':
+        if val=='fuse' or val=='fuse 1 2 3' or val=='fuse all':
             return 'o' # dark blue
         if val=='fuse last':
             return '$V$' 
@@ -180,7 +180,7 @@ class plotMarkers:
             return '$ↄ$'
         if val=='rupture 3':
             return '$K$' # yellow
-        if val=='rupture both' or val=='rupture 1 2':
+        if val=='rupture both' or val=='rupture 1 2' or val=='rupture all':
             return '$8$' # peach
         if val=='rupture 2 step':
             return '$\#$'
@@ -192,7 +192,8 @@ class plotMarkers:
             return 'v'
         else:
             print(val)
-            return self.markerList[int(np.random.randint(len(self.markerList), size=1))]
+            # return self.markerList[int(np.random.randint(len(self.markerList), size=1))]
+            return '.'
     
     #-----------------------------
     

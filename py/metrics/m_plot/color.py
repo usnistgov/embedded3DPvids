@@ -52,7 +52,7 @@ class plotColors:
         self.byIndices = byIndices
         self.swatch = True
         
-        if self.cvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3']:
+        if self.cvar in [ 'l1w1', 'l1w1relax', 'l1d1', 'l1d1relax', 'l1w2', 'l1w2relax', 'l1d2', 'l1d2relax', 'l1w3', 'l1w3relax', 'change', 'l1w2w3', 'l1w3end']:
             # qualitative
             self.cfunc=self.qualityDict
             self.valFunc=self.exactFunc
@@ -210,7 +210,7 @@ class plotColors:
         '''get a color given a quality'''
         if val=='no change' or val=='no fusion':
             return '#bcbcbc'
-        if val=='fuse' or val=='fuse 1 2 3':
+        if val=='fuse' or val=='fuse 1 2 3' or val=='fuse all':
             return '#6081c5' # dark blue
         if val=='fuse last':
             return '#3477eb' #blue
@@ -248,7 +248,7 @@ class plotColors:
             return '#c98279' # pink
         if val=='rupture 3':
             return '#b58a09' # yellow
-        if val=='rupture both' or val=='rupture 1 2':
+        if val=='rupture both' or val=='rupture 1 2' or val=='rupture all':
             return '#e06b4a' # peach
         if val=='fuse rupture' or val=='fuse 1 2 and rupture 12': 
             return '#18da3f' # green
@@ -258,7 +258,8 @@ class plotColors:
             return '#486cc7'
         else:
             print(val)
-            return '#%02x%02x%02x' % tuple(np.random.choice(range(256), size=3))  # random color
+            # return '#%02x%02x%02x' % tuple(np.random.choice(range(256), size=3))  # random color
+            return '#888888'
         
     
     #-------------------------

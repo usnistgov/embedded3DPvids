@@ -167,6 +167,10 @@ class qualityScatterSpacing(multiPlot):
         if self.cvar0=='l1w2w3':
             self.createCompositeCol()   # combine w2, w2relax, and w3 to categorize overall shape
             self.relaxVar = 'l1w3relax'
+        elif self.cvar0=='l1w3end':
+            self.createEndCol()
+            self.relax = False
+            self.relaxVar = ''
         else:
             self.relaxVar = f'{self.cvar0}relax'
         self.sssimple = self.ss.copy()
@@ -199,13 +203,13 @@ class qualityScatterSpacing(multiPlot):
         if ('partial fuse' in w2 and ('no change' in w2r or 'partial fuse' in w2r)) or ('partial fuse' in w2r):
             # partial fusion during w2
             if 'partial fuse 1 2' in w3:
-                return '2step partial fuse 1 2'
+                return 'partial fuse 1 2'
             if 'fuse 1 2' in w3:
-                return '2step fuse 1 2'
+                return 'fuse 1 2'
             if 'partial fuse 2 3' in w3:
                 return 'partial fuse last'
             if 'fuse 2 3' in w3:
-                return 'partial/whole fuse last'
+                return 'partial fuse last'
             if 'rupture' in w3:
                 return 'fuse rupture'
             if 'no fusion' in w3:
@@ -213,7 +217,7 @@ class qualityScatterSpacing(multiPlot):
         if ('fuse' in w2 or 'fuse' in w2r):
             # full fuse during w2
             if 'partial fuse 2 3' in w3:
-                return 'whole/partial fuse last'
+                return 'partial fuse last'
             if 'fuse 2 3' in w3 or 'fuse' in w3:
                 return 'fuse last'
             if 'rupture' in w3:
@@ -226,9 +230,74 @@ class qualityScatterSpacing(multiPlot):
                 return 'rupture 1st'
             if 'rupture' in w3:
                 return 'rupture 2 step'
-        if 'no fusion' in w2 and 'no change' in w2r:
+            if 'fuse' in w3:
+                return w3
+        if 'no fusion' in w2 and ('no change' in w2r or 'no fusion' in w2r):
             # no fusion during w2
             return w3              
+        
+        raise ValueError(f'Unexpected combination {w2}, {w2r}, {w3}')
+        
+    def findEndpoint(self, i:int, row:pd.Series) -> str:
+        '''find the final w2 w3 status for a row'''
+        w2 = row['l1w2']
+        w2r = row['l1w2relax']
+        w3 = row['l1w3']
+        w3r = row['l1w3relax']
+        if not (type(w2) is str and type(w2r) is str and type(w3) is str):
+            return np.nan
+        if w3=='fuse 1 2 3':
+            return 'fuse all'
+        if w3=='fuse droplets':
+            return 'fuse rupture'
+        if ('partial fuse' in w2 and ('no change' in w2r or 'partial fuse' in w2r)) or ('partial fuse' in w2r):
+            # partial fusion during w2
+            if 'partial fuse 1 2' in w3 or 'partial fuse 1 2' in w3r:
+                return 'partial fuse 1 2'
+            if 'fuse 1 2' in w3 or 'fuse 1 2' in w3r:
+                return 'fuse 1 2'
+            if 'partial fuse 2 3' in w3 or 'partial fuse 2 3' in w3r:
+                return 'partial fuse'
+            if 'fuse 2 3' in w3 or 'fuse 2 3' in w3r:
+                return 'partial fuse'
+            if 'rupture' in w3 or 'rupture' in w3r:
+                return 'fuse rupture'
+            if 'no fusion' in w3 and 'no change' in w3r:
+                return 'partial fuse 1 2'
+        if ('fuse' in w2 or 'fuse' in w2r):
+            # full fuse during w2
+            if 'partial fuse 2 3' in w3 or 'partial fuse 2 3' in w3r:
+                return 'partial fuse'
+            if 'fuse' in w3 or 'fuse' in w3r:
+                return 'fuse all'
+            if 'rupture' in w3 or 'rupture' in w3r:
+                return 'fuse rupture'
+            if 'no fusion' in w3 and 'no change' in w3r:
+                return 'fuse 1 2'
+        if 'rupture' in w2 or 'rupture' in w2r:
+            # rupture during w2
+            if 'no fusion' in w3 and 'no change' in w3r:
+                if 'rupture' in w2:
+                    return w2
+                else:
+                    return w2r
+            if 'rupture' in w3 or 'rupture' in w3r:
+                return 'rupture all'
+            if 'fuse' in w3 or 'fuse' in w3r:
+                return 'fuse rupture'
+        if 'no fusion' in w2 and ('no change' in w2r or 'no fusion' in w2r):
+            # no fusion during w2
+            if 'no fusion' in w3 and ('no change' in w3r or 'no fusion' in w3r):
+                return 'no fusion'
+            if 'partial fuse 2 3' in w3 or 'partial fuse 2 3' in w3r:
+                return 'partial fuse 2 3'
+            if 'fuse' in w3 or 'fuse' in w3r:
+                return 'fuse 2 3'
+            if 'rupture' in w3 or 'rupture' in w3r:
+                if 'rupture' in w3:
+                    return w3
+                else:
+                    return w3r          
         
         raise ValueError(f'Unexpected combination {w2}, {w2r}, {w3}')
         
@@ -239,6 +308,14 @@ class qualityScatterSpacing(multiPlot):
         for i,row in self.ss.iterrows():
             name = self.findComposite(i,row)
             self.ss.loc[i, 'l1w2w3'] = name
+            
+    def createEndCol(self):
+        '''combine write2 and write3 to describe overall print for all rows'''
+        if 'l1w3end' in self.ss:
+            return
+        for i,row in self.ss.iterrows():
+            name = self.findEndpoint(i,row)
+            self.ss.loc[i, 'l1w3end'] = name
        
     def getRows(self):
         '''get the number of rows'''
@@ -247,7 +324,6 @@ class qualityScatterSpacing(multiPlot):
         elif self.relax:
             self.cvarShort = [self.relaxVar]
         elif self.write:
-            
             self.cvarShort = [self.cvar0]
         else:
             raise ValueError('No plots requested. write and/or relax must be True.')
@@ -270,7 +346,8 @@ class qualityScatterSpacing(multiPlot):
         self.axbig = self.fig.add_subplot(gs[:, -1])
         
         if self.cols>2 or (hasattr(self, 'spacing') and self.spacing>0):
-            uniqueVals = pd.unique(self.ss[self.cvarShort].values.ravel('K'))  # get the unique values in all columns together
+            ssi = self.ss[self.ss.spacing.isin([0.5, 0.875, 1.25])]
+            uniqueVals = pd.unique(ssi[self.cvarShort].values.ravel('K'))  # get the unique values in all columns together
         else:
             uniqueVals = pd.unique(self.sssimple[self.cvarShort].values.ravel('K'))  # get the unique values in all columns together
         sslegen = pd.DataFrame([{'change':c} for c in uniqueVals])  # create a dataframe with all the possible morphologies
@@ -282,7 +359,7 @@ class qualityScatterSpacing(multiPlot):
     def groupCols(self) -> None:
         '''group columns 1:'''
         for j in range(2,self.cols-1):
-            for i in range(2): 
+            for i in range(self.rows): 
                 self.axs[0,1].get_shared_y_axes().join(self.axs[i,j], self.axs[0,1])  # share the y axes for these columns
                 self.axs[0,1].get_shared_x_axes().join(self.axs[i,j], self.axs[0,1])  # share the x axes for these columns
       #  self.axs[0,0].sharex(self.axs[1,0])  # share the y axes for these columns
