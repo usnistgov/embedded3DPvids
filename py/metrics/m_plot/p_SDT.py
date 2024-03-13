@@ -96,6 +96,34 @@ def shrinkagePlot(ms, fstri:str, export:bool=True) -> mp.multiPlot:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shrinkage_{orie}'))
     return yvl
 
+def shrinkage3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
+    '''plot fusion between filaments'''
+    if orie=='HOP' or orie=='HIP':
+        var = 'wn'
+    else:
+        var = 'hn'
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(3)]
+                       , yvars=[['ldiff_w2o'], [f'delta_{var}_disturb2'], [f'ldiff_w3o']]
+                       , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=True, sharex=True
+                           , legendAbove=False, tightLayout=True
+                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.25, 6))
+    for i,axrow in enumerate(yvl.axs):
+        for ax in axrow:
+            ax.set_xticks([30, 100, 300])
+            ax.set_xticklabels([30, 100, 300])
+            ax.set_ylim([-0.35, 0.55])
+            ax.set_yticks([-0.2, 0, 0.2, 0.4])
+            ax.yaxis.set_minor_locator(MultipleLocator(0.1))
+    if orie=='HIP':
+        yvl.axs[0,0].set_title('Horizontal in plane', fontsize=8)
+    elif orie=='HOP':
+        yvl.axs[0,0].set_title('Horizontal out of plane', fontsize=8)
+    elif orie=='V':
+        yvl.axs[0,0].set_title('Vertical', fontsize=8)
+    if export:
+        yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shrinkage3_{orie}'))
+    return yvl
+
 def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
     '''plot the shift in position'''
     if orie=='HOP':
@@ -153,6 +181,23 @@ def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.mu
         yvl.axs[j,0].yaxis.set_minor_locator(MultipleLocator(0.05))
     if export:
         yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_xs_{orie}'))
+    return yvl
+
+def shiftPlot3XS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
+    '''plot the shift in position'''
+    near = 'yTop'
+    far = 'yBot'
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[[xvar for i in range(4)]]
+                       , yvars=[[f'delta_{var}_{change}' for var in [near, far] for change in ['disturb2', 'write3']]]
+                       , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=True, sharex=True, legendAbove=False, tightLayout=True
+                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(7, 5))
+    for j in [0,1,2,3]:
+        yvl.axs[0,j].yaxis.set_minor_locator(MultipleLocator(0.05))
+        yvl.axs[0,j].set_title(yvl.axs[0,j].get_ylabel(), fontsize=8)
+        yvl.axs[0,j].set_ylabel(None)
+        
+    if export:
+        yvl.export(os.path.join(cfg.path.fig, 'SDT', 'plots', f'shift_xs3_{orie}'))
     return yvl
 
 def fusionPlot(ms, orie:str, export:bool=False) -> mp.scatterPlot:

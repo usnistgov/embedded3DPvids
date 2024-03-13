@@ -153,7 +153,7 @@ class qualityScatterSpacing(multiPlot):
     '''for plotting quality as color on the same x and y var on different axes, for different spacings'''
     
     def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, cvar0:str, y0var:str='spacing_adj'
-                 , write:bool=True, relax:bool=True, dx:float=0.05, dy:float=0.05, rigid:bool=True, **kwargs):
+                 , write:bool=True, relax:bool=True, dx:float=0.05, dy:float=0.05, rigid:bool=True, simplify:bool=True, **kwargs):
         self.xvar = xvar
         self.yvar = yvar
         self.y0var = y0var
@@ -161,8 +161,10 @@ class qualityScatterSpacing(multiPlot):
         self.write=write
         self.relax=relax
         self.legendMade = False
+        self.simplify = simplify
         self.ms = ms
         self.ss = ss.copy()
+        
         simplifyOutliers(self.ss)
         if self.cvar0=='l1w2w3':
             self.createCompositeCol()   # combine w2, w2relax, and w3 to categorize overall shape
@@ -173,8 +175,10 @@ class qualityScatterSpacing(multiPlot):
             self.relaxVar = ''
         else:
             self.relaxVar = f'{self.cvar0}relax'
-        self.sssimple = self.ss.copy()
-        simplifyMorphologies(self.sssimple)
+        
+        if self.simplify:
+            self.sssimple = self.ss.copy()
+            simplifyMorphologies(self.sssimple)
         self.getRC()
         
         # override sharing
@@ -345,7 +349,7 @@ class qualityScatterSpacing(multiPlot):
             ax.remove()
         self.axbig = self.fig.add_subplot(gs[:, -1])
         
-        if self.cols>2 or (hasattr(self, 'spacing') and self.spacing>0):
+        if self.cols>2 or (hasattr(self, 'spacing') and self.spacing>0) or not self.simplify:
             ssi = self.ss[self.ss.spacing.isin([0.5, 0.875, 1.25])]
             uniqueVals = pd.unique(ssi[self.cvarShort].values.ravel('K'))  # get the unique values in all columns together
         else:
@@ -377,8 +381,12 @@ class qualityScatterSpacing(multiPlot):
                 ss = self.ss[self.ss.spacing==self.spacing]
                 title = f'spacing = {self.spacing} $d_i$'
             else:
-                title = 'simplified'
-                ss = self.sssimple
+                if self.simplify:
+                    title = 'simplified'
+                    ss = self.sssimple
+                else:
+                    title = ''
+                    ss = self.ss
                 kwargs['yvar'] = self.y0var
                 kwargs['logy'] = False
                 kwargs['dy'] = 0.15
