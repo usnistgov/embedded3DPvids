@@ -29,7 +29,7 @@ logger.setLevel(logging.DEBUG)
 #----------------------------------------------
 
 def isSubPrintFolder(folder:str) -> bool:
-    for f in ['raw', 'temp', 'crop', 'Usegment', 'MLsegment']:
+    for f in ['raw', 'temp', 'crop', 'Usegment', 'MLsegment', 'annotations']:
         if f in folder:
             return True
     return False

@@ -102,16 +102,16 @@ def shrinkage3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
         var = 'wn'
     else:
         var = 'hn'
-    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(3)]
-                       , yvars=[['ldiff_w2o'], [f'delta_{var}_disturb2'], [f'ldiff_w3o']]
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(4)]
+                       , yvars=[[f'delta_{var}_disturb1'], ['ldiff_w2o'], [f'delta_{var}_disturb2'], [f'ldiff_w3o']]
                        , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=True, sharex=True
                            , legendAbove=False, tightLayout=True
-                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.25, 6))
+                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.25, 8))
     for i,axrow in enumerate(yvl.axs):
         for ax in axrow:
             ax.set_xticks([30, 100, 300])
             ax.set_xticklabels([30, 100, 300])
-            ax.set_ylim([-0.35, 0.55])
+            ax.set_ylim([-0.45, 0.55])
             ax.set_yticks([-0.2, 0, 0.2, 0.4])
             ax.yaxis.set_minor_locator(MultipleLocator(0.1))
     if orie=='HIP':

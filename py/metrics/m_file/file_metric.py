@@ -570,11 +570,13 @@ class fileMetric(timeObject):
             cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 2)
         return cm
     
-    def ldiffIm(self, export:bool=False, display:bool=True) -> np.array:
+    def ldiffIm(self, export:bool=False, display:bool=True, scalebar:bool=True) -> np.array:
         '''add annotations for length asymmetry to the initial image'''
         im = self.im0.copy()
         if hasattr(self, 'hull2'):
             cv.drawContours(im, [self.hull2], -1, (255,255,255), 2)
+        if scalebar:
+            im[10:20, 10:10+self.pv.pxpmm, :] = 255
         if display:
             imshow(im)
         if export:

@@ -81,7 +81,7 @@ class printVals:
                     self.spacing = float(split[3])
                 else:
                     self.spacing = float(split[2])
-                self.constUnits['spacing'] = '$d_i$'
+                self.constUnits['spacing'] = '$d_{est}$'
             else:
                 return
         self.press = pressureVals(self.printFolder, pfd=self.pfd)

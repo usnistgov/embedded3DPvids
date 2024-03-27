@@ -94,6 +94,7 @@ class summarySDT(summaryMetric):
         for si in ['space_b_d1p', 'space_b_w2p', 'space_b_d2p', 'space_b_w3p']:
             if si in self.ss:
                 self.ss[si] = [max(0, x) for x in self.ss[si]]
+        self.u['spacing'] = '$d_{est}$'
         if diag:
             self.printIndeps()
             print()
