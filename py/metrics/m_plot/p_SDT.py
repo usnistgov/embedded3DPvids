@@ -220,21 +220,21 @@ def fusionPlot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
 
 def fusion3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
     '''plot fusion between filaments'''
-    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(2)]
-                       , yvars=[[f'delta_roughness_{change}'] for change in ['disturb2', 'write3']]
+    yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(3)]
+                       , yvars=[[f'delta_roughness_{change}'] for change in ['write2', 'disturb2', 'write3']]
                        , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=False, sharex=True
-                           , legendAbove=False, tightLayout=True
-                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.25, 4))
+                           , legendAbove=False, tightLayout=True, markersize=15
+                   ,logx=True, logy=False, mode='scatter', dx=0.15, holdPlots=False, figsize=(2.25, 6))
     for i,axrow in enumerate(yvl.axs):
         for ax in axrow:
             ax.set_xticks([30, 100, 300])
             ax.set_xticklabels([30, 100, 300])
-            if i==0:           
+            if i==1:           
                 ax.set_ylim([-0.35, 0.1])
                 ax.set_yticks([-0.4, -0.3, -0.2, -0.1, 0])
             else:
-                ax.set_ylim([-0.05, 0.9])
-                ax.set_yticks([0, 0.2, 0.4,0.6, 0.8])
+                ax.set_ylim([-0.05, 1])
+                ax.set_yticks([0, 0.2, 0.4,0.6, 0.8, 1])
             ax.yaxis.set_minor_locator(MultipleLocator(0.1))
     if orie=='HIP':
         yvl.axs[0,0].set_title('Horizontal in plane', fontsize=8)

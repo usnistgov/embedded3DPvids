@@ -110,8 +110,7 @@ class printFileDict:
             for key,val in d.items():
                 if f==key:
                     self.printType=val
-                    return  
-                
+                    return   
             # printtype folder failed, try the printfolder
             logging.error('Could not determine print type from file hierarchy')
             bn = re.split('_',os.path.basename(self.printFolder))[0]

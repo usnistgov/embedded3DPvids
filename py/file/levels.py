@@ -60,6 +60,9 @@ class labelLevels:
             elif os.path.basename(bfold)=='temp':
                 self.tempFolder = bfold
                 aboveRaw = os.path.dirname(self.tempFolder)
+            elif os.path.basename(bfold)=='annotations':
+                self.annotationsFolder = bfold
+                aboveRaw = os.path.dirname(self.annotationsFolder)
             else:
                 if 'raw' in bfold:
                     self.rawLineFolder = bfold

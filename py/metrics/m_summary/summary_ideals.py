@@ -80,3 +80,4 @@ class XSSDTIdeals(ideals):
                         return 3
             
         raise AttributeError(f'Ideal value not found for {yvar}')
+        

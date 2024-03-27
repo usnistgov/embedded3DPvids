@@ -35,12 +35,13 @@ class SDTWorkflow:
         self.imtag = ''
         
     def run(self, stillsAwayK:dict={}, progDimsK:dict={}, exportStillsK:dict={}, nozzleK:dict={}, backgroundK:dict={}, analyzeK:dict={}, **kwargs):
-        self.putStillsAway(**stillsAwayK)
-        self.getProgDims(**progDimsK)
-        self.exportStills(**exportStillsK)
-        self.detectNozzle(**nozzleK)
-        self.exportBackground(**backgroundK)
-        self.analyze(**analyzeK)
+        '''go through all of the steps to analyze a single print folder'''
+        self.putStillsAway(**stillsAwayK)      # put the original stills in the raw folder
+        self.getProgDims(**progDimsK)          # generate progDims table
+        self.exportStills(**exportStillsK)     # export stills from video
+        self.detectNozzle(**nozzleK)           # detect the nozzle
+        self.exportBackground(**backgroundK)   # export the background
+        self.analyze(**analyzeK)               # segment and measure images, and summarize measurements
         
     def putStillsAway(self, **kwargs):
         '''put the shopbot-created stills in a folder'''
@@ -53,10 +54,12 @@ class SDTWorkflow:
         self.pfd = self.pdim.pfd
         
     def initPFD(self):
+        '''initial the printFileDict object that holds file locations'''
         if not hasattr(self, 'pfd'):
             self.pfd = fh.printFileDict(self.folder)
         
     def initVD(self):
+        '''initialize the vidData object that holds metadata about the print'''
         self.initPFD()
         self.vd = vt.vidData(self.folder, pfd = self.pfd)
         
@@ -141,6 +144,7 @@ class SDTWorkflow:
                 self.testFailure(i, **kwargs)
         
     def getTagFromFile(self, fn) -> str:
+        '''get the still tag from the file name, e.g. l1w2o3'''
         bn = os.path.basename(fn)
         bn = re.split('vstill_', bn)[-1]
         bn = re.split('_I', bn)[0]
@@ -158,6 +162,7 @@ class SDTWorkflow:
         
         
     def openInPaint(self, tag:str, nmin:int=0, nmax:int=100, usegment:bool=False, **kwargs):
+        '''open a still in MS paint, given a tag'''
         self.initPFD()
         self.pfd.findVstill()
         if usegment:
@@ -180,24 +185,30 @@ class SDTWorkflow:
                     openInPaint(file, **kwargs)
         
     def openLastImage(self, **kwargs):
+        '''open the last analyzed still in MS paint'''
         self.openInPaint(self.imtag, **kwargs)
         
     def openLastUsegment(self, **kwargs):
+        '''open the last segmented image in MS paint'''
         self.openInPaint(self.imtag, usegment=True, **kwargs)
         
     def openLastSeries(self, **kwargs):
+        '''open all files in the series for the last analyzed still in MS paint'''
         self.openInPaint(self.imtag[:5], **kwargs)
         
     def openLastUsegmentSeries(self, **kwargs):
+        '''open all segmented images in the series for the last analyzed still in MS paint'''
         self.openInPaint(self.imtag[:5], usegment=True, **kwargs)
         
     def openBackground(self):
+        '''show the background image in the notebook'''
         nfn = self.pfd.newFileName('background', 'png')
         if os.path.exists(nfn):
             im = cv.imread(nfn)
             imshow(im)
         
     def openExplorer(self):
+        '''open the print folder in windows explorer'''
         fh.openExplorer(self.folder)
         
     def adjustNozzle(self) -> None:
@@ -220,6 +231,7 @@ class SDTWorkflow:
         whiteOutFiles(self.folder, mustMatch=[self.imtag])
         
     def approve(self) -> None:
+        '''mark all segmentation failures as approved'''
         if not os.path.exists(self.folder):
             return
         if not hasattr(self, 'failuredf'):
@@ -231,7 +243,7 @@ class SDTWorkflow:
         plainExp(self.pfd.failures, self.failuredf, {'file':'', 'error':''})
         
 class fullSequencer(fh.folderLoop):
-    '''recursively run all tests on all files in the folder'''
+    '''recursively run all tests on all subfolders in the folder'''
     
     def __init__(self, folders:Union[str,list], **kwargs):
         super().__init__(folders, self.fullSequence, **kwargs)
@@ -247,4 +259,5 @@ class fullSequencer(fh.folderLoop):
             plainExp(fn.replace('Failures', 'Errors'), pd.DataFrame(self.folderErrorList), {}, index=False)
 
     def run(self):
+        '''analyze all folders'''
         super().run()

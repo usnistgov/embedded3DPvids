@@ -557,7 +557,7 @@ class fileMetric(timeObject):
             hleft = left.y.max()-left.y.min()     # height of points to the left
             return hright-hleft
         
-    def roughnessIm(self) -> np.array:
+    def roughnessIm(self, hull2:bool=True, scalebar:bool=False, export:bool=False, display:bool=False) -> np.array:
         '''add annotations for roughness to the image'''
         cm = self.componentMask.copy()
         cm = cv.cvtColor(cm,cv.COLOR_GRAY2RGB)
@@ -566,8 +566,16 @@ class fileMetric(timeObject):
                 cv.drawContours(cm, self.contours, i, (186, 6, 162), 2)
         if hasattr(self, 'hull'):
             cv.drawContours(cm, [self.hull], -1, (110, 245, 209), 2)
-        if hasattr(self, 'hull2'):
+        if hasattr(self, 'hull2') and hull2:
             cv.drawContours(cm, [self.hull2], -1, (252, 223, 3), 2)
+        if scalebar:
+            cm[10:20, 10:10+self.pv.pxpmm, :] = 255  # 1 mm scale bar
+        if display:
+            imshow(cm)
+        if export:
+            self.roughnessIm = cm
+            self.exportImage('roughnessIm', 'annotations', 'roughness', overwrite=True)
+            self.exportImage('im0', 'annotations', 'orig', overwrite=True)
         return cm
     
     def ldiffIm(self, export:bool=False, display:bool=True, scalebar:bool=True) -> np.array:
@@ -576,7 +584,7 @@ class fileMetric(timeObject):
         if hasattr(self, 'hull2'):
             cv.drawContours(im, [self.hull2], -1, (255,255,255), 2)
         if scalebar:
-            im[10:20, 10:10+self.pv.pxpmm, :] = 255
+            im[10:20, 10:10+self.pv.pxpmm, :] = 255  # 1 mm scale bar
         if display:
             imshow(im)
         if export:

@@ -93,3 +93,4 @@ if __name__ == '__main__':
     result = runner.run(suite())
     failedFiles = [int(re.split(': ', str(s))[-1][:-4]) for s in result.failures]  # indices of failed files
     print(failedFiles)
+    

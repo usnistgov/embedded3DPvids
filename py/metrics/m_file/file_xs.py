@@ -31,8 +31,6 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     
 pd.set_option("display.precision", 2)
 
-
-
 #----------------------------------------------
 
 class fileXS(fileMetric):

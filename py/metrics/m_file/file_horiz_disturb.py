@@ -109,7 +109,8 @@ class fileHorizDisturb(fileHoriz, fileDisturb):
         hc = 0
         if self.name[-1]=='o':
             # observing
-            self.crop = {'y0':int(h/2), 'yf':int(h*6/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}   # crop the left and right edge to remove zigs
+            self.crop = {'y0':int(h/2), 'yf':int(h*6/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}   
+            # crop the left and right edge to remove zigs
         else:
             # writing
             self.crop = {'y0':int(h/6), 'yf':int(h*5/6), 'x0':hc, 'xf':w-hc, 'w':w, 'h':h}
@@ -145,4 +146,3 @@ class fileHorizDisturb(fileHoriz, fileDisturb):
         self.gaps(self.pv.dEst)
         self.display()
         
-
