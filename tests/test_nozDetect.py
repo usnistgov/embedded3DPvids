@@ -15,10 +15,11 @@ __unittest = True
 # local packages
 currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
-from py.config import cfg
-import py.logs as logs
-import py.vidTools as vt
-from py.imshow import imshow
+from py.tools.config import cfg
+import py.tools.logs as logs
+import py.vid_tools as vt
+import py.vid_noz_detect as nt
+from py.tools.imshow import imshow
 
 # logging
 logger = logging.getLogger(__name__)
@@ -27,21 +28,12 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 LOGGERDEFINED = logs.openLog('test_nozDetect.py', False, level='DEBUG', exportLog=True) # export logs to file
 
-# info
-__author__ = "Leanne Friedrich"
-__copyright__ = "This data is publicly available according to the NIST statements of copyright, fair use and licensing; see https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software"
-__credits__ = ["Leanne Friedrich"]
-__license__ = "MIT"
-__version__ = "1.0.0"
-__maintainer__ = "Leanne Friedrich"
-__email__ = "Leanne.Friedrich@nist.gov"
-__status__ = "Development"
 
 #----------------------------------------------
 
 
 class TestNozDetect(unittest.TestCase):
-
+    '''tests that nozzles are correctly detected'''
     
     def parameterize(self, margin:int=20, **kwargs):
         self.folder = kwargs['folder']
@@ -51,8 +43,8 @@ class TestNozDetect(unittest.TestCase):
         self.margin = margin
     
     def setUp(self):
-        self.vd = vt.vidData(self.folder)
-        self.vd.detectNozzle(diag=2, suppressSuccess=True)
+        self.vd = nt.nozData(self.folder)
+        self.vd.detectNozzle(diag=1, suppressSuccess=True, export=False, overwrite=True)
     
     def test_xL(self):
         errmess = f'text_xL failed on {self.folder}, expected-actual = {self.xL-self.vd.xL}'
@@ -84,32 +76,12 @@ class TestNozDetect(unittest.TestCase):
 
 def suite():
     suite = unittest.TestSuite()
-    testlist = [{'s':r'LapRD LapRD 1day\I_2.75_S_3.00\I_2.75_S_3.00_210727', 'xL':343, 'xR':470, 'yB':354},
-               {'s':r'LapRD LapRD 3day\I_3.00_S_2.50\I_3.00_S_2.50_210517', 'xL':322, 'xR':436, 'yB':386.5}, 
-                
-                {'s':r'mineral812 LapRD\I_M4_S_2.50\I_M4_S_2.50_210519', 'xL':336, 'xR':463, 'yB':368.5},
-                {'s':r'mineral812 LapRD\I_M6_S_2.50\I_M6_S_2.50_210921', 'xL':329, 'xR':457, 'yB':375},
-                {'s':r'mineral812 LapRD\I_M6_S_3.50\I_M6_S_3.50_210519', 'xL':326, 'xR':449, 'yB':297},
-                {'s':r'mineral812 LapRD\I_M9_S_2.75\I_M9_S_2.75_210921', 'xL':283, 'xR':403, 'yB':385.5},
-                
-                {'s':r'mineral812S LapRDT\I_M4S_S_2.25T\I_M4S_S_2.25T_210922', 'xL':326, 'xR':455, 'yB':373},
-                {'s':r'mineral812S LapRDT\I_M4S_S_2.75T\I_M4S_S_2.75T_210922', 'xL':333, 'xR':458, 'yB':363.5},
-                {'s':r'mineral812S LapRDT\I_M4S_S_3.00T\I_M4S_S_3.00T_210922', 'xL':327, 'xR':440, 'yB':375.5},
-                {'s':r'mineral812S LapRDT\I_M5S_S_2.25T\I_M5S_S_2.25T_210518', 'xL':322, 'xR':441, 'yB':347},
-                {'s':r'mineral812S LapRDT\I_M5S_S_2.25T\I_M5S_S_2.25T_210922', 'xL':345, 'xR':476, 'yB':343},
-                {'s':r'mineral812S LapRDT\I_M5S_S_2.50T\I_M5S_S_2.50T_210518', 'xL':383, 'xR':501, 'yB':351},
-                {'s':r'mineral812S LapRDT\I_M5S_S_2.75T\I_M5S_S_2.75T_210518', 'xL':327, 'xR':451, 'yB':348},
-                {'s':r'mineral812S LapRDT\I_M6S_S_2.25T\I_M6S_S_2.25T_210518', 'xL':285, 'xR':415, 'yB':292},
-                {'s':r'mineral812S LapRDT\I_M6S_S_2.25T\I_M6S_S_2.25T_210922', 'xL':298, 'xR':428, 'yB':365},
-                {'s':r'mineral812S LapRDT\I_M6S_S_2.50T\I_M6S_S_2.50T_210518', 'xL':278, 'xR':399, 'yB':312},
-                {'s':r'mineral812S LapRDT\I_M7S_S_2.50T\I_M7S_S_2.50T_210518', 'xL':291, 'xR':414, 'yB':371},
-                {'s':r'mineral812S LapRDT\I_M7S_S_2.75T\I_M7S_S_2.75T_210922', 'xL':306, 'xR':429, 'yB':340},
-                {'s':r'mineral812S LapRDT\I_M9S_S_2.75T\I_M9S_S_2.75T_210922', 'xL':324, 'xR':453, 'yB':350},
-                
-                {'s':r'PDMSM LapRD\I_PDMSM7.5_S_4.00\I_PDMSM7.5_S_4.00_210630', 'xL':291, 'xR':421, 'yB':346.5},
-               ]
-    for s in testlist:
-        s['folder'] = os.path.join(cfg.path.server, 'singleLines', s['s'])
+    cdir = os.path.dirname(os.path.realpath(__file__))
+    testcsv = os.path.join(cdir,'test_nozDetect.csv')
+    testlist = pd.read_csv(testcsv, dtype={'s':'str', 'xL':'float', 'xR':'float', 'yB':'float'})
+    for i,row in testlist.iterrows():
+        row['folder'] = os.path.join(cfg.path.server, row['s'])
+        s = dict(row)
         t = TestNozDetect()
         t.parameterize(**s)
         suite.addTest(t)
@@ -119,3 +91,4 @@ def suite():
 if __name__ == '__main__':
     runner = unittest.TextTestRunner()
     runner.run(suite())
+    

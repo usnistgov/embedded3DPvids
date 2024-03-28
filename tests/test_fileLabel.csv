@@ -1,0 +1,22 @@
+﻿file,level
+tripleLines\LapRD_LapRD_visc\I_3.00_S_2.75\I_3.00_S_2.75_220428\crossDoubleHoriz_0_0.500\crossDoubleHoriz_0_0.500_Basler camera_I_3.00_S_2.75_220428_123623_6.avi,file
+tripleLines\LapRD_LapRD_visc\I_3.00_S_2.75\I_3.00_S_2.75_220428\crossDoubleHorizPics\crossDoubleHorizPics_Basler camera_I_3.00_S_2.75_220428_124139_9.png,file
+tripleLines\LapRD_LapRD_visc\I_3.00_S_2.75\I_3.00_S_2.75_220428,subFolder
+tripleLines\LapRD_LapRD_visc\I_3.00_S_2.75,sampleFolder
+tripleLines\mineral_LapRD_visc\I_M9_S_4.00\I_M9_S_4.00_220413v2,subFolder
+tripleLines\mineral_LapRD_visc\I_M9_S_4.00\I_M9_S_4.00_220413v2\tripleLinesHorizPics\tripleLinesHorizPics_Basler camera_I_M9_S_4.00_220413_143758_8.png,file
+singleLines\mineral812 LapRD\I_M5_S_3.00\I_M5_S_3.00_210305,subFolder
+singleLines\mineral812 LapRD\I_M5_S_3.00\I_M5_S_3.00_210305\Basler camera_I_M5_S_3.00_5mmps_210305_154242.png,file
+singleLines\mineral812 LapRD\I_M5_S_3.00\I_M5_S_3.00_210305\I_M5_S_3.00_210305_progDims.csv,file
+singleLines\mineral812 LapRD\I_M7_S_3.00\I_M7_S_3.00_210407\I_M7_S_3.00_210407_vert4_00.png,file
+singleLines\mineral812 LapRD\I_M7_S_3.00\I_M7_S_3.00_210407\raw\vert3\singleLinesPics_Basler camera_I_M7_S_3.00_210407_132137.png,rawFile
+singleLines\mineral812 LapRD\I_M9_S_2.25\I_M9_S_2.25_210921\I_M9_S_2.25_210921_vert1_0.333_00.png,file
+singleLines\vels LapRD LapRD 1day\I_2.75_S_3.50\I_2.75_S_3.50_VI_10_VS_5_210921\singleLinesNoZig_5_Basler camera_I_2.75_S_3.50_VI_10_VS_5_210921_181410.avi,file
+singleLines\mineral812 LapRD\I_M7_S_3.00\I_M7_S_3.00_210407\raw\vert3\singleLinesPics_Basler camera_I_M7_S_3.00_210407_132137.png,rawFile
+singleLines\mineral812 LapRD\I_M7_S_3.00\I_M7_S_3.00_210407\raw,rawFolder
+tripleLines\mineral_LapRD_visc\I_M8_S_3.50\I_M8_S_3.50_220426\crossDoubleHoriz_0.5_0.500,sbpFolder
+tripleLines\mineral_LapRD_visc,sampleTypeFolder
+tripleLines,printTypeFolder
+tripleLines\mineral_LapRD_visc\I_M9_S_3.50\I_M9_S_3.50_220413v2\tripleLinesHorizPics,sbpFolder
+tripleLines\mineral_LapRD_visc\I_M9_S_3.50\I_M9_S_3.50_220413v2\tripleLinesHorizPics\tripleLinesHorizPics_Basler camera_I_M9_S_3.50_220413_143018_7.png,file
+singleLines\mineral812 LapRD\I_M7_S_3.00\I_M7_S_3.00_210407\raw\vert3,rawLineFolder
