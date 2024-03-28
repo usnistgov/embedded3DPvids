@@ -28,11 +28,6 @@ def flatten(l:list) -> list:
     '''flatten a list of lists'''
     return [food for sublist in l for food in sublist]
 
-            
-#------------------------
-
-        
-        
 class stitchSorter:
     '''class that holds, sorts, and stitches lists of stills'''
     
@@ -366,11 +361,6 @@ class stitchSorterSingle(stitchSorter):
                     return ValueError(f'{self.folder}: Cannot calculate files per column for {s}')
             return 
 
-    
-
-            
-            
-#-----------
 
 class stitchSorterTriple(stitchSorter):
     '''class that holds, sorts, and stitches lists of stills for tripleLines prints'''
@@ -699,10 +689,6 @@ class stitchSorterTriple(stitchSorter):
         self.setGroup2D('HOPxs', pf, files, rows, cols, rc, 4, offset=picsPerSet*24, **kwargs)       
 
 
-            
-#--------------------------------------------------
-
-
 def stitchSortDecide(folder:str) -> stitchSorter:
     '''get a stitchSorter object with the correct print type'''
     pfd = fh.printFileDict(folder)
@@ -739,7 +725,3 @@ def stitchRecursive(folder:str, **kwargs) -> None:
     else:
         for f in os.listdir(folder):
             stitchRecursive(os.path.join(folder, f), **kwargs)
-            
-
-    
-            

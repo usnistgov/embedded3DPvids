@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations applied to images'''
+'''imports packages for segmenting images'''
 
 # external packages
 import os

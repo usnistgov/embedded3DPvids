@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines'''
+'''functions for statistical measurements'''
 
 # external packages
 import os, sys
@@ -121,4 +121,3 @@ def tossBigSE(df:pd.DataFrame, column:str, quantile:float=0.9):
     if not column[-3:]=='_SE':
         column = f'{column}_SE'
     return df[df[column]<df[column].quantile(quantile)]
-

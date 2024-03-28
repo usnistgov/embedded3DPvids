@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing dimensions of the nozzle'''
+'''Class for storing dimensions of the nozzle'''
 
 # external packages
 import os, sys
@@ -51,6 +51,7 @@ class nozDims:
         
         
     def adjustForCrop(self, crops:dict, xlist:list, ylist:list) -> None:
+        '''shift the nozzle dimensions relative to how we cropped the image'''
         for x in xlist:
             setattr(self, x, int(getattr(self, x)+crops['x0']))
         for y in ylist:

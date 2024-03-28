@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines'''
+'''Functions for collecting data from stills of single lines for a whole folder'''
 
 # external packages
 import os, sys
@@ -447,13 +447,6 @@ def plainTypes(sslap:pd.DataFrame, incSweep:int=1, abbrev:bool=True) -> pd.DataF
             sslap.loc[sslap.ink_type=='mineral oil_Span 20', s] = sap+'MO/Span'
             sslap.loc[sslap.ink_type=='PEGDA_40', s] = sap+'PEG'
 
-
-
-
-
-
-    
-
 def speedTableRecursive(topfolder:str) -> pd.DataFrame:
     '''go through all of the folders and summarize the stills'''
     if isSubFolder(topfolder):
@@ -486,14 +479,3 @@ def speedTable(topfolder:str, exportFolder:str, filename:str) -> pd.DataFrame:
     if os.path.exists(exportFolder):
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
-
-
-
-
-
-        
-        
-    
-
-                
-    

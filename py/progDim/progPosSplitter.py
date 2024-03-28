@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''class for splitting progPos tables into lines'''
 
 # external packages
 import os, sys

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for making scatter plots on a single axis'''
 
 # external packages
 import os, sys
@@ -255,4 +255,3 @@ class scatterPlot(metricPlot):
         self.fixTicks()
         if self.plotReg:
             self.regressionSS()
-

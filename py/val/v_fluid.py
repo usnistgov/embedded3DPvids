@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing metadata about print folders'''
+'''Functions for storing metadata about fluids'''
 
 # external packages
 import os, sys
@@ -160,6 +160,7 @@ class fluidVals:
         return out,units
     
     def findRheTable(self, rhe:pd.DataFrame) -> int:
+        '''find the rheology fit for this fluid from the rheology table'''
         if len(rhe)==0:
             logging.error(f'No rheology table found: {self.fluid}')
             return
@@ -194,6 +195,7 @@ class fluidVals:
         return
     
     def findDensityTable(self, tab:pd.DataFrame) -> int:
+        '''find the desntiy for this fluid from the rheology table'''
         if len(tab)==0:
             logging.error(f'No density table found: {self.fluid}')
             return 1
@@ -249,3 +251,4 @@ class fluidVals:
                 # characteristic diameter for Plateau rayleigh instability in mm
                 setattr(self, f'Bm{dire}', tau0*diam/(self.visc0*self.v))            # Bingham number
         self.constUnits = {'density':'g/mL', 'v':'mm/s','rate':'1/s','visc0':'Pa*s', 'CaInv':'','Re':'','WeInv':'','OhInv':'','dPRa':'mm', 'dPRd':'mm', 'Bma':'', 'Bmd':''}
+        

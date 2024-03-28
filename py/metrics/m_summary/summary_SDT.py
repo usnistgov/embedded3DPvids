@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a whole folder'''
+'''holds data and functions for handling metric summary tables for single double triple prints'''
 
 # external packages
 import os, sys
@@ -35,7 +35,7 @@ pd.set_option('display.max_rows', 500)
 #----------------------------------------------
 
 class summarySDT(summaryMetric):
-    '''holds data and functions for handling metric summary tables for disturbed lines'''
+    '''holds data and functions for handling metric summary tables for single double triple lines'''
     
     def __init__(self, file:str, diag:bool=False):
         super().__init__(file)
@@ -173,6 +173,7 @@ class summarySDT(summaryMetric):
         display(self.keyTable)
         
     def keyTableVar(self, yvar:str) -> None:
+        '''get a table of which summarized variables are available, for a given y variable measured at the file level'''
         kt = self.keyTable.copy()
         cols = self.keyTable.columns
         for i,row in self.keyTable.iterrows():
@@ -393,3 +394,4 @@ class summarySDT(summaryMetric):
             if len(row)>0:
                 return dict(row.iloc[0])
         return self.depCorrelation0(var1, var2)
+    

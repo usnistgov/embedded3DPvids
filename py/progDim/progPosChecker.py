@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''class for checking and correcting errors in progPos files'''
 
 # external packages
 import os, sys

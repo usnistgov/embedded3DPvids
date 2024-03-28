@@ -62,9 +62,11 @@ class background:
             self.fs = frameSelector(self.printFolder, self.pfd)  # frame selector
     
     def backgroundFN(self):
+        '''file name for the background image'''
         return self.pfd.newFileName('background', 'png')
     
     def exportBackground0(self, diag:int=0):
+        '''export the background image to file'''
         fn = self.backgroundFN()
         cv.imwrite(fn, self.background)
         logging.info(f'Exported {fn}')
@@ -209,4 +211,3 @@ class background:
         self.curveBackground = self.background.copy()
         for channel in range(3):
             self.fitChannel(channel, **kwargs)
-   

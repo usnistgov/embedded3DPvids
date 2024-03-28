@@ -47,3 +47,4 @@ class fileSingle(fileMetric):
             if tag in st:
                 return float(st.replace(tag, ''))
         return -1
+    

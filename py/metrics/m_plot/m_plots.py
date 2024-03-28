@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data'''
+'''Import packages for plotting still and video data'''
 
 # external packages
 import os, sys

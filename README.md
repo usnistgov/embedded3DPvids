@@ -15,7 +15,9 @@ Python tools for analysis of videos and images of filament shapes in embedded 3D
 
 ## Description
 
-In embedded 3D printing, a nozzle is embedded into a support bath and extrudes filaments or droplets into the bath. This repository includes python code for analyzing and managing images and videos of the printing process. Images should be .png format, and videos should be .avi format. There are three datasets this was designed for: one that features single filaments, one that features single filaments that are later disturbed by the nozzle, and a third that contains single filaments, pairs of filaments, and trios of filaments that are later disturbed by the nozzle. 
+In embedded 3D printing, a nozzle is embedded into a support bath and extrudes filaments or droplets into the bath. This repository includes python code for analyzing and managing images and videos of the printing process. Images should be .png format, and videos should be .avi format. There are three datasets this was designed for: one that features single filaments, one that features single filaments that are later disturbed by the nozzle, and a third that contains single filaments, pairs of filaments, and trios of filaments that are later disturbed by the nozzle.
+
+There are four types of datasets that this code was designed for. Version 1.0.0 was designed for single lines. Version 1.1.0 was designed for disturbed single lines, where the nozzle returned to run next to an existing filament, and triple lines, which included multiple morphologies including sets of lines and cross intersections. Version 1.2.0 was designed for single, double, and triple lines (SDT), some of which were disturbed, that followed a consistent format. If a file is labeled just as "triple lines," that refers to the unpublished dataset for version 1.1.0. If the file is labeled as "SDT" or "single double triple", that means the code was designed for the published data in version 1.2.0. Although the code from version 1.0.0 and 1.1.0 was designed to be backwards compatible with version 1.2.0, it may be unstable.
 
 
 ## Change log

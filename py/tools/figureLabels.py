@@ -20,10 +20,7 @@ plt.rcParams['svg.fonttype'] = 'none'
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-
 #----------------------------------------------
-
     
 def subFigureLabel(ax, label:str, inside:bool=True) -> None:
     '''add a subfigure label to the top left corner'''
@@ -59,3 +56,4 @@ def subFigureLabels(axs, horiz:bool=True, inside:bool=True) -> None:
             for i in range(w):
                 for j in range(h):
                     subFigureLabel(axs[j][i], alphabet_list.pop(0), inside=inside)
+                    

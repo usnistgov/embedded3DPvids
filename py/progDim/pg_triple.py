@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''Functions for handling tables of programmed timings for triple lines'''
 
 # external packages
 import os, sys
@@ -24,10 +24,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
-
 
 class progDimsTripleLine(progDim):
     '''for programmed dimensions of triple line prints'''

@@ -130,6 +130,7 @@ class plotColors:
         return (val-self.minval)/(self.maxval-self.minval)
         
     def logFracFunc(self, val:Any) -> float:
+        '''convert the value into a log-scaled fraction between the min and max val'''
         return (np.log10(val)-np.log10(self.minval))/(np.log10(self.maxval)-np.log10(self.minval))
         
     def indexFunc(self, val:Any) -> float:
@@ -139,12 +140,13 @@ class plotColors:
         return self.vallist.index(val)/(len(self.vallist)-1)
     
     def exactFunc(self, val:Any) -> Any:
+        '''return the exact value'''
         return val
     
     #-------------------------
     
     def adjust_lightness(self, color, amount=0.5):
-        '''https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
+        '''adjust the lightness of the color. https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
         try:
             c = mc.cnames[color]
         except:
@@ -153,7 +155,7 @@ class plotColors:
         return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
 
     def adjust_saturation(self, color, amount=0.5):
-        '''https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
+        '''adjust the saturation of the color. https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib'''
         try:
             c = mc.cnames[color]
         except:
@@ -181,18 +183,22 @@ class plotColors:
         return self.colorDict[val]
     
     def makeCubeHelix(self):
+        '''create a colorfunction for the cubehelix palette'''
         self.cmap = sns.cubehelix_palette(as_cmap=True, rot=-0.4)
         self.cfunc = self.cmapFunc
     
     def makeDiverging(self):
+        '''create a diverging palette'''
         self.cmap = sns.diverging_palette(220, 20, as_cmap=True)
         self.cfunc = self.cmapFunc
     
     def makePalette(self):
+        '''create a color palette given a palette name'''
         self.cmap = sns.color_palette(self.cname, as_cmap=True)
         self.cfunc = self.cmapFunc
     
     def cmapFunc(self, val:Any) -> str:
+        '''get a color from a value'''
         if type(val) is str or val<0 or val>1:
             return self.defaultColor
         cmap = self.cmap

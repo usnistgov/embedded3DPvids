@@ -23,7 +23,6 @@ logger.setLevel(logging.DEBUG)
 
 #----------------------------------------------
 
-
 def polyfit(x:List[float], y:List[float], degree:int) -> dict:
     '''fit polynomial'''
     results = {}

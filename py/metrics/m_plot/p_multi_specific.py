@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting a single yvar measured on line 1, line 2, etc., across the same xvar and color variable'''
 
 # external packages
 import os, sys
@@ -73,6 +73,7 @@ class multiSpecific(multiPlot):
         self.rows, self.cols = self.yvars.shape
                     
     def getY(self) -> str:
+        '''get the y variable'''
         if self.mode=='scatter':
             y = self.yvar
         else:
@@ -93,6 +94,7 @@ class multiSpecific(multiPlot):
         
     
     def scatterPlot(self, i:int, j:int) -> None:
+        '''plot a scatter plot in axis i,j'''
         kwargs = {**self.kwargs0, **{'xvar':self.xvars[i,j], 'cvar':self.cvar
                                      , 'ax':self.axs[i,j], 'fig':self.fig
                                      , 'plotType':self.plotType, 'legendVals':self.legendVals}}
@@ -113,7 +115,7 @@ class multiSpecific(multiPlot):
                                  , **kwargs)
         
     def gridPlot(self, func, i:int, j:int) -> None:
-        '''either a mesh plot or a contour plot'''
+        '''plot either a mesh plot or a contour plot on axis i,j'''
         kwargs = {**self.kwargs0, **{'xvar':self.xvars[i,j], 'yvar':self.yvar
                                          , 'ax':self.axs[i,j], 'fig':self.fig
                                          , 'plotType':self.plotType}}
@@ -130,7 +132,7 @@ class multiSpecific(multiPlot):
                                  , **kwargs)
     
     def plot(self, i:int, j:int) -> None:
-        '''make a single plot'''
+        '''make a single plot on axis i,j'''
         self.xs[i,j] = self.xvars[i,j]
         self.ys[i,j] = self.yvars[i,j]
         if self.mode=='scatter':

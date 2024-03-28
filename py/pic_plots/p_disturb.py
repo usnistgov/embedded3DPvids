@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video and image data for tripleLines'''
+'''Functions for plotting multiple stills on one plot for disturbed single lines'''
 
 # external packages
 import os, sys

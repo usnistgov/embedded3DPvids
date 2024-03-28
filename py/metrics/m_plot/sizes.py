@@ -51,13 +51,16 @@ class sizes:
         else:
             raise ValueError(f'Unknown plot type {self.plotType}')
             
-    def values(self):
+    def values(self) -> Tuple[int, tuple, int, int]:
+        '''return all sizes'''
         return self.fs, self.figsize, self.markersize, self.linewidth
             
             
     def getFigSize(self, wmax:float, hmax:float) -> None:
+        '''get figure size, given maximum dimensions'''
         self.ar = self.rows/self.cols*1.1
         wider = [wmax, wmax*self.ar]
         if wider[1]>hmax:
             wider = [w*hmax/wider[1] for w in wider]
         self.figsize = tuple(wider)
+        

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for importing csv'''
+'''Functions for importing and exporting tables and dictionaries'''
 
 # external packages
 import os

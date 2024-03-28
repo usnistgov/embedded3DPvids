@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting nozzle detection lines on side views of the nozzle'''
+'''Functions for plotting nozzle detection metrics on images of the nozzle'''
 
 # external packages
 import os, sys
@@ -48,12 +48,14 @@ class nozPlotter:
             self.under = False
         
     def drawNozzleOnFrame(self, colors:bool=True) -> None:
+        '''draw the detected nozzle outline on the diagnostics frame'''
         if self.under:
             self.drawNozzleOnFrameUnder(colors)
         else:
             self.drawNozzleOnFrameSide(colors)
             
     def drawLinesOnFrame(self) -> None:
+        '''draw all of the detected lines or circles on the frame'''
         if self.under:
             self.drawLinesOnFrameUnder()
         else:
@@ -103,6 +105,7 @@ class nozPlotter:
                     cv.line(self.lines_image,(int(line['x0']),int(line['y0'])),(int(line['xf']),int(line['yf'])),color,4)
                     
     def displayNearLines(self, lines0:pd.DataFrame, im:np.array, edges:np.array) -> None:
+        '''draw the lines that are near the nozzle on the frame'''
         print('Lines near nozzle: ', lines0)
         if len(lines0)>0:
             im2 = cv.cvtColor(im, cv.COLOR_GRAY2BGR)
@@ -197,6 +200,3 @@ class nozPlotter:
         plt.subplots_adjust(wspace=0.05, hspace=0)
         plt.close()
         return fig
-    
-
-        

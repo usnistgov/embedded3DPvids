@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of triple lines, for a whole folder'''
+'''Functions for collecting data from stills of single double triple lines, for a whole folder'''
 
 # external packages
 import os, sys
@@ -55,6 +55,7 @@ class folderSDT(folderMetric):
         self.lines = list(self.pg.progDims.name)    
         
     def importMeasure(self):
+        '''import the measure table'''
         super().importMeasure()
         self.df = self.df[~(self.df.pname=='o8')]  # remove 8th observation bc frame rate too slow, often blurry
         self.df = self.df[~(self.df.pname=='p5')]  # remove 5th printing step bc frame rate too slow, often blurry
@@ -243,5 +244,4 @@ class folderSDT(folderMetric):
             for s in ['.png', '.svg']:
                 fig.savefig(f'{fn0}{s}', bbox_inches='tight', dpi=300)
             logging.info(f'Exported {fn0}.png and .svg')
-        
-
+    

@@ -33,7 +33,7 @@ LOGGERDEFINED = logs.openLog('test_nozDetect.py', False, level='DEBUG', exportLo
 
 
 class TestNozDetect(unittest.TestCase):
-
+    '''tests that nozzles are correctly detected'''
     
     def parameterize(self, margin:int=20, **kwargs):
         self.folder = kwargs['folder']

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''Top-level functions for collecting tables of programmed timings'''
 
 # external packages
 import os, sys
@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
-
-
 
 #----------------------------------------------
 
@@ -155,6 +153,3 @@ def progTable(topfolder:str, exportFolder:str, filename:str, **kwargs) -> pd.Dat
     if os.path.exists(exportFolder):
         plainExp(os.path.join(exportFolder, filename), tt, units)
     return tt,units
-
-
-    

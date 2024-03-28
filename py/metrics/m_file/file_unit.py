@@ -58,6 +58,7 @@ def testFile(fstr:str, fistr:str, func, slist:list, diag:int=4, **kwargs) -> dic
     return olist
 
 def addToTestFile(csv:str, fstr:str, fistr:str, func, slist:list, diag:int=4, **kwargs) -> None:
+    '''add a correctly segmented image to the test table'''
     l = testFile(fstr, fistr, func, slist, diag=diag, **kwargs)
     df, _ = plainIm(csv, ic=None)
     if len(df)==0:
@@ -86,6 +87,7 @@ class unitTester:
         self.func = func
         
     def run(self):
+        '''test all files'''
         currentdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         sys.path.append(os.path.join(os.path.dirname(os.path.dirname(currentdir)), 'tests'))
         tp = __import__(self.testpy)
@@ -94,10 +96,12 @@ class unitTester:
         self.failedFiles = [int(re.split(': ', str(s))[-1][:-4]) for s in result.failures]  # indices of failed files
         
     def importList(self):
+        '''import the list of files to test'''
         if not hasattr(self, 'testList'):
             self.testList = pd.read_csv(self.testcsv)
             
     def runTest(self, i:int, diag:int=0, **kwargs) -> Tuple[pd.Series, dict, list]:
+        '''test a single file'''
         self.importList()
         if i>=len(self.testList):
             print(f'UnitTester has {len(self.testList)} entries. {i} not in list')
@@ -140,6 +144,7 @@ class unitTester:
                 return
             
     def openCSV(self):
+        '''open the list of tests in excel'''
         subprocess.Popen([cfg.path.excel, self.testcsv]);
         
     def exportTestList(self):
@@ -165,6 +170,7 @@ class unitTester:
         self.exportTestList()
         
     def openExplorer(self, i:int):
+        '''open a single folder in windows explorer'''
         folder = self.testList.loc[i,'folder']
         folder = os.path.join(cfg.path.server, folder)
         fh.openExplorer(folder)
@@ -173,6 +179,3 @@ def runUnitTest(testName:str, func):
     ut = unitTester(testName, func)
     ut.run()
     ut.compareAll()
-
-    
-    

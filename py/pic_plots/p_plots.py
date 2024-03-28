@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video and image data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting multiple images together'''
 
 # external packages
 import os, sys

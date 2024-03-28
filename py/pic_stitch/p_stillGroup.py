@@ -20,7 +20,6 @@ import file.file_handling as fh
 from pic_stitch.pic_stitch import Stitch
 
 
-
 #----------------------------------------
 
 class stillGroup:
@@ -344,3 +343,4 @@ class stillGroup:
         logging.info(f'Test stitch passed: {self.targetFolder}')
         self.clearTest(True, fn, testfn)
         return 0
+    

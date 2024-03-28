@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''class to labels the lines in the progDims table'''
 
 # external packages
 import os, sys

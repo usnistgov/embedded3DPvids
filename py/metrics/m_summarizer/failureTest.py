@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a whole folder'''
+'''class for testing failed files for all folders in a topfolder'''
 
 # external packages
 import os, sys
@@ -39,9 +39,6 @@ pd.set_option('display.max_rows', 500)
 
 #----------------------------------------------
 
-
-
-
 class failureTest:
     '''for testing failed files for all folders in a topfolder. testFunc should be a fileMetric class definition'''
     
@@ -53,6 +50,7 @@ class failureTest:
         self.importFailures()
         
     def countFailures(self):
+        '''count and print the different categories of file and folder'''
         self.bad = self.df[(self.df.approved==False)&(~(self.df.error==''))]
         self.approved = self.df[self.df.approved==True]
         self.unapproved = self.df[self.df.approved==False]
@@ -63,31 +61,37 @@ class failureTest:
         print(f'{self.failedLen} failed files, {self.failedFolders} failed folders, {self.uncheckedFolders} unchecked folders, {self.totalFolders} total folders')
         
     def firstBadFile(self):
+        '''find the name of the first bad file in the table'''
         if len(self.bad)==0:
             return 'No bad files'
         return self.bad.iloc[0].name
     
     def firstBadFolder(self):
+        '''find the name of the first bad folder in the table'''
         if len(self.bad)==0:
             return 'No bad folders'
         return self.bad.iloc[0]['fostr']
     
     def firstUnapprovedFolder(self):
+        '''find the name of the first unapproved folder in the table'''
         if len(self.unapproved)==0:
             return 'No unapproved folders'
         return self.unapproved.iloc[0]['fostr']
     
     def file(self, i):
+        '''get the name of a file by index in the table'''
         row = self.df.loc[i]
         file = os.path.join(cfg.path.server, row['fostr'], row['fistr'])
         return file
     
     def folder(self, i):
+        '''get the name of a folder by index of a file in the table'''
         row = self.df.loc[i]
         folder = os.path.join(cfg.path.server, row['fostr'])
         return folder
         
     def importFailures(self):
+        '''import the table of failed files'''
         df, _ = plainIm(self.failureFile, ic=None)
         df.fillna('', inplace=True)
         if len(df)>0:
@@ -118,6 +122,7 @@ class failureTest:
             self.testFunc(file, **kwargs)
         
     def testFolder(self, folder:str, testFailures:bool=False, **kwargs):
+        '''initialize the SDTWorkflow object to test a specific folder by name'''
         if testFailures:
             ffiles = self.bad[self.bad.fostr==folder]
             for i,_ in ffiles.iterrows():
@@ -163,8 +168,6 @@ class failureTest:
         '''overwrite the Usegment and MLsegment files so this file cannot be measured. useful if the function is measuring values from a bad image'''
         file = self.file(i)
         self.testFunc(file, measure=False).disableFile()
-        
-
         
     def approveFile(self, i:int, export:bool=True, count:bool=True, whiteOut:bool=False):
         '''approve the file'''
@@ -247,3 +250,4 @@ class failureTest:
     def export(self):
         '''export the failure summary file'''
         plainExp(self.failureFile, self.df, {}, index=False)
+        

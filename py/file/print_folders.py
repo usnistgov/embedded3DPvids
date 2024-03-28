@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''Functions for finding all print folders in a top folder'''
 
 # external packages
 import os, sys

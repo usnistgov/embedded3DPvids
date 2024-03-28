@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data and summarizing stills of single line xs for a whole folder'''
+'''Functions for collecting data and summarizing stills of single double triple horizontal lines for a whole folder'''
 
 # external packages
 import os, sys

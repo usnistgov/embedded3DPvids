@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting gradient plots'''
 
 # external packages
 import os, sys
@@ -151,3 +151,4 @@ class meshPlot(metricPlot):
             cbar = plt.colorbar(self.sc, label=self.zlabel, location = self.legendloc, ax=self.ax, fraction=0.046, pad=0.04)
             cbar.ax.tick_params(labelsize=self.fs)
         self.setSquare()
+        

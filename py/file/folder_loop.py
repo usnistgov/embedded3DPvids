@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''class for looping through all subfolders in a folder and applying some operation'''
 
 # external packages
 import os, sys
@@ -32,7 +32,16 @@ logger.setLevel(logging.DEBUG)
 class folderLoop:
     '''loops a function over all printFolders in the topFolder. 
     the function needs to have only one arg, folder, and all other variables need to go in kwargs
-    folders could be either the top folder to recurse into, or a list of folders'''
+    folders could be either the top folder to recurse into, or a list of folders
+    func is the function to run on all folders
+    mustMatch is a list of strings that must be in the print folder name
+    canMatch is a list of strings. If it's not empty, all print folders must have at least one of the strings in the list
+    printTraceback is true to print the traceback message when an error is hit
+    printErrors is true to print error messages from each folder
+    folderDiag is the diagnostics printing level to feed into the function we're running on each file
+    findFolders is false to use the folder list shown in the config file
+    other kwargs get fed into the function to find folders and the function we're applying to each folder
+    '''
     
     def __init__(self, folders:Union[str, list], func, mustMatch:list=[], canMatch:list=[], printTraceback:bool=False, printErrors:bool=True, folderDiag:int=0, findFolders:bool=True, **kwargs):
         if findFolders:
@@ -104,6 +113,7 @@ class folderLoop:
         self.func(row['folder'], **kwargs)
         
     def openErrorFolder(self, i:int) -> None:
+        '''open a folder in windows explorer, given an index in the list of folders that threw errors'''
         if i>len(self.folderErrorList):
             print(f'{i} is greater than number of error files ({len(self.folderErrorList)})')
             return
@@ -114,6 +124,7 @@ class folderLoop:
         '''export the error list to file'''
         plainExp(fn, pd.DataFrame(self.folderErrorList), {'folder':'', 'error':''}, index=False)
     
+#----------
 
 class folderFileLoop(folderLoop):
     '''loops a function over all files in a printFolder, and loops over all printfolders that match the keys'''

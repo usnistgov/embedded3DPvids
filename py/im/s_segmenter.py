@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations applied to images'''
+'''class for thresholding and segmenting images'''
 
 # external packages
 import cv2 as cv
@@ -31,6 +31,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 #----------------------------------------------
 
 class sMode:
+    '''how to segment the image'''
     threshold = 0
     adaptive = 1
     kmeans = 2
@@ -38,6 +39,7 @@ class sMode:
     thresholdRed = 4
     
 class nozMode:
+    '''how much of the nozzle to remove from the object before segmentation'''
     none = 0
     full = 1
     bottom = 2

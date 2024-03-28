@@ -41,7 +41,7 @@ class fileXS(fileMetric):
         
         
     def filterXSComponents(self) -> None:
-        '''filter out cross-section components'''
+        '''filter out cross-section components that don't make sense'''
         errorRet = [], []
         h,w = self.segmenter.labelsBW.shape[:2]
         xest = w/2 # estimated x
@@ -91,6 +91,7 @@ class fileXS(fileMetric):
 
 
     def display(self, title:str='') -> None:
+        '''display diagnostics'''
         if self.diag<=0:
             return
         # show the image with annotated dimensions
@@ -178,3 +179,4 @@ class fileXS(fileMetric):
                       , 'emptiness':emptiness, 'roughness':roughness}
         self.units = {**self.units, **units}
         self.stats = {**self.stats, **ret}
+        

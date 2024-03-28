@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of disturbed lines'''
+'''Collect data from all folders into a single folder, for single double triple lines'''
 
 # external packages
 import os, sys
@@ -101,21 +101,21 @@ class summarizerUnderSDT(summarizerSDT):
 #--------------------------------
     
 class xsSDTFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed XS SDT files'''
     
     def __init__(self, dire):
         s = summarizerXSSDT('', dire)
         super().__init__(s.failureFN(), xsSDTTestFile)
         
 class vertSDTFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed vertical SDT files'''
     
     def __init__(self, dire):
         s = summarizerVertSDT('')
         super().__init__(s.failureFN(), vertSDTTestFile)
         
 class horizSDTFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed horizontal SDT files'''
     
     def __init__(self, dire):
         s = summarizerHorizSDT('')

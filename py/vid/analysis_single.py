@@ -72,8 +72,6 @@ class singleVidData:
         frame = frame[0:int(self.yB)+150, 0:self.xL+30]  # crop to region to left of nozzle outlet
         return frame
     
-    
-    
     def getLineTime(self, s:str, dt0:float, **kwargs) -> float:
         '''get the time of the end of the line. s is the line name, e.g. xs1. dt0 is the time to add to the end time'''
         if 'time' in kwargs:
@@ -420,13 +418,7 @@ class singleVidData:
         data = {**meta,**data}
         units = {**metaunits,**units}
         return data, units
-    
-    
-    
-        
-        
-#-----------------------------------------
-        
+
         
 def measureVideosRecursiveSingle(topfolder:str, **kwargs) -> List[str]:
     '''go through all of the videos and measure them and export values into individual tables

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting multiple axes in one figure'''
 
 # external packages
 import os, sys
@@ -119,9 +119,11 @@ class multiPlot:
             ax.set_ylim(lim)
         
     def setxlim(self, i:int, j:int, ax) -> None:
+        '''set the xlim of axis i,j'''
         self.setlim(i,j,ax,'x')
         
     def setylim(self, i:int, j:int, ax) -> None:
+        '''set the ylim of axis i,j'''
         self.setlim(i,j,ax,'y')
         
     def clean(self):
@@ -148,6 +150,7 @@ class multiPlot:
             self.fig.tight_layout()
                 
     def export(self, fn:str):
+        '''export the figure to png and svg'''
         if '.' in fn:
             fn = re.split('.', fn)[0]
         for ext in ['.svg', '.png']:

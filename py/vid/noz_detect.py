@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for holding data about the nozzle'''
+'''Functions for detecting and holding data about the nozzle'''
 
 # external packages
 import os, sys
@@ -78,6 +78,7 @@ class nozData(timeObject):
     #-----------------------------
 
     def subtractBackground(self, im:np.array, dilate:int=0, diag:int=0, **kwargs) -> np.array:
+        '''subtract the background image from the image'''
         subtracted = self.bg.subtractBackground(im, diag=diag)
         subtracted = self.maskNozzle(subtracted, dilate=dilate, **kwargs)
         if diag>0:
@@ -85,9 +86,11 @@ class nozData(timeObject):
         return subtracted
     
     def exportBackground(self, **kwargs):
+        '''export the background image'''
         self.bg.exportBackground(nd=self.nd, **kwargs)
         
     def __getattr__(self, s):
+        '''lets us probe the nozDims object held inside of this nozData object'''
         return getattr(self.nd, s)
         
 
@@ -109,6 +112,7 @@ class nozData(timeObject):
         self.nd = self.detector.nd
         
     def createDetector(self, **kwargs):
+        '''create an object to detect the nozzle'''
         if 'Under' in self.printFolder:
             return nozDetectorUnder(self.fs, self.pfd, self.printFolder, **kwargs)
         else:
@@ -176,17 +180,19 @@ class nozData(timeObject):
         
         
     def absoluteCoords(self, d:dict) -> dict:
+        '''convert coordinates which are relative to the nozzle position to coordinates relative to the image frame'''
         return self.nd.absoluteCoords(d)
     
     def relativeCoords(self, x:float, y:float, reverse:bool=False) -> dict:
+        '''convert coordinates which are relative to the image frame to coordinates relative to the nozzle position'''
         return self.nd.relativeCoords(x,y,reverse=reverse)
-    
         
     def dentHull(self, hull:list, crops:dict) -> list:
         '''conform the contour to the nozzle'''
         return self.nd.dentHull(hull, crops)
     
     def padNozzle(self, **kwargs):
+        '''add white space around the nozzle'''
         return self.nd.padNozzle(**kwargs)
 
 
@@ -194,6 +200,7 @@ class nozData(timeObject):
 #--------------------------------------------
 
 def exportNozDims(folder:str, overwrite:bool=False, **kwargs) -> None:
+    '''export the detected nozzle dimensions and background image'''
     pfd = fh.printFileDict(folder)
     if not overwrite and hasattr(pfd, 'nozDims') and hasattr(pfd, 'background'):
         return
@@ -208,6 +215,7 @@ def exportNozDimsRecursive(folder:str, overwrite:bool=False, **kwargs) -> list:
     return fl
 
 def exportNozDimsRetry(folder:str, lcrit:int=15, overwrite:bool=False) -> None:
+    '''try detecting nozzle dimensions until no more errors are thrown'''
     error = True
     e0 = None
     i = 0
@@ -268,3 +276,4 @@ def fixBackground(folder:str, diag:int=0) -> int:
             print(f'Count {count} mm {mm}')
     if mm<mcrit:
         nv.bg.stealBackground(diag=diag)
+        

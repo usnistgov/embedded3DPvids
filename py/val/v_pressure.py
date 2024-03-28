@@ -28,8 +28,6 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
 
 class pressureVals:
@@ -97,6 +95,7 @@ class pressureVals:
         return -self.calibb/(2*self.caliba)
     
     def calculateTargetPressure(self) -> float:
+        '''calculate the pressure that we should be going to to reach the ink speed'''
         self.targetPressure = self.calculateP(self.vink)
         return self.targetPressure
         
@@ -354,3 +353,4 @@ class pressureVals:
             writer.writerow(['calibb', 'mm/s/mbar', str(self.calibb)])
             writer.writerow(['calibc', 'mm/s', str(self.calibc)])
         logging.info(f'Exported {file}')
+        

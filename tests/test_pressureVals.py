@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Script for testing nozzle detection in videos. Tests specific files with known nozzle location'''
+'''Script for testing that pressures are correctly calculated'''
 
 # external packages
 import os, sys
@@ -32,7 +32,7 @@ LOGGERDEFINED = logs.openLog('test_nozDetect.py', False, level='DEBUG', exportLo
 
 
 class TestPressureVals(unittest.TestCase):
-
+    '''tests that pressures are correctly calculated'''
     
     def parameterize(self, folder:str='', pressure:float=0, margin:float=0.1, **kwargs):
         self.folder = folder

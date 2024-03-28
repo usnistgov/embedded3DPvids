@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a single image'''
+'''Functions for measuring computation time'''
 
 # external packages
 import time
@@ -31,3 +31,4 @@ class timeObject:
         tt = time.time()
         print(f'{self.timeName} {(tt-self.timeCount):0.4f} seconds {s} ')
         self.timeCount = tt
+        

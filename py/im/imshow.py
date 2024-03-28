@@ -16,10 +16,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
 #----------------------------------------------
-
-####### DISPLAY TOOLS
 
 def hideSpines(ax):
     ax.spines['bottom'].set_color('white')
@@ -98,3 +95,4 @@ def imshow(*args, scale:float=8, axesVisible:bool=True, numbers:bool=False, perR
             else:
                 ax.set_title(t)
     f.tight_layout()
+    

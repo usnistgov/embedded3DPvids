@@ -492,4 +492,3 @@ class Stitch:
             pass
         self.images = self.imagesPerm.copy()
         self.filenames = self.filenamesPerm.copy()
-

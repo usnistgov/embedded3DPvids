@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a single image'''
+'''Functions for collecting data from stills of single double triple lines, for a single image'''
 
 # external packages
 import os, sys
@@ -51,6 +51,7 @@ class fileSDT(fileDisturb):
         super().__init__(file, diag=diag, acrit=acrit, **kwargs)
         
     def initialize(self):
+        '''get the intended dimensions of the line'''
         self.getProgRow() 
         self.getProgTime()
         
@@ -112,6 +113,7 @@ class fileSDT(fileDisturb):
         
     
     def cropIm(self, normalize:bool=True):
+        '''remove the background and crop the image'''
         if self.background:
             self.im = self.nd.subtractBackground(self.im, normalize=normalize)   # remove the background and the nozzle
         self.im = vc.imcrop(self.im, self.crop)
@@ -137,6 +139,4 @@ class fileSDT(fileDisturb):
         if s=='thresh' or openPaint:
             openInPaint(fnseg)
         print(f'Exported {self.title} to training data')
-        
-
-        
+    

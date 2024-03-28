@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from a still of a horizontal SDT line'''
+'''Functions for collecting data from a still of a horizontal in plane SDT line viewed from underneath'''
 
 # external packages
 import os, sys
@@ -38,6 +38,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def underSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileUnderSDT(file, **kwargs).values() 
 
 def underSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:
@@ -77,6 +78,7 @@ class fileUnderSDT(fileHorizSDT):
         self.makeCrop(rc, export=self.exportCropLocs, overwrite=self.overwriteCropLocs)
         
     def removeGlare(self) -> np.array:
+        '''remove bright spots from the image that ruin segmentation'''
         _,thresh = cv.threshold(255-self.im,120,255,cv.THRESH_TRUNC)
         thresh = 255-normalize(thresh)
         return thresh
@@ -104,6 +106,7 @@ class fileUnderSDT(fileHorizSDT):
         return trunc
     
     def makeSegmenter(self, trunc:np.array, topthresh:int):
+        '''create a new segmenter object and segment and fill the image'''
         segmode = [ sMode.kmeans, sMode.threshold]
         si = segmenter(trunc, acrit=self.acrit, diag=max(0, self.diag-1)
                                    , fillMode=fi.fillMode.fillTiny
@@ -117,7 +120,7 @@ class fileUnderSDT(fileHorizSDT):
         return si
     
     def halfhalf(self, trunc:np.array) -> None:
-        '''split the image in half and process it separately'''
+        '''split the image in halves and process each half separately'''
         topthreshes = [220, 230]
         segmenters = []
         for thresh in topthreshes:
@@ -127,6 +130,7 @@ class fileUnderSDT(fileHorizSDT):
         self.segmentComplete()
         
     def singleSegmenter(self, trunc:np.array) -> None:
+        '''segment the whole image at once'''
         if not hasattr(self, 'topthresh'):  
             if 'o' in self.tag:
                 self.topthresh = 220

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting contour plots'''
 
 # external packages
 import os, sys
@@ -82,3 +82,4 @@ class contourPlot(metricPlot):
             cbar.ax.tick_params(labelsize=self.fs)
         self.setSquare()
         # self.ax.set_title(vs, fontsize=self.fs)
+        

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data and summarizing stills of single line xs for a whole folder'''
+'''Functions for collecting data and summarizing stills of under view single double triple lines for a whole folder'''
 
 # external packages
 import os, sys
@@ -50,7 +50,7 @@ class folderUnderSDT(folderSDT):
     # summaries
 
     def summarize(self, **kwargs) -> Tuple[dict,dict]:
-        '''summarize xsical measurements in the folder and export table'''
+        '''summarize measurements in the folder and export table'''
         r = self.summaryHeader()
         if r==0:
             return self.summary, self.summaryUnits, self.failures

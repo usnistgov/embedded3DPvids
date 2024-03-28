@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting video and image data for tripleLines'''
+'''Functions for plotting multiple stills on one plot for tripleLines'''
 
 # external packages
 import os, sys
@@ -35,7 +35,7 @@ matplotlib.rc('font', size='10.0')
 #-----------------------------------------------
 
 class multiPlotsTriple(multiPlots):
-    '''given a sample type folder, plot values'''
+    '''given a sample type folder, plot multiple images on one plot'''
     
     def __init__(self, folder:str, exportFolder:str, dates:List[str], **kwargs):
         super().__init__(self, folder, exportFolder, dates, **kwargs)

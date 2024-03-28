@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''filling empty spaces in images'''
+'''find contours of segmented images and use them to fill the right gaps'''
 
 # external packages
 import cv2 as cv
@@ -122,5 +122,3 @@ class contourH:
                 if cv.contourArea(self.cnt[i])>50:
                     cv.drawContours(c2, [self.cnt[i]], -1, color, 2)
         return c2
-    
-

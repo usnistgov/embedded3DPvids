@@ -1,4 +1,5 @@
-'''Functions for collecting data from stills of images, for a whole folder'''
+#!/usr/bin/env python
+'''Functions for checking that Usegment and MLsegment sizes are correct'''
 
 # external packages
 import os, sys

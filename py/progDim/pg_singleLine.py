@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''Functions for handling tables of programmed timings for single lines'''
 
 # external packages
 import os, sys
@@ -24,8 +24,6 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
 
 class progDimsSingleLine(progDim):
@@ -40,6 +38,7 @@ class progDimsSingleLine(progDim):
         self.fluigent()
         
     def progDimsSummary(self) -> Tuple[pd.DataFrame,dict]:
+        '''summarize the programmed dimensions into a table'''
         if len(self.progDims)==0:
             self.importProgDims()
         if len(self.progDims)==0:
@@ -163,3 +162,4 @@ class progDimsSingleLine(progDim):
         # start times at 0
         self.progDims.tf = self.progDims.tf-self.progDims.t0.min()
         self.progDims.t0 = self.progDims.t0-self.progDims.t0.min()
+        

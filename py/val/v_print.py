@@ -30,10 +30,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
-
 
 class printVals:
     '''class that holds info about the experiment'''
@@ -92,6 +89,7 @@ class printVals:
         self.const()
         
     def findSampleName(self):
+        '''determine the sample name from the folder name'''
         fi = self.printFolder
         fi0 = ''
         while not fh.sampleInName(fi) and not fi0==fi:
@@ -210,6 +208,7 @@ class printVals:
         return value
         
     def label(self, varfunc:str) -> float:
+        '''create a label for the plot axis'''
         split = re.split('\.', varfunc)
         if 'ink' in varfunc or 'sup' in varfunc:
             fluid = split[0]
@@ -275,6 +274,7 @@ class pvSingle(printVals):
             self.sup.findRhe()
             
     def summaryFile(self) -> str:
+        '''file name for the summary file'''
         return os.path.join(self.printFolder, f'{os.path.basename(self.printFolder)}_summary.csv')
 
         
@@ -390,6 +390,7 @@ class pvSingle(printVals):
         return t3, units
     
     def summary(self) -> Tuple[dict,dict]:
+        '''pull together all metadata and measurements for a single dictionary of data'''
 #         logging.info(self.printFolder)
 #         self.fluigent()
         self.importProgDims()
@@ -428,12 +429,9 @@ class pvTriple(printVals):
 
 
     def summary(self) -> Tuple[dict,dict]:
+        '''pull together all metadata and measurements for a single dictionary of data'''
         meta,metaunits = self.metarow()
         out = {**meta, **xs}
         outunits = {**metaunits, **xsunits}
         self.exportSummary(out, outunits)
         return out, outunits
-    
-
-
-        

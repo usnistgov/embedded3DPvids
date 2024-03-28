@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for detecting the nozzle in an image'''
+'''import packages for detecting the nozzle in an image'''
 
 # external packages
 import os, sys
@@ -31,9 +31,3 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 
 #----------------------------------------------
-
-
-
-
-    
-    

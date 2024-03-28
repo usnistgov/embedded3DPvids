@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines'''
+'''general functions for making measurements of images'''
 
 # external packages
 import os, sys
@@ -39,7 +39,6 @@ pd.set_option('display.max_rows', 500)
 
 #----------------------------------------------
 
-  
 
 def ppdist(p1:list, p2:list) -> float:
     '''distance between 2 points'''
@@ -174,3 +173,4 @@ def whiteOutFiles(folder:str, canMatch:list=[], mustMatch:list=[]) -> None:
     for file in os.listdir(folder):
         if 'vstill' in file and fh.anyIn(canMatch, file) and fh.allIn(mustMatch, file):
             whiteoutAll(os.path.join(folder, file))
+            

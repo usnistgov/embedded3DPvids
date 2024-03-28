@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for taking measurements from videos of single line extrusion'''
+'''Functions for holding metadata and data from a video'''
 
 # external packages
 import os, sys

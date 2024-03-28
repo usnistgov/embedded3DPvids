@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills horiz lines'''
+'''Functions for collecting data from stills of horiz lines'''
 
 # external packages
 import os, sys
@@ -25,8 +25,6 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
     
 pd.set_option("display.precision", 2)
-
-
 
 #----------------------------------------------
 
@@ -181,6 +179,7 @@ class fileHoriz(fileMetric):
         self.units = {**self.units, **units}
         
     def gaps(self, distancemm:float) -> None:
+        '''measure the gaps between the nozzle and the object'''
         if not hasattr(self, 'nd') or not hasattr(self, 'crop') or 'o' in self.name:
             return
         # get displacements

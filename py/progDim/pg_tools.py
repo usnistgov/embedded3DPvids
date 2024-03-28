@@ -36,7 +36,8 @@ def measureTRD(pp:pd.Series) -> float:
     '''measure the distance between the read and target distance'''
     return np.sqrt((pp['xd']-pp['xt'])**2+(pp['yd']-pp['yt'])**2+(pp['zd']-pp['zt'])**2)
 
-def timeColumns(reverse:bool=False):
+def timeColumns(reverse:bool=False) -> dict:
+    '''get the columns in the time table'''
     d = {'Channel 0 pressure':'pressure', 'Channel_0_pressure':'pressure', 'x_disp':'xd', 'y_disp':'yd', 'z_disp':'zd', 'x_est':'xe', 'y_est':'ye', 'z_est':'ze','x_target':'xt','y_target':'yt','z_target':'zt', 'x':'xd', 'y':'yd', 'z':'zd'}
     if reverse:
         for s in ['x', 'y', 'z']:
@@ -280,6 +281,7 @@ class progDim:
         self.importGeneric('progPos')
                 
     def getDTraveled(self, translationSpeed:float, tf:float, t0:float) -> float:
+        '''calculate the distance traveled during the time period'''
         return translationSpeed*(tf-t0)
 
     def readProgGroup(self, v:pd.DataFrame) -> dict:

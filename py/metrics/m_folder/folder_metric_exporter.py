@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a single image'''
+'''Functions for exporting cropped images, ML images, segmented images across all folders'''
 
 # external packages
 import os, sys

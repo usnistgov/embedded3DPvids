@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing dimensions of the nozzle'''
+'''Functions for storing dimensions of the nozzle, for side views where the nozzle is a rectangle'''
 
 # external packages
 import os, sys
@@ -45,9 +45,11 @@ class nozDimsSide(nozDims):
         
         
     def adjustForCrop(self, crops:dict) -> None:
+        '''shift the nozzle position relative to how we cropped the image'''
         super().adjustForCrop(crops, ['xL', 'xR', 'xM'], ['yB'])
         
     def padNozzle(self, left:int=0, right:int=0, bottom:int=0):
+        '''add white space around the nozzle'''
         self.xL = self.xL-left
         self.xR = self.xR+right
         self.yB = self.yB+bottom
@@ -88,13 +90,15 @@ class nozDimsSide(nozDims):
         return out
         
     def nozCenter(self) -> tuple:
+        '''get position of the center of the nozzle'''
         return self.xM, self.yB
         
     def nozWidthPx(self):
-        '''nozzle width in mm'''
+        '''nozzle outer diameter in px'''
         return (self.xR-self.xL)
     
     def nozBounds(self) -> dict:
+        '''get the coordinates of the edges of the nozzle'''
         return {'x0':self.xL, 'xf':self.xR, 'y0':0, 'yf':self.yB}
     
     def nozCover(self, padLeft:int=0, padRight:int=0, padBottom:int=0, val:int=255, y0:int=0, color:bool=False, **kwargs) -> np.array:

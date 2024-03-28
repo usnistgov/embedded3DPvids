@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''Functions for working with specific types of file names'''
 
 # external packages
 import os, sys
@@ -26,22 +26,26 @@ logger.setLevel(logging.DEBUG)
 
 #----------------------------------------------
 
-def allSBPFiles():
+def allSBPFiles() -> dict:
+    '''dictionary of all of the shopbot file names and their shortcuts'''
     return {**singleDisturbSBPfiles(), **SDTSBPfiles(), **tripleLineSBPfiles(), **singleLineSBPfiles()}
 
-def allStFiles():
+def allStFiles() -> list:
+    '''list of all still names'''
     return singleLineStN()+tripleLineSt()+singleDisturbSt()+SDTSt()
 
-
-def isTripleLineStill(file):
+def isTripleLineStill(file:str) -> bool:
+    '''determine if the file is a triple line still'''
     spl = splitFileName(file)
     return spl[0] in tripleLineSBPPicfiles()
 
-def isSingleLineStill(file):
+def isSingleLineStill(file:str) -> bool:
+    '''determine if the file is a single line still'''
     spl = splitFileName(file)
     return spl[0] in singleLineSBPPicfiles()
 
-def isSDTStill(file):
+def isSDTStill(file:str) -> bool:
+    '''determine if the file is a single double triple file'''
     spl = splitFileName(file)
     return spl[0] in SDTSBPPicfiles()
 
@@ -73,8 +77,8 @@ def isStitch(file:str) -> bool:
         return True
     return False
 
-
 def printType(bn:str) -> str:
+    '''determine what type of print this file is from'''
     if bn in tripleLineSBPfiles():
         return 'tripleLine'
     elif bn in singleLineSBPfiles():
@@ -241,7 +245,7 @@ def isSBPFolder(folder:str) -> bool:
             return True
     
 def isPrintFolder(folder:str) -> bool:
-    '''determine if the folder is the print folder'''
+    '''determine if the folder is a print folder'''
     if os.path.exists(os.path.join(folder, 'raw')):
         return True  
 
@@ -254,4 +258,3 @@ def isPrintFolder(folder:str) -> bool:
         return True
 
     return False
-

@@ -28,6 +28,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 #----------------------------------------------
 
 class fillMode:
+    '''how to fill the holes in the image'''
     removeBorder = 0
     fillSimple = 1
     fillSimpleWithHoles = 2
@@ -81,7 +82,7 @@ class filler:
             self.ch.labelHierarchy()
 
     def removeHollows(self) -> np.array:
-        # remove the inside of any bubbles inside objects
+        '''remove the inside of any bubbles inside objects'''
         self.initializeContours()
         imremove = self.thresh.copy()*0       # new image with contours filled
         if self.diag>0:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''Functions for handling tables of programmed timings for single double triple'''
 
 # external packages
 import os, sys
@@ -52,6 +52,7 @@ class progDimsSDT(progDim):
         return 0
         
     def getProgPos(self, **kwargs) -> None:
+        '''create a progPos table'''
         super().getProgPos()
         self.progPosChecker = progPosChecker(self.printFolder, self.progPos, **kwargs)
         self.progPos = self.progPosChecker.progPos
@@ -113,6 +114,7 @@ class progDimsSDT(progDim):
 
 
     def labelProgDims(self):
+        '''split the progPos table into labeled lines'''
         self.progDimsLabeler = progDimsLabeler(self.ppd, self.progPos, self.progDims)
         self.progDims = self.progDimsLabeler.progDims
 

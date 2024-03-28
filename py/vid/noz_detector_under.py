@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for detecting the nozzle in an image shot from underneath the nozzle'''
+'''Functions for detecting the nozzle in an image shot from underneath the nozzle, where the nozzle is a circle around the upper middle portion of the image'''
 
 # external packages
 import os, sys
@@ -109,6 +109,6 @@ class nozDetectorUnder(nozDetector):
         self.nd.nozDetected=True
         
     def checkNozzleValues(self):
+        '''deprecated'''
         return
-        
-        
+   

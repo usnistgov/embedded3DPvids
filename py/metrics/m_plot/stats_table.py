@@ -74,7 +74,7 @@ class regressionTable:
             self.plotBest(**kwargs)
         
     def defineY(self):
-        # define y variables
+        '''define y variables'''
         if self.logy:
             self.ss = self.ms.addLogs(self.ss, [self.yvar])
             self.ycol = f'{self.yvar}_log'
@@ -92,7 +92,7 @@ class regressionTable:
         return
     
     def indepVars(self) -> list:
-        '''a  list of the nondimensional variables for nonzero surface tension'''
+        '''a list of the nondimensional variables for nonzero surface tension'''
         if self.smax>0:
             self.varlist = ['Ca', 'dnorm', 'We', 'Oh', 'Re', 'Bm', 'visc0']
         else:

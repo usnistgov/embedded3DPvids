@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for detecting the nozzle in an image'''
+'''Functions for detecting the nozzle in an image from the side, where the nozzle is a rectangle coming from the top of the image'''
 
 # external packages
 import os, sys
@@ -20,8 +20,6 @@ currentdir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(currentdir)
 sys.path.append(os.path.dirname(currentdir))
 from noz_detector_tools import *
-
-
 
 # logging
 logger = logging.getLogger(__name__)
@@ -66,7 +64,7 @@ class nozDetectorSide(nozDetector):
         
     def defineHoughParams(self, min_line_length:int = 50, max_line_gap:int=300, threshold:int=30
                           , rho:int=0, critslope:float=0.1, theta:float=np.pi/180, hmax:int=400, **kwargs):
-        '''define paramters for finding rectangular nozzle profile'''
+        '''define parameters for finding rectangular nozzle profile'''
         self.min_line_length = min_line_length
         self.max_line_gap = max_line_gap
         self.threshold = threshold
@@ -126,6 +124,7 @@ class nozDetectorSide(nozDetector):
         self.np.edgeImage = self.edgeImage
         
     def nozzleLines0(self, im:np.array):
+        '''run a hough transform on the edge image to collect lines that could be part of the nozzle'''
         theta = np.pi/180   # angular resolution in radians of the Hough grid
       # threshold is minimum number of votes (intersections in Hough grid cell)
         # Run Hough on edge detected image

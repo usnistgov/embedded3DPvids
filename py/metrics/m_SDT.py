@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''collects all metrics functions into one file'''
+'''collects all metrics functions into one file for single double triple prints'''
 
 # external packages
 import os,sys
@@ -77,3 +77,4 @@ class fitChanger(fh.folderLoop):
         fvs = func(folder, overwriteMeasure=True, overwriteSummary=True, diag=0, pfd=pfd, pv=pdim.pv, pg=pdim)
         fvs.measureFolder()
         fvs.summarize()
+        

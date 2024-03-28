@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''for plotting a single yvar measured on line 1, line 2, etc., across the same xvar and color variable'''
 
 # external packages
 import os, sys

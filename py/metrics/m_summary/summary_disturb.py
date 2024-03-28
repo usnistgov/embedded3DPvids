@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single disturbed lines, for a whole folder'''
+'''class that holds data and functions for handling metric summary tables for disturbed lines'''
 
 # external packages
 import os, sys

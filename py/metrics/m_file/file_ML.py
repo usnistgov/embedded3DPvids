@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for running ML models'''
+'''Functions for working with machine learning segmentation models'''
 
 # external packages
 import os, sys

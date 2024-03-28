@@ -35,6 +35,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def vertDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileVertDisturb(file, **kwargs).values() 
 
 def vertDisturbTestFile(fstr:str, fistr:str, **kwargs) -> None:
@@ -98,3 +99,4 @@ class fileVertDisturb(fileVert, fileDisturb):
         self.adjustForCrop(self.crop)
         self.gaps(self.pv.dEst)
         self.display()
+        

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations applied to images'''
+'''combine segmentation from ML model and unsupervised model'''
 
 # external packages
 import cv2 as cv
@@ -92,3 +92,4 @@ class segmentCombinerH(timeObject):
         segmenter.exc = MLadd
         segmenter.dif = dif
         self.segmenter = segmenter
+        

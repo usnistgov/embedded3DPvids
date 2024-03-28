@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''check that the programmed picture locations match expections'''
 
 # external packages
 import os, sys
@@ -140,3 +140,4 @@ class progDimsChecker:
             for sp in self.spacings:
                 if sp>intendedSpacing+scrit or sp<intendedSpacing-scrit:
                     raise ValueError(f'Bad spacing in {self.printFolder} group {gnum}: {sp}/{intendedSpacing}')
+                    

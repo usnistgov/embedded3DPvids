@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single line xs'''
+'''Functions for collecting data from stills of vertical lines'''
 
 # external packages
 import os, sys
@@ -106,6 +106,7 @@ class fileVert(fileMetric):
         self.units = {**self.units, **units}
         
     def gaps(self, distancemm:float) -> None:
+        '''measure gap between nozzle and filament'''
         if not hasattr(self, 'nd') or not hasattr(self, 'crop') or 'o' in self.name:
             return
         # get displacements
@@ -149,3 +150,4 @@ class fileVert(fileMetric):
             imshow(imgi, im2, self.statText(), title='vertFile')
         plt.title(os.path.basename(self.file))
         return 
+    

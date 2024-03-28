@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single line xs'''
+'''Functions for collecting data from stills of single vertical lines'''
 
 # external packages
 import os, sys

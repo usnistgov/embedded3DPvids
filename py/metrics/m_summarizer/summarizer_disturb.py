@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of disturbed lines'''
+'''Collect data from all folders into a single folder, for disturbed single lines'''
 
 # external packages
 import os, sys
@@ -64,20 +64,20 @@ class summarizerDisturb(summarizer):
     
 
 class summarizerXSdisturb(summarizerDisturb):
-    '''recursively create summaries. measureClass is a class definition for a folderMetric class'''
+    '''recursively create summaries for disturbed XS lines. measureClass is a class definition for a folderMetric class'''
     
     def __init__(self, topFolder:str, dire:str, **kwargs):
         self.dire = dire
         super().__init__(topFolder, folderXSDisturb, 'XS', mustMatch=mustMatch+[dire], **kwargs)
         
 class summarizerVertdisturb(summarizerDisturb):
-    '''recursively create summaries. measureClass is a class definition for a folderMetric class'''
+    '''recursively create summaries for disturbed vertical lines. measureClass is a class definition for a folderMetric class'''
     
     def __init__(self, topFolder:str, **kwargs):
         super().__init__(topFolder, folderVertDisturb, 'Vert', **kwargs)
         
 class summarizerHorizdisturb(summarizerDisturb):
-    '''recursively create summaries. measureClass is a class definition for a folderMetric class'''
+    '''recursively create summaries for disturbed horizontal lines. measureClass is a class definition for a folderMetric class'''
     
     def __init__(self, topFolder:str, **kwargs):
         super().__init__(topFolder, folderHorizDisturb, 'Horiz', **kwargs)
@@ -86,22 +86,23 @@ class summarizerHorizdisturb(summarizerDisturb):
 #--------------------------------
     
 class xsdisturbFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed disturbed XS files'''
     
     def __init__(self, dire):
         s = summarizerXSdisturb('', dire)
         super().__init__(s.failureFN(), xsDisturbTestFile)
         
 class vertdisturbFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed disturbed vertical files'''
     
     def __init__(self, dire):
         s = summarizerVertdisturb('')
         super().__init__(s.failureFN(), vertDisturbTestFile)
         
 class horizdisturbFailureTest(failureTest):
-    '''for testing failed files'''
+    '''for testing failed disturbed horizontal files'''
     
     def __init__(self, dire):
         s = summarizerHorizdisturb('')
         super().__init__(s.failureFN(), horizDisturbTestFile)
+        

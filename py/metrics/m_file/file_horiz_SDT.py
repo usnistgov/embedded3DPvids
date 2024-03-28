@@ -36,6 +36,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def horizSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileHorizSDT(file, **kwargs).values() 
 
 def horizSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:

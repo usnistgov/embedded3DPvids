@@ -85,5 +85,4 @@ class valTables:
         t = t.fillna('') 
         self.densityt = t
         return self.densityt
-        
-        
+                

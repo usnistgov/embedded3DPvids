@@ -1,4 +1,5 @@
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+#!/usr/bin/env python
+'''specific plots used for single double triple papers'''
 
 # external packages
 import os, sys
@@ -97,7 +98,7 @@ def shrinkagePlot(ms, fstri:str, export:bool=True) -> mp.multiPlot:
     return yvl
 
 def shrinkage3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
-    '''plot fusion between filaments'''
+    '''plot fusion between filaments for double/triple lines'''
     if orie=='HOP' or orie=='HIP':
         var = 'wn'
     else:
@@ -125,7 +126,7 @@ def shrinkage3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
     return yvl
 
 def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
-    '''plot the shift in position'''
+    '''plot the shift in position for single/double lines'''
     if orie=='HOP':
         near = 'yTop'
         far = 'yBot'
@@ -170,7 +171,7 @@ def shiftPlot(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.mult
     return yvl
 
 def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
-    '''plot the shift in position'''
+    '''plot the shift in position for single/double lines'''
     near = 'yTop'
     far = 'yBot'
     yvl = mp.multiSpecific(ms, ms.ss, xvars=[[xvar] for i in range(4)]
@@ -184,7 +185,7 @@ def shiftPlotXS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.mu
     return yvl
 
 def shiftPlot3XS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.multiPlot:
-    '''plot the shift in position'''
+    '''plot the shift in position for triple lines'''
     near = 'yTop'
     far = 'yBot'
     yvl = mp.multiSpecific(ms, ms.ss, xvars=[[xvar for i in range(4)]]
@@ -201,7 +202,7 @@ def shiftPlot3XS(ms, orie:str, xvar:str='tau0aRatio', export:bool=False) -> mp.m
     return yvl
 
 def fusionPlot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
-    '''plot fusion between filaments'''
+    '''plot fusion between filaments for single/double lines'''
     sp = mp.scatterPlot(ms, ms.ss, xvar='tau0aRatio', yvar='roughness_w2o', cvar='spacing', logx=True, plotType='paper', figsize=(3*6.5/7.2, 2.5*6.5/7.2))
     # sp.ax.set_xticks([30, 100, 300])
     # sp.ax.set_xticklabels([30, 100, 300])
@@ -219,7 +220,7 @@ def fusionPlot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
     return sp
 
 def fusion3Plot(ms, orie:str, export:bool=False) -> mp.scatterPlot:
-    '''plot fusion between filaments'''
+    '''plot fusion between filaments for double/triple lines'''
     yvl = mp.multiSpecific(ms, ms.ss, xvars=[['sup_Oh'] for i in range(3)]
                        , yvars=[[f'delta_roughness_{change}'] for change in ['write2', 'disturb2', 'write3']]
                        , cvar='spacing', plotType='paper', yideal=me.ideals(), sharey=False, sharex=True

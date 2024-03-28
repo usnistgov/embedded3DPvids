@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''class for checking and correcting errors in timeRewrite files'''
 
 # external packages
 import os, sys
@@ -200,6 +200,7 @@ class timeRewriteChecker:
             
         
     def getOvershoots(self, trust:bool=True) -> pd.DataFrame:
+        '''find points where the target line overshot where the printer actually was'''
         f = self.ftable.loc[1:]
         if trust:
             return f[((f.targetLine)>(f.targetLine.shift(-1)))&(~f.trusted)]
@@ -248,6 +249,7 @@ class timeRewriteChecker:
         
         
     def overwriteSection(self, tl:int, jj:int, ii:int, lastBad:int, ft2:pd.DataFrame, ft1:pd.DataFrame) -> int:
+        '''overwrite the section with a different target point'''
         pt = ft2[ft2.targetLine==tl].iloc[0]
         prevpt = ft2[ft2.targetLine==(ft2[ft2.targetLine<tl].targetLine.max())].iloc[0]
         dxdydz = self.targetdxdydz(prevpt, pt)
@@ -311,5 +313,4 @@ class timeRewriteChecker:
                 self.ftable.loc[ii:jj, 'speed'] = pt['speed']
                 ii = jj+1
         # print(self.ftable.targetLine.unique())
-        
         

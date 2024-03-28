@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''class for finding files in a print folder'''
 
 # external packages
 import os, sys
@@ -22,12 +22,9 @@ from tools.plainIm import *
 import file_names as fn
 from levels import labelLevels
 
-
 # logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
 
 #----------------------------------------------
 
@@ -148,6 +145,7 @@ class printFileDict:
                 self.meta.append(ffull)
                 
     def findSummary(self) -> str:
+        '''find the summary file'''
         for f1 in os.listdir(self.printFolder):
             if f1.endswith('.csv') and 'summary' in f1.lower():
                 ffull = os.path.join(self.printFolder, f1)
@@ -156,6 +154,7 @@ class printFileDict:
         return ''
     
     def findMeasure(self) -> str:
+        '''find the measure file'''
         for f1 in os.listdir(self.printFolder):
             if f1.endswith('.csv') and 'measure' in f1.lower():
                 ffull = os.path.join(self.printFolder, f1)
@@ -350,6 +349,7 @@ class printFileDict:
             self.still_unknown.append(ffull)
             
     def splitFile(self, bn) -> Tuple[str, str, list]:
+        '''split the file name into its components'''
         exspl = os.path.splitext(bn)
         ext = exspl[-1]
         fname = exspl[0]
@@ -389,6 +389,7 @@ class printFileDict:
         self.getDate()
         
     def findVstill(self) -> None:
+        '''find all of the vstill images'''
         self.vstill = []
         for f1 in os.listdir(self.printFolder):
             if 'vstill' in f1 and 'png' in f1:
@@ -405,6 +406,7 @@ class printFileDict:
         return ''   
     
     def findMLsegment(self) -> None:
+        '''find all of the machine learning segmented images'''
         self.MLsegment = []
         folder = os.path.join(self.printFolder, 'MLsegment')
         if not os.path.exists(folder):
@@ -415,6 +417,7 @@ class printFileDict:
                 self.MLsegment.append(ffull)
                 
     def findMLsegment2(self) -> None:
+        '''find all of the images segmented using the 2nd machine learning model'''
         self.MLsegment2 = []
         folder = os.path.join(self.printFolder, 'MLsegment2')
         if not os.path.exists(folder):
@@ -425,6 +428,7 @@ class printFileDict:
                 self.MLsegment2.append(ffull)
                 
     def findUsegment(self) -> None:
+        '''find all of the segmented images'''
         self.Usegment = []
         folder = os.path.join(self.printFolder, 'Usegment')
         if not os.path.exists(folder):
@@ -435,6 +439,7 @@ class printFileDict:
                 self.Usegment.append(ffull)
                 
     def findVcrop(self) -> None:
+        '''find all of the cropped images'''
         self.vcrop = []
         folder = os.path.join(self.printFolder, 'crop')
         if not os.path.exists(folder):
@@ -445,7 +450,7 @@ class printFileDict:
                 self.vcrop.append(ffull)
         
     def printAll(self) -> None:
-        '''print all values'''
+        '''print all files, with their labels'''
         for key,value in self.__dict__.items():
             if key in ['levels']:
                 pass

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling tables of programmed timings'''
+'''Functions for handling tables of programmed timings for disturbed single lines'''
 
 # external packages
 import os, sys
@@ -24,10 +24,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
-
 
 class progDimsSingleDisturb(progDim):
     '''for programmed dimensions of single disturb prints'''

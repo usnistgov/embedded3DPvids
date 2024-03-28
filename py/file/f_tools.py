@@ -256,6 +256,7 @@ def splitName(fname:str) -> List[str]:
     return spl
 
 def splitFileName(file:str) -> str:
+    '''split the file name into constituent parts'''
     exspl = os.path.splitext(os.path.basename(file))
     ext = exspl[-1]
     fname = exspl[0]

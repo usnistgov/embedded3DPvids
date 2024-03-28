@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for summarizing data from all folders'''
+'''holds data and functions for handling metric summary tables'''
 
 # external packages
 import os, sys
@@ -45,9 +45,11 @@ class summaryMetric:
         fh.openExplorer(self.folderName(i))
         
     def folderName(self, i:int):
+        '''get the relative name of a folder, given its index in the list'''
         return os.path.join(cfg.path.server, self.ss.loc[i,'printFolderR'])
         
-    def importStillsSummary(self, diag:bool=False) -> pd.DataFrame:
+    def importStillsSummary(self, diag:bool=False) -> None:
+        '''import the stillsSummary file to a dataframe'''
         self.ss, self.u = plainIm(self.file)
         
     def flipInv(self, ss:pd.DataFrame=[], varlist:list = ['Ca', 'dPR', 'dnorm', 'We', 'Oh']) -> pd.DataFrame:
@@ -198,6 +200,7 @@ class summaryMetric:
         print(f'Dependents: {list(deps)}')
         
     def indepVars(self) -> list:
+        '''get a list of independent variables'''
         k = self.ss.keys()
         firstCol = self.firstDepCol()
         controls = k[:firstCol]
@@ -215,6 +218,7 @@ class summaryMetric:
             print('\t',"{:<12}".format(' '), ' ',  ', '.join(l2))
     
     def printIndeps(self) -> None:
+        '''print out the independent variables'''
         iv = self.indepVars()
         mv = self.metaVars()
         const = list(filter(lambda x: not x in mv, iv))
@@ -245,6 +249,7 @@ class summaryMetric:
         return self.idx(k, self.firstDepCol())
     
     def depVars(self) -> List[str]:
+        '''get a list of dependent variables'''
         k = self.ss.keys()
         firstCol = self.firstDepCol()
         deps = k[firstCol:]

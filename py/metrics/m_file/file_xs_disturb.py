@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single line xs'''
+'''Functions for collecting data from stills of disturbed single lines in cross-section view'''
 
 # external packages
 import os, sys
@@ -36,6 +36,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def xsDisturbMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileXSDisturb(file, **kwargs).values()  
 
 def xsDisturbTestFile(fstr:str, fistr:str, **kwargs) -> None:

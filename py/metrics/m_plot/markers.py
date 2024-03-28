@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Plotting tools for analyzing OpenFOAM single filaments'''
+'''tools for handling plot markers'''
 
 # external packages
 import sys
@@ -107,9 +107,11 @@ class plotMarkers:
             return self.vallist.index(val)
         
     def constFunc(self, val:Any) -> float:
+        '''always return 0'''
         return 0
     
     def exactFunc(self, val:Any) -> Any:
+        '''return the value given'''
         return val
     
     #----------------------------

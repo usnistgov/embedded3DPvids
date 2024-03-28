@@ -56,6 +56,7 @@ class fcModes:
     
 
 class frameSelector:
+    '''class that can extract images from a video'''
     
     def __init__(self, printFolder:str, pfd:fh.printFileDict):
         self.frames = []
@@ -142,6 +143,7 @@ class frameSelector:
         self.frames = [cv.imread(os.path.join(folder, f))[5:-5,5:-5,:] for f in os.listdir(folder)[:2]]
             
     def getFramesProgPos(self, **kwargs) -> None:
+        '''get a list of frames using the progPos table to guide us'''
         if len(self.pfd.progPos)>0:
             tlist = self.tlistFromProgPos(**kwargs)
         else:
@@ -154,10 +156,11 @@ class frameSelector:
         self.frames = [self.vd.getFrameAtTime(t) for t in tlist]  # get frames in gaps between prints
             
     def getFrameGetMode(self, **kwargs) -> int:
+        '''determine how we should be getting frames'''
         if 'frameGetMode' in kwargs:
             frameGetMode = kwargs['frameGetMode']
         elif self.pfd.date>230807 and not 'XS' in self.printFolder:
-            # use the snaps programmed into the print path after augst 7, 2023
+            # use the snaps programmed into the print path after august 7, 2023
             frameGetMode = frameGetModes.snap
         else:
             frameGetMode = frameGetModes.progPos
@@ -209,5 +212,4 @@ class frameSelector:
         if diag>0:
             imshow(*self.frames, numbers=True, perRow=10)
         return out
-    
     

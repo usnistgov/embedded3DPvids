@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing dimensions of the nozzle'''
+'''import tools for storing nozzle dimensions'''
 
 # external packages
 import os, sys
@@ -31,4 +31,3 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 
 #----------------------------------------------
-

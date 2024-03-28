@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for plotting qualitative measurements using scatter plots'''
 
 # external packages
 import os, sys
@@ -128,6 +128,7 @@ class qualityScatter(multiPlot):
 
     
     def plot(self, i:int, j:int) -> None:
+        '''make one plot on axis i,j'''
         cvar = self.cvars[i,j]
         if not cvar in self.ss:
             return
@@ -370,6 +371,7 @@ class qualityScatterSpacing(multiPlot):
       #  self.axs[0,0].sharey(self.axs[1,0])  # share the x axes for these columns
     
     def plot(self, i:int, j:int) -> None:
+        '''make a plot on axis i,j'''
         cvar = self.cvars[i,j]
         if not cvar in self.ss:
             return
@@ -416,6 +418,7 @@ class qualityScatterSpacing(multiPlot):
         
         
 class qualityScatterSimple(qualityScatterSpacing):
+    '''for plotting quality as color on the same x and y var on different axes, for either a specific spacing or all spacings together'''
     
     def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvar:str, yvar:str, cvar0:str, spacing:float=0, **kwargs):
         self.spacing=spacing
@@ -430,7 +433,7 @@ class qualityScatterSimple(qualityScatterSpacing):
 
         
 class qualityScatterXY(multiPlot):
-    '''for plotting quality  as color on arbitrary x and y var'''
+    '''for plotting quality as color on arbitrary x and y var'''
     
     def __init__(self, ms:summaryMetric, ss:pd.DataFrame, xvars:np.array, yvars:np.array, cvar:str, simplify:bool=True, dx:float=0.05, dy:float=0.05, rigid:bool=True, **kwargs):
         if type(xvars) is np.array:
@@ -480,6 +483,7 @@ class qualityScatterXY(multiPlot):
                                      , legendVals=list(sslegen['change']), ncol=6, fs=self.fs)
     
     def plot(self, i:int, j:int) -> None:
+        '''make a single plot on axis i,j'''
         cvar = self.cvar
         if not cvar in self.ss:
             return
@@ -501,3 +505,4 @@ class qualityScatterXY(multiPlot):
         # self.fig.tight_layout()
         self.makeLegend()
         self.clean()
+        

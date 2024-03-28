@@ -31,8 +31,6 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     
 pd.set_option("display.precision", 2)
 
-
-
 #----------------------------------------------
 
 
@@ -44,6 +42,7 @@ class fileXSTriple(fileXS):
     
     
     def display(self) -> None:
+        '''display diagnostics'''
         if self.diag==0:
             return
         cm = self.labelsBW.copy()
@@ -70,3 +69,4 @@ class fileXSTriple(fileXS):
         self.filterXSComponents()
         if not self.segmented.success:
             return 
+        

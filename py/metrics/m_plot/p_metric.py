@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''class for making a single plot on a single axis'''
 
 # external packages
 import os, sys
@@ -90,6 +90,7 @@ class metricPlot:
             self.setUpAxes()
             
     def dropna(self):
+        '''drop any rows that are nan in any of the columns we need'''
         l = []
         for li in [self.xvar, self.yvar, self.cvar, self.mvar]:
             if li in self.ss and not li in l:
@@ -132,6 +133,7 @@ class metricPlot:
             self.colors = plotColors([], '', '', **kwargs)
           
     def export(self, filename):
+        '''export the plot to png and svg'''
         if len(filename)>0:
             fn = os.path.splitext(filename)[0]
             for s in ['.png', '.svg']:
@@ -176,9 +178,6 @@ class metricPlot:
             if s in self.ss:
                 llist.append(s)
         self.ss = self.ss[llist].dropna()
-        
-
-        
             
     #----------------------------------------
         

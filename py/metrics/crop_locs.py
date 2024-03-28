@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a single image'''
+'''a class for holding the locations of cropped images'''
 
 # external packages
 import os, sys
@@ -101,6 +101,3 @@ class cropLocs:
         if not self.changed and os.path.exists(self.fn) and not overwrite:
             return
         plainExp(self.fn, self.df, self.units, diag=diag)
-        
-        
-

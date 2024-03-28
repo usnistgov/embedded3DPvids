@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations applied to images'''
+'''class for storing segmented components'''
 
 # external packages
 import cv2 as cv
@@ -31,6 +31,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 
 
 class segmenterFail:
+    '''class that reflects failed segmentation'''
     
     def __init__(self):
         self.filled = None
@@ -410,3 +411,4 @@ class segmenterDF(timeObject):
             if sdf.componentIsIn(m):
                 mask = cv.add(mask, m)
         return mask
+    

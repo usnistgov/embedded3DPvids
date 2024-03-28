@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''collects all metrics functions into one file'''
+'''collects all metrics functions into one file for disturbed single lines'''
 
 # external packages
 import os,sys

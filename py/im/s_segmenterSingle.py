@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Morphological operations applied to images'''
+'''class for segmenting images of single lines'''
 
 # external packages
 import cv2 as cv
@@ -31,6 +31,7 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 #----------------------------------------------
 
 class segmenterSingle(segmenter):
+    '''for segmenting images of single lines'''
     
     def __init__(self, im:np.array, acrit:float=2500, diag:int=0, removeVert:bool=False, removeBorder:bool=True, **kwargs):
         self.removeVert = removeVert
@@ -125,3 +126,4 @@ class segmenterSingle(segmenter):
             else:
                 attempt = attempt+1
         return self.filled, self.markers, self.finalAt
+    

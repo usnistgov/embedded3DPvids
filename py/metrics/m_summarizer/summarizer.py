@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines, for a whole folder'''
+'''Collect data from all folders into a single folder'''
 
 # external packages
 import os, sys
@@ -118,6 +118,7 @@ class summarizer(fh.folderLoop):
             self.failures.reset_index(inplace=True, drop=True)
 
     def export(self, fn:str) -> None:
+        '''export the tables of data'''
         df = pd.DataFrame(self.out)
         
         if 'gname' in df:
@@ -133,13 +134,12 @@ class summarizer(fh.folderLoop):
             plainExp(fn.replace('Failures', 'Errors'), pd.DataFrame(self.folderErrorList), {}, index=False)
             
     def runFailure(self, i:int) -> None:
+        '''try this folder again, by its index in the failure list'''
         self.summarize(self.folderErrorList[i]['folder'])
             
     def run(self):
+        '''collect data from all folders'''
         self.out = []
         self.units = {}
         self.failures = pd.DataFrame([])
         super().run()
-        
-#---------------------------------------------------
-        

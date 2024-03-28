@@ -124,8 +124,6 @@ def convertCrop(im:np.array, crops:Union[Dict, int]) -> dict:
         return {}
     return convertCropHW(h,w,crops)
     
-        
-    
 def convertCropPad(im:np.array, crops:Union[Dict, int]) -> Tuple[dict, dict]:
     '''convert the given crop dimensions to coordinates that will fit, and get the size of the padding on the side'''
     if len(im)>0:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data and summarizing stills of single line xs for a whole folder'''
+'''class that holds ideal values for measurements'''
 
 # external packages
 import os, sys
@@ -25,6 +25,8 @@ for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
 #----------------------------------------------
 
 class ideals:
+    '''holds ideal values for measurements'''
+    
     def __init__(self):
         return
     

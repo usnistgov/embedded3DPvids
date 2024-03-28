@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Script for testing print file labeling'''
+'''Script for testing that bas files are correctly labeled for stitching'''
 
 # external packages
 import os, sys

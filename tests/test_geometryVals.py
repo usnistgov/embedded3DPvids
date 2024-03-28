@@ -32,7 +32,7 @@ LOGGERDEFINED = logs.openLog('test_nozDetect.py', False, level='DEBUG', exportLo
 
 
 class TestGeometryVals(unittest.TestCase):
-
+    '''tests whether geometry metadata is correctly detected'''
     
     def parameterize(self, folder:str='', pxpmm:int=0, **kwargs):
         self.folder = folder

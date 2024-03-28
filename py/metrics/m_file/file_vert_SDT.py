@@ -36,6 +36,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def vertSDTMeasure(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileVertSDT(file, **kwargs).values() 
 
 def vertSDTTestFile(fstr:str, fistr:str, **kwargs) -> None:

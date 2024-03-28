@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for plotting still and video data. Adapted from https://github.com/usnistgov/openfoamEmbedded3DP'''
+'''for plotting a single yvar measured on line 1, line 2, etc., across the same xvar and color variable'''
 
 # external packages
 import os, sys
@@ -113,6 +113,7 @@ class yvarlines(multiPlot):
                     self.axs[0,i].sharey(self.axs[0,i0])  # share the y axes for these columns
                     
     def getY(self) -> str:
+        '''get the y variable'''
         if self.mode=='scatter':
             y = self.yvar
         else:
@@ -156,6 +157,7 @@ class yvarlines(multiPlot):
         
     
     def scatterPlot(self, i:int, j:int, y:str, p:str, killWritten:bool=True) -> None:
+        '''plot a scatter plot on axis i,j'''
         kwargs = {**self.kwargs0, **{'xvar':self.xvar, 'cvar':self.cvar
                                      , 'ax':self.axs[i,j], 'fig':self.fig
                                      , 'plotType':self.plotType, 'legendVals':self.legendVals}}
@@ -229,12 +231,14 @@ class yvarlines(multiPlot):
             self.axs[i,j].set_ylabel(f'{pl}\n{ll}', fontsize=self.fs)
             
     def firstRow(self, j:int) -> int:
+        '''find the first row that has a plot on it, for this column'''
         i = 0
         while i<self.rows and len(self.ys[i,j])==0:
             i = i+1
         return i
     
     def firstCol(self, i:int) -> int:
+        '''find the first column that has a plot on it, for this row'''
         j = 0
         while j<self.cols and len(self.ys[i,j])==0:
             j = j+1

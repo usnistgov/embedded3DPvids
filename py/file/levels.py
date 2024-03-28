@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''class for labeling the levels of files in a hierarchy'''
 
 # external packages
 import os, sys
@@ -24,11 +24,10 @@ from f_tools import *
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-
 #----------------------------------------------
 
 def isSubPrintFolder(folder:str) -> bool:
+    '''determine if the folder is a subfolder inside of a print folder'''
     for f in ['raw', 'temp', 'crop', 'Usegment', 'MLsegment', 'annotations']:
         if f in folder:
             return True
@@ -159,6 +158,7 @@ class labelLevels:
             return self.subFolder
 
     def printAll(self):
+        '''print all of the levels in the hierarchy'''
         spacer = '  '
         ii = 0
         for s in ['printTypeFolder', 'sampleTypeFolder', 'sampleFolder', 'subFolder']:

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling log files
-'''
+'''Functions for handling log files'''
 
 # external packages
 import os
@@ -15,11 +14,7 @@ try:
 except:
     pass
 
-
-
 #------------------------------------------------------------------------------------------------- 
-
-
 
 def logFN(scriptFile:str) -> str:
     '''Get a log file name, given a script file name'''

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing metadata about print folders'''
+'''Functions for storing metadata about print geometry'''
 
 # external packages
 import os, sys
@@ -25,11 +25,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
-#----------------------------------------------
-
-            
+#----------------------------------------------    
             
 class geometryVals:
     '''holds info about the print geometry'''
@@ -59,6 +55,7 @@ class geometryVals:
         self.pxpmm()
         
     def pxpmm(self):
+        '''image resolution in pixels per mm'''
         if self.camMag==1 and self.camPosition=='side':
             self.pxpmm = 139
         elif self.camMag == 0.5 and self.camPosition=='side':

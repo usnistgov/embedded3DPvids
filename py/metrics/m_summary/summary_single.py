@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single lines'''
+'''holds data and functions for handling metric summary tables for single lines'''
 
 # external packages
 import os, sys
@@ -185,3 +185,4 @@ class summarySingle(summaryMetric):
             typ = re.split('_', s)[0]
             s1 = s1[len(typ)+1:]
             return s1
+        

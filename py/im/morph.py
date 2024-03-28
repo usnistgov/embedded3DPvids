@@ -23,12 +23,7 @@ logger.setLevel(logging.DEBUG)
 for s in ['matplotlib', 'imageio', 'IPython', 'PIL']:
     logging.getLogger(s).setLevel(logging.WARNING)
 
-
-
 #----------------------------------------------
-
-
-######### MORPHOLOGICAL OPERATIONS
 
 def morph(img:np.array, width:int, func:str, iterations:int=1, shape:bool=cv.MORPH_RECT, aspect:float=1, hitBorder:bool=False, **kwargs) -> np.array:
     '''erode, dilate, open, or close. func should be erode, dilate, open, or close. aspect is aspect ratio of the kernel, height/width'''
@@ -110,9 +105,6 @@ def isReentrant(cnt:np.array) -> bool:
     dist = cv.pointPolygonTest(cnt, (cx,cy), False)
     return dist<0
 
-
-
-
 def imAve(im:np.array) -> float:
     '''average value of image'''
     return im.mean(axis=0).mean(axis=0)
@@ -157,7 +149,6 @@ def removeBorders(im:np.array, normalizeIm:bool=True) -> np.array:
         adjusted = normalize(adjusted)
     return adjusted
 
-
 def verticalFilter(gray:np.array) -> np.array:
     '''vertical line filter'''
     sobel_y = np.array([[-1, 0, 1],[-1, 0, 1],[-1, 0, 1], [-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
@@ -171,7 +162,6 @@ def verticalFilter(gray:np.array) -> np.array:
     vertthresh = cv.subtract(vertthresh,horizthresh) # remove horizontals from verticals
     vertthresh = closeMorph(vertthresh,2)          # close holes
     return vertthresh
-
 
 def removeBlack(im:np.array, threshold:int=70) -> np.array:
     '''remove black portions such as bubbles from the image'''
@@ -243,6 +233,7 @@ def blackenRed(im:np.array) -> np.array:
     return frameMasked
 
 def skeletonize(img:np.array, w:int=3) -> np.array:
+    '''find skeleton of binarized images'''
     size = np.size(img)
     skel = np.zeros(img.shape,np.uint8)
 

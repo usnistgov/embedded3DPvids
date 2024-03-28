@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for manually characterizing stills of triple lines, for a whole folder'''
+'''Functions for manually characterizing stills of single double triple lines, for a whole folder'''
 
 # external packages
 import os, sys
@@ -148,6 +148,5 @@ class folderManualLoop(folderLoop):
         '''import the folder statuses'''
         d,u = plainImDict(fn)
         self.incomplete = [k for k,v in d.items() if v=='incomplete']
-        self.complete = [k for k,v in d.items() if v=='complete']
-        
+        self.complete = [k for k,v in d.items() if v=='complete']   
         

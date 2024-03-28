@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for handling files'''
+'''Functions for sorting and labeling files'''
 
 # external packages
 import os, sys
@@ -173,6 +173,7 @@ def sortRecursive(folder:str, debug:bool=False) -> None:
 #------------------------------------------------------
       
 def mkdirif(folder:str) -> None:
+    '''make a directory if it doesn't already exist'''
     if not os.path.exists(folder):
         os.mkdir(folder)
 

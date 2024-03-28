@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for storing dimensions of the nozzle'''
+'''Functions for storing dimensions of the nozzle viewed from underneath, where the nozzle is a circle'''
 
 # external packages
 import os, sys
@@ -44,9 +44,11 @@ class nozDimsUnder(nozDims):
         
         
     def adjustForCrop(self, crops:dict) -> None:
+        '''shift the nozzle coordinates knowing how we cropped the image'''
         return super().adjustForCrop(crops, ['xC'], ['yC'])
         
     def padNozzle(self, dr:int=0):
+        '''add white space around the nozzle'''
         self.r = self.r + dr
         
     def nozDims(self) -> dict:
@@ -80,9 +82,11 @@ class nozDimsUnder(nozDims):
         return super().importNozzleDims(['yC', 'xC', 'xC', 'pxpmm', 'w', 'h'])
         
     def nozCenter(self) -> tuple:
+        '''get the coordinates of the nozzle center'''
         return self.xC, self.yC
 
     def nozWidthPx(self):
+        '''get the outer diameter of the nozzle in pixels'''
         return (self.r*2)
     
     def nozCover(self, pad:int=0, val:int=255, y0:int=0, color:bool=False, **kwargs) -> np.array:
@@ -124,6 +128,5 @@ class nozDimsUnder(nozDims):
         return mask
     
     def nozBounds(self) -> dict:
+        '''get the boundaries of the nozzle'''
         return {'x0':self.xC-self.r, 'xf':self.xC+self.r, 'y0':self.yC-self.r, 'yf':self.yC+self.r}
-
-        

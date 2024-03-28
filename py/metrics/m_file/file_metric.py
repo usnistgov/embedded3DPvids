@@ -86,13 +86,14 @@ class fileMetric(timeObject):
             raise AttributeError
         
     def importIm(self):
+        '''import the image and determine if it was pre-scaled'''
         self.scale = 1/fh.fileScale(self.file)
         self.im = cv.imread(self.file)
         self.hasIm = True
         
     def openInPaint(self):
+        '''open the image in paint'''
         openInPaint(self.file)
-    
         
     def imDims(self):
         '''image dimensions'''
@@ -104,15 +105,18 @@ class fileMetric(timeObject):
         return h,w
         
     def values(self) -> Tuple[dict,dict]:
+        '''measured parameters and units'''
         return self.stats, self.units
     
     def dropVariables(self, l:list):
+        '''get rid of the variables listed'''
         for s in l:
             if s in self.stats:
                 self.stats.pop(s)
                 self.units.pop(s)
     
     def statText(self, cols:int=1) -> str:
+        '''return measurements as readable text'''
         out = ''
         col = 0
         for key,val in self.stats.items():
@@ -260,8 +264,6 @@ class fileMetric(timeObject):
             self.segmenter = segmenterFail()
         if self.segmenter.success:
             self.componentMask = self.segmenter.filled.copy()
-        
-            
             
     def importSegmentation(self) -> None:
         '''import any pre-segmented images'''
@@ -274,6 +276,7 @@ class fileMetric(timeObject):
             print(f'Usegment: {uu}, MLsegment: {mm}')
         
     def importUsegment(self):
+        '''import the image segmented using the unsupervised model'''
         s = self.segmentFN()
         if os.path.exists(s):
             self.Usegment = cv.imread(s, cv.IMREAD_GRAYSCALE)
@@ -283,6 +286,7 @@ class fileMetric(timeObject):
             self.importedImages = True
             
     def importMLsegment(self):
+        '''import the image segmented using the ML model'''
         m = self.MLFN()
         if os.path.exists(m):
             self.MLsegment = cv.imread(m, cv.IMREAD_GRAYSCALE)
@@ -299,9 +303,11 @@ class fileMetric(timeObject):
         self.exportImage('im0', 'crop', 'vcrop', **kwargs)
         
     def segmentFN(self) -> str:
+        '''get the file name for the segmented image'''
         return self.subFN('Usegment', 'Usegment')
     
     def MLFN(self) -> str:
+        '''get the file name for the ML segmented image'''
         fn = self.subFN('MLsegment2', 'MLsegment2')
         if not os.path.exists(fn):
             return self.subFN('MLsegment', 'MLsegment')
@@ -519,6 +525,7 @@ class fileMetric(timeObject):
             return left, right
         
     def getLURU(self, left:pd.DataFrame, right:pd.DataFrame, horiz:bool) -> Tuple[int, int]:
+        '''get the length-wise distances of the two edges of the simplified convex hull for measuring ldiff'''
         if len(left)<2 or len(right)<2:
             return 0,0
         if horiz:

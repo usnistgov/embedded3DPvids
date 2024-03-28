@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for combining images into videos'''
+'''Functions for converting videos to gifs'''
 
 # external packages
 import os, sys

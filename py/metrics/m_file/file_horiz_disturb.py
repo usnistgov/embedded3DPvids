@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Functions for collecting data from stills of single line horiz'''
+'''Functions for collecting data from stills of disturbed single horizontal lines'''
 
 # external packages
 import os, sys
@@ -35,6 +35,7 @@ pd.set_option("display.precision", 2)
 #----------------------------------------------
 
 def horizDisturbMeasureFile(file:str, **kwargs) -> Tuple[dict, dict]:
+    '''given a file name, measure the image and return the measured values'''
     return fileHorizDisturb(file, **kwargs).values()
 
 def horizDisturbTestFile(fstr:str, fistr:str, **kwargs) -> None:

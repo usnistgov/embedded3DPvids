@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''Functions for collecting data from stills of images, for a whole folder'''
 
 # external packages
@@ -90,6 +91,7 @@ class folderMetric(timeObject):
             raise ValueError(f'Failed to identify line type in {self.folder}')
         
     def getFNs(self):
+        '''get file names for the tables we are going to export'''
         self.fn = self.pfd.newFileName(f'measure', '.csv')
         self.failfn = self.pfd.newFileName(f'failures', '.csv')
         self.summaryFn = self.pfd.newFileName(f'summary', '.csv')
@@ -169,12 +171,14 @@ class folderMetric(timeObject):
                 self.failures = pd.DataFrame([{'file':os.path.join(self.folder, 'successes'), 'error':''}])
         
     def createEmpty(self, dd:dict) -> None:
+        '''create an empty dictionary to hold summary data'''
         dd['total'] = {}
         if self.splitGroups:
             for g in self.df.gname.unique():
                 dd[g] = {}
                 
     def importSummary(self):
+        '''import the summary file to a dictionary'''
         if self.splitGroups:
             df, _ = plainIm(self.summaryFn, checkUnits=False)
             if len(df.columns)<4:
@@ -283,6 +287,7 @@ class folderMetric(timeObject):
         self.exportSummary()
                 
     def exportSummary(self):
+        '''export the summary data to file'''
         if len(self.aves)==1:
             plainExpDict(self.summaryFn, self.summary['total'], units=self.summaryUnits)
         else:
@@ -293,6 +298,7 @@ class folderMetric(timeObject):
             plainExp(self.summaryFn, summary, units={}, index=None)
         
     def dflines(self, name:str, group:str='total') -> pd.DataFrame:
+        '''get the data for lines that fit this name'''
         if not 'o' in name:
             lines = self.df[(self.df.line.str.contains(name))&(~self.df.line.str.contains('o'))]
         else:

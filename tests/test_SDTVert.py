@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''Script for testing measurements of SDTed cross-sections'''
+'''Script for testing measurements of vertical SDT lines'''
 
 # external packages
 import os, sys
@@ -33,7 +33,7 @@ LOGGERDEFINED = logs.openLog('test_SDTXS.py', False, level='DEBUG', exportLog=Tr
 
 
 class TestSDTVert(unittest.TestCase):
-    '''test for correct print file labeling'''
+    '''test for correct measurements of vertical SDT lines'''
     
     def parameterize(self, folder:str='', file:str='', emptiness:float=0, x0:float=0, segments:int=0, test:int=0, **kwargs):
         self.folder = folder
