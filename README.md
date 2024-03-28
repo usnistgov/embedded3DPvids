@@ -2,7 +2,6 @@
 
 Python tools for analysis of videos and images of filament shapes in embedded 3D printing
 
-
 ## Authors
 - Leanne M. Friedrich
     - National Institute of Standards and Technology, MML
@@ -30,7 +29,6 @@ In embedded 3D printing, a nozzle is embedded into a support bath and extrudes f
 
 ## Data Use Notes
 
-
 This code is publicly available according to the NIST statements of copyright, fair use and licensing; see 
 https://www.nist.gov/director/copyright-fair-use-and-licensing-statements-srd-data-and-software
 
@@ -44,6 +42,7 @@ You may cite the use of this code as follows:
 This version of the code is described in the following papers:
 
 > Friedrich, L.M., Woodcock, J.W. (2024) Inducing Inter-Filament Fusion during Embedded 3D Printing of Silicones, submitted for publication
+> 
 > Friedrich, L.M., Woodcock, J.W. (2024) Filament Disturbance and Fusion during Embedded 3D Printing of Silicones, submitted for publication
 
 
@@ -670,7 +669,7 @@ The files included in this publication use the following hierarchy:
 
 ### Experiments
 
-Use the GUI at https://github.com/usnistgov/ShopbotPyQt/ to generate files (examples in parentheses) during printing. For each print, the GUI exports:
+Use the GUI at https://github.com/usnistgov/ShopbotPyQt/ to generate files (examples in parentheses) during printing of single lines. For each print, the GUI exports:
 
 - a video of the printing process from a color Basler camera (`disturbUnder_2_0.500_Basler camera_I_PDMSS7.5_S_3.50_230920_110040_0.avi`)
 - a table of pressure over time (`disturbUnder_2_0.500_time_I_PDMSS7.5_S_3.50_230920_110040_0.csv`)
